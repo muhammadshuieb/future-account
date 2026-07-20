@@ -50,12 +50,20 @@ textarea {
   min-width: 0;
 }
 
-/* Sidebar — RTL content with scrollbar on the right */
+/* Sidebar — RTL content with scrollbar on the right.
+   Do NOT set display here: Tailwind `hidden` / `md:flex` / drawer `flex`
+   control visibility. A bare `display:flex` overrides `hidden` on mobile. */
 .app-sidebar {
-  display: flex;
   flex-direction: column;
   background: var(--color-slate-panel);
   color: #fff;
+}
+
+/* Belt-and-suspenders: permanent sidebar never takes width below md */
+@media (max-width: 767.98px) {
+  .app-sidebar:not(.app-sidebar-drawer) {
+    display: none;
+  }
 }
 
 .app-sidebar-nav {
