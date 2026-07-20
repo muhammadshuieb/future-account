@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
+import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
 import type { Setting } from '@/types'
 import { Button, EmptyState, Field, LoadingBlock, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
@@ -410,36 +411,44 @@ export default function SettingsPage() {
               <thead><tr><th>الاسم</th><th>البريد</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(usersAdmin.data || []).map((u) => (
-                  <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.join(', ')}</td><td>{u.is_active ? 'نشط' : 'معطّل'}</td></tr>
+                  <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td><td>{u.is_active ? 'نشط' : 'معطّل'}</td></tr>
                 ))}
               </tbody>
             </table>
             <div className="border-t border-[var(--color-line)] p-4">
               <h3 className="mb-3 text-sm font-semibold">{t('settings.roles')}</h3>
-              {(rolesAdmin.data?.roles || []).map((role) => (
-                <details key={role.id} className="mb-2 rounded border border-[var(--color-line)] p-2">
-                  <summary className="cursor-pointer text-sm font-medium">{role.name} ({role.permissions.length})</summary>
-                  {role.name !== 'admin' && (
-                    <div className="mt-2 grid max-h-40 gap-1 overflow-y-auto text-xs">
+              {(rolesAdmin.data?.roles || []).map((role) => {
+                const isAdminRole = role.name === 'admin'
+                return (
+                  <details key={role.id} className="mb-2 rounded border border-[var(--color-line)] p-2">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      {roleLabel(t, role.name)} ({role.permissions.length})
+                    </summary>
+                    <div className="mt-2 grid max-h-48 gap-1 overflow-y-auto text-xs">
+                      {isAdminRole && (
+                        <p className="mb-1 text-[11px] text-black/45">{t('settings.adminRoleLocked')}</p>
+                      )}
                       {(rolesAdmin.data?.permissions || []).map((perm) => (
-                        <label key={perm} className="flex items-center gap-2">
+                        <label key={`${role.id}-${perm}`} className="flex items-center gap-2">
                           <input
                             type="checkbox"
                             checked={role.permissions.includes(perm)}
+                            disabled={isAdminRole || updateRolePerms.isPending}
                             onChange={(e) => {
+                              if (isAdminRole) return
                               const next = e.target.checked
                                 ? [...role.permissions, perm]
                                 : role.permissions.filter((p) => p !== perm)
                               updateRolePerms.mutate({ id: role.id, permissions: next })
                             }}
                           />
-                          {perm}
+                          <span>{permissionLabel(t, perm)}</span>
                         </label>
                       ))}
                     </div>
-                  )}
-                </details>
-              ))}
+                  </details>
+                )
+              })}
             </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
@@ -449,7 +458,7 @@ export default function SettingsPage() {
             <Field label="كلمة المرور"><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required minLength={8} /></Field>
             <Field label={t('settings.roles')}>
               <select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>
-                {(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+                {(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}
               </select>
             </Field>
             <Button type="submit" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button>

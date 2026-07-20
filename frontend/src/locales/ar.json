@@ -140,10 +140,33 @@
     "last7Days": "آخر 7 أيام",
     "last30Days": "آخر 30 يوم"
   },
+  "roleNames": {
+    "admin": "مدير النظام",
+    "accountant": "محاسب",
+    "warehouse": "أمين المستودع",
+    "sales": "مبيعات",
+    "purchasing": "مشتريات"
+  },
+  "permissionNames": {
+    "dashboard": { "view": "عرض لوحة التحكم" },
+    "accounts": { "view": "عرض الحسابات", "manage": "إدارة الحسابات" },
+    "journals": { "view": "عرض القيود", "manage": "إدارة القيود", "post": "ترحيل القيود" },
+    "settings": { "manage": "إدارة الإعدادات" },
+    "sales": { "view": "عرض المبيعات", "manage": "إدارة المبيعات" },
+    "purchases": { "view": "عرض المشتريات", "manage": "إدارة المشتريات" },
+    "warehouse": { "view": "عرض المستودع", "manage": "إدارة المستودع" },
+    "customers": { "view": "عرض العملاء", "manage": "إدارة العملاء" },
+    "suppliers": { "view": "عرض الموردين", "manage": "إدارة الموردين" },
+    "cash": { "view": "عرض الصندوق والبنوك", "manage": "إدارة الصندوق والبنوك" },
+    "hr": { "view": "عرض الموارد البشرية", "manage": "إدارة الموارد البشرية" },
+    "reports": { "view": "عرض التقارير" },
+    "users": { "manage": "إدارة المستخدمين" }
+  },
   "settings": {
     "users": "المستخدمون والصلاحيات",
     "roles": "الأدوار",
     "permissions": "الصلاحيات",
+    "adminRoleLocked": "صلاحيات مدير النظام ثابتة ولا يمكن تعديلها",
     "autoBackupNote": "النسخ الاحتياطي التلقائي يعمل يومياً الساعة 2:00 ص (يتطلب cron للـ scheduler)",
     "barcodeScanner": "قارئ الباركود",
     "barcodeIntro": "معظم قارئات USB تعمل كلوحة مفاتيح (HID keyboard wedge) — لا تحتاج تعريفاً. النظام يستقبل الأرقام ثم Enter.",

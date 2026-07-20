@@ -5,6 +5,7 @@ import { LogOut, Shield, Bell, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
+import { formatRoleNames } from '@/lib/rbacLabels'
 import { APP_VERSION } from '@/version'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { navGroups, type NavItem } from '@/config/navigation'
@@ -126,7 +127,7 @@ export default function AppLayout() {
           <Shield size={16} className="shrink-0 text-teal" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-white">{user.name}</p>
-            <p className="truncate text-xs text-white/45">{user.roles.join(' · ')}</p>
+            <p className="truncate text-xs text-white/45">{formatRoleNames(t, user.roles)}</p>
           </div>
         </div>
         <button

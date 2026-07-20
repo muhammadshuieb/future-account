@@ -140,10 +140,33 @@
     "last7Days": "Son 7 gün",
     "last30Days": "Son 30 gün"
   },
+  "roleNames": {
+    "admin": "Sistem Yöneticisi",
+    "accountant": "Muhasebeci",
+    "warehouse": "Depo Sorumlusu",
+    "sales": "Satış",
+    "purchasing": "Satın Alma"
+  },
+  "permissionNames": {
+    "dashboard": { "view": "Kontrol panelini görüntüle" },
+    "accounts": { "view": "Hesapları görüntüle", "manage": "Hesapları yönet" },
+    "journals": { "view": "Yevmiyeleri görüntüle", "manage": "Yevmiyeleri yönet", "post": "Yevmiye kaydet" },
+    "settings": { "manage": "Ayarları yönet" },
+    "sales": { "view": "Satışı görüntüle", "manage": "Satışı yönet" },
+    "purchases": { "view": "Satın almayı görüntüle", "manage": "Satın almayı yönet" },
+    "warehouse": { "view": "Depoyu görüntüle", "manage": "Depoyu yönet" },
+    "customers": { "view": "Müşterileri görüntüle", "manage": "Müşterileri yönet" },
+    "suppliers": { "view": "Tedarikçileri görüntüle", "manage": "Tedarikçileri yönet" },
+    "cash": { "view": "Kasa ve bankaları görüntüle", "manage": "Kasa ve bankaları yönet" },
+    "hr": { "view": "İK görüntüle", "manage": "İK yönet" },
+    "reports": { "view": "Raporları görüntüle" },
+    "users": { "manage": "Kullanıcıları yönet" }
+  },
   "settings": {
     "users": "Kullanıcılar ve Yetkiler",
     "roles": "Roller",
     "permissions": "Yetkiler",
+    "adminRoleLocked": "Yönetici rolü yetkileri sabittir ve değiştirilemez",
     "autoBackupNote": "Otomatik yedekleme her gün 02:00'de çalışır (scheduler cron gerekir)",
     "barcodeScanner": "Barkod Okuyucu",
     "barcodeIntro": "Çoğu USB okuyucu klavye gibi çalışır (HID keyboard wedge) — sürücü gerekmez.",

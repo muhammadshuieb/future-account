@@ -140,10 +140,33 @@
     "last7Days": "Last 7 days",
     "last30Days": "Last 30 days"
   },
+  "roleNames": {
+    "admin": "System Admin",
+    "accountant": "Accountant",
+    "warehouse": "Warehouse Keeper",
+    "sales": "Sales",
+    "purchasing": "Purchasing"
+  },
+  "permissionNames": {
+    "dashboard": { "view": "View dashboard" },
+    "accounts": { "view": "View accounts", "manage": "Manage accounts" },
+    "journals": { "view": "View journals", "manage": "Manage journals", "post": "Post journals" },
+    "settings": { "manage": "Manage settings" },
+    "sales": { "view": "View sales", "manage": "Manage sales" },
+    "purchases": { "view": "View purchases", "manage": "Manage purchases" },
+    "warehouse": { "view": "View warehouse", "manage": "Manage warehouse" },
+    "customers": { "view": "View customers", "manage": "Manage customers" },
+    "suppliers": { "view": "View suppliers", "manage": "Manage suppliers" },
+    "cash": { "view": "View cash & banks", "manage": "Manage cash & banks" },
+    "hr": { "view": "View HR", "manage": "Manage HR" },
+    "reports": { "view": "View reports" },
+    "users": { "manage": "Manage users" }
+  },
   "settings": {
     "users": "Users & Permissions",
     "roles": "Roles",
     "permissions": "Permissions",
+    "adminRoleLocked": "Admin role permissions are fixed and cannot be changed",
     "autoBackupNote": "Automatic backup runs daily at 2:00 AM (requires Laravel scheduler cron)",
     "barcodeScanner": "Barcode Scanner",
     "barcodeIntro": "Most USB scanners act as a keyboard (HID keyboard wedge) — no driver needed. The app captures digits then Enter.",
