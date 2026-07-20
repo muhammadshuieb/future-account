@@ -114,7 +114,15 @@
     "action": "İşlem",
     "entity": "Varlık",
     "ip": "IP",
-    "empty": "Kayıt yok"
+    "empty": "Henüz kayıt yok — yeni değişiklikler burada görünecek",
+    "actions": {
+      "created": "Oluşturma",
+      "updated": "Güncelleme",
+      "deleted": "Silme",
+      "posted": "Onaylama",
+      "voided": "İptal",
+      "stock": "Stok hareketi"
+    }
   },
   "companies": {
     "title": "Şirketler ve Şubeler",

@@ -114,7 +114,15 @@
     "action": "Action",
     "entity": "Entity",
     "ip": "IP",
-    "empty": "No audit records"
+    "empty": "No audit records yet — new changes will appear here",
+    "actions": {
+      "created": "Created",
+      "updated": "Updated",
+      "deleted": "Deleted",
+      "posted": "Posted",
+      "voided": "Voided",
+      "stock": "Stock movement"
+    }
   },
   "companies": {
     "title": "Companies & Branches",
