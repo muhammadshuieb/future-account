@@ -14,9 +14,10 @@ if ($DeployEnv -eq "prod" -and (Test-Path "docker-compose.prod.yml")) {
 }
 
 function Invoke-Compose {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-    & docker @ComposeArgs @Args
-    if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Args -join ' ')" }
+    param([Parameter(Mandatory = $true)][string[]]$ComposeCommandArgs)
+    $allArgs = $ComposeArgs + $ComposeCommandArgs
+    & docker @allArgs
+    if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($ComposeCommandArgs -join ' ')" }
 }
 
 Write-Host "==> Future Account deploy (env=$DeployEnv, branch=$Branch)"
@@ -28,27 +29,27 @@ git checkout $Branch
 git pull --ff-only origin $Branch
 
 Write-Host "==> Building containers..."
-Invoke-Compose @("build")
+Invoke-Compose -ComposeCommandArgs @("build")
 
 Write-Host "==> Starting containers..."
-Invoke-Compose @("up", "-d")
+Invoke-Compose -ComposeCommandArgs @("up", "-d")
 
 Write-Host "==> Waiting for backend..."
 for ($i = 0; $i -lt 30; $i++) {
-    Invoke-Compose @("exec", "-T", "backend", "php", "artisan", "--version") 2>$null
+    Invoke-Compose -ComposeCommandArgs @("exec", "-T", "backend", "php", "artisan", "--version") 2>$null
     if ($LASTEXITCODE -eq 0) { break }
     Start-Sleep -Seconds 2
 }
 
 Write-Host "==> Running migrations..."
-Invoke-Compose @("exec", "-T", "backend", "php", "artisan", "migrate", "--force", "--no-ansi")
+Invoke-Compose -ComposeCommandArgs @("exec", "-T", "backend", "php", "artisan", "migrate", "--force", "--no-ansi")
 
 Write-Host "==> Checking whether admin user seed is needed..."
-$userCount = (Invoke-Compose @("exec", "-T", "backend", "php", "artisan", "tinker", "--execute=echo \App\Models\User::count();") 2>$null | Out-String).Trim()
+$userCount = (Invoke-Compose -ComposeCommandArgs @("exec", "-T", "backend", "php", "artisan", "tinker", "--execute=echo \App\Models\User::count();") 2>$null | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($userCount)) { $userCount = "0" }
 if ($userCount -eq "0") {
     Write-Host "==> No users — running AdminUserSeeder..."
-    Invoke-Compose @("exec", "-T", "backend", "php", "artisan", "db:seed", "--class=AdminUserSeeder", "--force", "--no-ansi")
+    Invoke-Compose -ComposeCommandArgs @("exec", "-T", "backend", "php", "artisan", "db:seed", "--class=AdminUserSeeder", "--force", "--no-ansi")
 } else {
     Write-Host "==> Users exist ($userCount) — skipping AdminUserSeeder."
 }

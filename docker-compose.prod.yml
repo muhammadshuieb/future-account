@@ -15,7 +15,7 @@ services:
       APP_ENV: production
       APP_DEBUG: "false"
       SKIP_DB_SEED: "1"
-      APP_KEY: ${APP_KEY:?Set APP_KEY in .env.prod — run: php artisan key:generate --show}
+      APP_KEY: "${APP_KEY:?Set APP_KEY in .env.prod - run: php artisan key:generate --show}"
       APP_URL: ${APP_URL:-http://localhost:8000}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
       SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,127.0.0.1}
