@@ -9,8 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SalesInvoice extends Model
 {
     protected $fillable = [
-        'invoice_number', 'invoice_date', 'customer_id', 'warehouse_id', 'branch_id',
-        'status', 'currency', 'exchange_rate', 'base_amount',
+        'invoice_number', 'e_invoice_uuid', 'invoice_date', 'customer_id', 'warehouse_id', 'branch_id',
+        'sales_order_id', 'status', 'currency', 'exchange_rate', 'base_amount',
         'subtotal', 'tax_amount', 'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
@@ -30,6 +30,7 @@ class SalesInvoice extends Model
     }
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
+    public function salesOrder(): BelongsTo { return $this->belongsTo(SalesOrder::class); }
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
     public function branch(): BelongsTo { return $this->belongsTo(Branch::class); }
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }

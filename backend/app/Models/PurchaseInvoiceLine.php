@@ -9,7 +9,7 @@ class PurchaseInvoiceLine extends Model
 {
     protected $fillable = [
         'purchase_invoice_id', 'product_id', 'quantity', 'unit_cost',
-        'tax_rate', 'line_total',
+        'tax_rate', 'line_total', 'batch_no', 'serial_no',
     ];
 
     protected function casts(): array

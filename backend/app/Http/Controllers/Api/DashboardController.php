@@ -77,6 +77,44 @@ class DashboardController extends Controller
             ->get()
             ->sum(fn (PurchaseInvoice $i) => (float) ($i->base_amount ?: $i->total));
 
+        $days = (int) request()->query('days', 7);
+        $days = in_array($days, [7, 30], true) ? $days : 7;
+        $fromDate = now()->subDays($days - 1)->startOfDay();
+
+        $dailySales = SalesInvoice::query()
+            ->where('status', 'posted')
+            ->where('invoice_date', '>=', $fromDate->toDateString())
+            ->get()
+            ->groupBy(fn (SalesInvoice $i) => $i->invoice_date->toDateString())
+            ->map(fn ($group, $date) => [
+                'date' => $date,
+                'total' => round($group->sum(fn (SalesInvoice $i) => (float) ($i->base_amount ?: $i->total)), 2),
+                'count' => $group->count(),
+            ])
+            ->values()
+            ->sortBy('date')
+            ->values()
+            ->all();
+
+        $dailyPurchases = PurchaseInvoice::query()
+            ->where('status', 'posted')
+            ->where('invoice_date', '>=', $fromDate->toDateString())
+            ->get()
+            ->groupBy(fn (PurchaseInvoice $i) => $i->invoice_date->toDateString())
+            ->map(fn ($group, $date) => [
+                'date' => $date,
+                'total' => round($group->sum(fn (PurchaseInvoice $i) => (float) ($i->base_amount ?: $i->total)), 2),
+                'count' => $group->count(),
+            ])
+            ->values()
+            ->sortBy('date')
+            ->values()
+            ->all();
+
+        // Fill missing dates with zero
+        $dailySales = $this->fillDailyGaps($dailySales, $days);
+        $dailyPurchases = $this->fillDailyGaps($dailyPurchases, $days);
+
         $alerts = [];
         if ($lowStock > 0) {
             $alerts[] = ['type' => 'warning', 'title' => 'تنبيه مخزون', 'body' => "{$lowStock} صنف تحت حد إعادة الطلب"];
@@ -113,6 +151,8 @@ class DashboardController extends Controller
                 'payables' => round(max($payables, 0), 2),
                 'month_sales' => round($monthSales, 2),
                 'month_purchases' => round($monthPurchases, 2),
+                'daily_sales' => $dailySales,
+                'daily_purchases' => $dailyPurchases,
                 'customers_count' => Customer::query()->count(),
                 'suppliers_count' => Supplier::query()->count(),
                 'products_count' => Product::query()->count(),
@@ -120,5 +160,17 @@ class DashboardController extends Controller
                 'alerts' => $alerts,
             ],
         ]);
+    }
+
+    protected function fillDailyGaps(array $rows, int $days): array
+    {
+        $map = collect($rows)->keyBy('date');
+        $result = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i)->toDateString();
+            $result[] = $map->get($date, ['date' => $date, 'total' => 0, 'count' => 0]);
+        }
+
+        return $result;
     }
 }

@@ -1,5 +1,6 @@
 import { NavLink, Outlet, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   LayoutDashboard,
   BookOpen,
@@ -23,23 +24,25 @@ import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { APP_VERSION } from '@/version'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
 
-const navItems = [
-  { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
-  { to: '/accounts', label: 'دليل الحسابات', icon: BookOpen },
-  { to: '/journal-entries', label: 'القيود اليومية', icon: FileText },
-  { to: '/sales', label: 'المبيعات', icon: ShoppingCart },
-  { to: '/purchases', label: 'المشتريات', icon: Truck },
-  { to: '/warehouse', label: 'المخازن', icon: Warehouse },
-  { to: '/partners', label: 'العملاء والموردون', icon: Users },
-  { to: '/cash-banks', label: 'الصناديق والبنوك', icon: Landmark },
-  { to: '/hr', label: 'الموارد البشرية', icon: UserCog },
-  { to: '/reports', label: 'التقارير', icon: BarChart3 },
-  { to: '/barcodes', label: 'الباركود والملصقات', icon: Barcode },
-  { to: '/settings', label: 'الإعدادات', icon: Settings },
-]
+const navKeys = [
+  { to: '/', key: 'dashboard', icon: LayoutDashboard, end: true },
+  { to: '/accounts', key: 'accounts', icon: BookOpen },
+  { to: '/journal-entries', key: 'journal', icon: FileText },
+  { to: '/sales', key: 'sales', icon: ShoppingCart },
+  { to: '/purchases', key: 'purchases', icon: Truck },
+  { to: '/warehouse', key: 'warehouse', icon: Warehouse },
+  { to: '/partners', key: 'partners', icon: Users },
+  { to: '/cash-banks', key: 'cash', icon: Landmark },
+  { to: '/hr', key: 'hr', icon: UserCog },
+  { to: '/reports', key: 'reports', icon: BarChart3 },
+  { to: '/barcodes', key: 'barcodes', icon: Barcode },
+  { to: '/settings', key: 'settings', icon: Settings },
+] as const
 
 export default function AppLayout() {
+  const { t } = useTranslation()
   const { user, loading, logout } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -65,7 +68,7 @@ export default function AppLayout() {
       <div className="grid min-h-screen place-items-center">
         <div className="text-center">
           <div className="mx-auto mb-3 h-10 w-10 animate-pulse rounded-xl bg-teal/20" />
-          <p className="text-teal">جاري التحميل...</p>
+          <p className="text-teal">{t('common.loading')}</p>
         </div>
       </div>
     )
@@ -83,21 +86,21 @@ export default function AppLayout() {
             ف
           </div>
           <div>
-            <p className="text-lg font-bold leading-tight">فيوتشر أكونت</p>
-            <p className="text-xs text-white/55">نظام محاسبة متكامل</p>
+            <p className="text-lg font-bold leading-tight">{t('app.name')}</p>
+            <p className="text-xs text-white/55">{t('app.tagline')}</p>
             <p className="text-[10px] text-white/40">v{APP_VERSION}</p>
           </div>
         </div>
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
-        {navItems.map((item) => {
+        {navKeys.map((item) => {
           const Icon = item.icon
           return (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
+              end={'end' in item ? item.end : undefined}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 [
@@ -109,7 +112,7 @@ export default function AppLayout() {
               }
             >
               <Icon size={18} strokeWidth={1.75} />
-              <span className="flex-1">{item.label}</span>
+              <span className="flex-1">{t(`nav.${item.key}`)}</span>
             </NavLink>
           )
         })}
@@ -129,7 +132,7 @@ export default function AppLayout() {
           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-white/65 transition hover:bg-white/10 hover:text-white"
         >
           <LogOut size={16} />
-          تسجيل الخروج
+          {t('nav.logout')}
         </button>
       </div>
     </>
@@ -166,7 +169,9 @@ export default function AppLayout() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher />
+              <div className="relative">
               <button
                 type="button"
                 className="relative rounded-lg border border-[var(--color-line)] bg-white p-2.5 text-ink/70 hover:bg-mist"
@@ -201,6 +206,7 @@ export default function AppLayout() {
                   </ul>
                 </div>
               )}
+              </div>
             </div>
           </div>
         </header>

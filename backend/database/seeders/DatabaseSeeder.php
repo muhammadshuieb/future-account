@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             ErpDemoSeeder::class,
             CurrencySeeder::class,
             AdminUserSeeder::class,
+            ErpExtendedSeeder::class,
         ]);
     }
 }

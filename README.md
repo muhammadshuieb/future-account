@@ -43,9 +43,12 @@ docker compose down
 
 | المجال | المحتوى |
 |--------|---------|
-| محاسبة | دليل حسابات، قيود مزدوجة، إعدادات، لوحة تحكم |
-| مخازن | مستودعات، أصناف، باركود، أرصدة، حركات، تحويلات، تنبيهات |
-| مبيعات/مشتريات | فواتير، مرتجعات، قبض/صرف، كشوف حساب، QR على طباعة الفاتورة |
+| محاسبة | دليل حسابات، قيود مزدوجة، إعدادات، لوحة تحكم (مبيعات/مشتريات يومية) |
+| مخازن | مستودعات، أصناف، باركود، أرصدة، حركات، تحويلات، **جرد**، تنبيهات، **دفعات/تسلسلي** |
+| مبيعات/مشتريات | **عروض وأوامر**، فواتير، مرتجعات (UI)، قبض/صرف، كشوف حساب، **فاتورة إلكترونية** |
+| مشتريات | **طلبات وأوامر شراء** مع تحويل لفاتورة المورد |
+| صلاحيات | **إدارة مستخدمين وأدوار** (admin) |
+| لغات | **عربي (افتراضي) + English + Türkçe** عبر i18next |
 | نقدية وتقارير | صناديق، بنوك، ميزان مراجعة، دخل، ميزانية، تدفقات، ضريبة، طباعة |
 | موارد بشرية | موظفون، حضور، إجازات، رواتب |
 | فروع وتدقيق | شركات/فروع، سجل تدقيق، إشعارات |
@@ -120,7 +123,7 @@ docker compose exec backend php artisan tinker
 docker compose exec backend php artisan test
 ```
 
-تغطي: ترحيل الفواتير، تحويل العملات، صلاحيات النسخ الاحتياطي، ملصقات الباركود.
+تغطي: ترحيل الفواتير، تحويل العملات، صلاحيات النسخ الاحتياطي، ملصقات الباركود، عرض→أمر→فاتورة، طلب→أمر شراء، تحقق دفعة/تسلسلي، مرتجعات.
 
 ---
 
@@ -272,6 +275,17 @@ DEPLOY_ENV=prod ./scripts/deploy.sh
 ---
 
 ## Changelog
+
+### v1.1.0 (2026-07-20)
+- Sales quotes & orders — CRUD + Quote → Order → Invoice conversion
+- Purchase requests & orders — CRUD + PR → PO → Supplier Invoice
+- Returns UI — Sales/purchase return forms (Arabic RTL)
+- Inventory count UI — Variance posting from Warehouse
+- Permissions admin — Users & roles in Settings (admin)
+- E-invoice — UUID, structured JSON, enhanced QR print (gov API = Phase 2)
+- i18next — Arabic + English + Turkish
+- Batch/serial tracking — Product flags, validation, invoice/movement fields
+- Dashboard — Daily sales/purchases charts (7/30 days)
 
 ### v1.0.1 (2026-07-20)
 - Test release for CI/CD auto-deploy pipeline.

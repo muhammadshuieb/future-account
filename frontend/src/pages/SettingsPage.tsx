@@ -1,5 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
+import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import type { Setting } from '@/types'
 import { Button, EmptyState, Field, LoadingBlock, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
@@ -29,8 +31,10 @@ type BackupRow = {
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation()
+  const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'general' | 'currencies' | 'backup'>('general')
+  const [tab, setTab] = useState<'general' | 'currencies' | 'backup' | 'users'>('general')
   const [values, setValues] = useState<Record<string, string>>({})
   const msg = useFormMessage()
 
@@ -60,6 +64,22 @@ export default function SettingsPage() {
     enabled: tab === 'backup',
     retry: false,
   })
+
+  const usersAdmin = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: async () => (await api.get('/users')).data.data as { id: number; name: string; email: string; is_active: boolean; roles: string[] }[],
+    enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
+    retry: false,
+  })
+
+  const rolesAdmin = useQuery({
+    queryKey: ['admin-roles'],
+    queryFn: async () => (await api.get('/roles')).data.data as { roles: { id: number; name: string; permissions: string[] }[]; permissions: string[] },
+    enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
+    retry: false,
+  })
+
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', roles: ['accountant'] as string[] })
 
   const [rateForm, setRateForm] = useState({
     from_currency: 'USD',
@@ -127,6 +147,25 @@ export default function SettingsPage() {
     onError: msg.fromErr,
   })
 
+  const saveUser = useMutation({
+    mutationFn: () => api.post('/users', userForm),
+    onSuccess: () => {
+      msg.setMessage('تم إنشاء المستخدم')
+      setUserForm({ name: '', email: '', password: '', roles: ['accountant'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const updateRolePerms = useMutation({
+    mutationFn: ({ id, permissions }: { id: number; permissions: string[] }) => api.put(`/roles/${id}`, { permissions }),
+    onSuccess: () => {
+      msg.setMessage('تم تحديث الصلاحيات')
+      void queryClient.invalidateQueries({ queryKey: ['admin-roles'] })
+    },
+    onError: msg.fromErr,
+  })
+
   async function downloadBackup(filename: string) {
     const res = await api.get(`/backups/${encodeURIComponent(filename)}/download`, { responseType: 'blob' })
     const url = URL.createObjectURL(res.data)
@@ -152,6 +191,7 @@ export default function SettingsPage() {
           { id: 'general', label: 'عام' },
           { id: 'currencies', label: 'العملات وأسعار الصرف' },
           { id: 'backup', label: 'النسخ الاحتياطي' },
+          ...((user?.permissions.includes('users.manage') || user?.roles.includes('admin')) ? [{ id: 'users', label: t('settings.users') }] : []),
         ]}
         active={tab}
         onChange={(id) => setTab(id as typeof tab)}
@@ -309,6 +349,61 @@ export default function SettingsPage() {
             ))}
           </ul>
         </Panel>
+      )}
+
+      {tab === 'users' && (
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <Panel>
+            <div className="border-b border-[var(--color-line)] px-5 py-3"><h2 className="font-semibold">{t('settings.users')}</h2></div>
+            <table className="data-table text-sm">
+              <thead><tr><th>الاسم</th><th>البريد</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
+              <tbody>
+                {(usersAdmin.data || []).map((u) => (
+                  <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.join(', ')}</td><td>{u.is_active ? 'نشط' : 'معطّل'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="border-t border-[var(--color-line)] p-4">
+              <h3 className="mb-3 text-sm font-semibold">{t('settings.roles')}</h3>
+              {(rolesAdmin.data?.roles || []).map((role) => (
+                <details key={role.id} className="mb-2 rounded border border-[var(--color-line)] p-2">
+                  <summary className="cursor-pointer text-sm font-medium">{role.name} ({role.permissions.length})</summary>
+                  {role.name !== 'admin' && (
+                    <div className="mt-2 grid max-h-40 gap-1 overflow-y-auto text-xs">
+                      {(rolesAdmin.data?.permissions || []).map((perm) => (
+                        <label key={perm} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={role.permissions.includes(perm)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...role.permissions, perm]
+                                : role.permissions.filter((p) => p !== perm)
+                              updateRolePerms.mutate({ id: role.id, permissions: next })
+                            }}
+                          />
+                          {perm}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </details>
+              ))}
+            </div>
+          </Panel>
+          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
+            <h2 className="font-semibold">مستخدم جديد</h2>
+            <Field label="الاسم"><input className={inputClass} value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required /></Field>
+            <Field label="البريد"><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></Field>
+            <Field label="كلمة المرور"><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required minLength={8} /></Field>
+            <Field label={t('settings.roles')}>
+              <select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>
+                {(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+              </select>
+            </Field>
+            <Button type="submit" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button>
+          </form>
+        </div>
       )}
     </div>
   )

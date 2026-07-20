@@ -1,0 +1,91 @@
+{
+  "app": {
+    "name": "Future Account",
+    "tagline": "Entegre muhasebe sistemi"
+  },
+  "nav": {
+    "dashboard": "Kontrol Paneli",
+    "accounts": "Hesap Planı",
+    "journal": "Yevmiye Fişleri",
+    "sales": "Satışlar",
+    "purchases": "Satın Alma",
+    "warehouse": "Depo",
+    "partners": "Müşteriler ve Tedarikçiler",
+    "cash": "Kasa ve Bankalar",
+    "hr": "İnsan Kaynakları",
+    "reports": "Raporlar",
+    "barcodes": "Barkod ve Etiketler",
+    "settings": "Ayarlar",
+    "logout": "Çıkış"
+  },
+  "common": {
+    "save": "Kaydet",
+    "post": "Kaydet ve Onayla",
+    "convert": "Dönüştür",
+    "delete": "Sil",
+    "print": "Yazdır",
+    "close": "Kapat",
+    "status": "Durum",
+    "total": "Toplam",
+    "date": "Tarih",
+    "customer": "Müşteri",
+    "supplier": "Tedarikçi",
+    "warehouse": "Depo",
+    "product": "Ürün",
+    "quantity": "Miktar",
+    "price": "Fiyat",
+    "cost": "Maliyet",
+    "batch": "Parti",
+    "serial": "Seri No",
+    "loading": "Yükleniyor...",
+    "currency": "Para Birimi"
+  },
+  "sales": {
+    "title": "Satışlar",
+    "subtitle": "Teklifler, siparişler, faturalar, iadeler ve tahsilatlar",
+    "quotes": "Satış Teklifleri",
+    "orders": "Satış Siparişleri",
+    "invoices": "Faturalar",
+    "returns": "İadeler",
+    "receipts": "Tahsilatlar",
+    "newQuote": "Yeni Teklif",
+    "newOrder": "Yeni Satış Siparişi",
+    "newInvoice": "Satış Faturası",
+    "newReturn": "Satış İadesi",
+    "convertToOrder": "Siparişe Dönüştür",
+    "convertToInvoice": "Faturaya Dönüştür",
+    "eInvoice": "E-Fatura"
+  },
+  "purchases": {
+    "title": "Satın Alma",
+    "subtitle": "Talepler, siparişler, faturalar, iadeler ve ödemeler",
+    "requests": "Satın Alma Talepleri",
+    "orders": "Satın Alma Siparişleri",
+    "invoices": "Tedarikçi Faturaları",
+    "returns": "Satın Alma İadeleri",
+    "payments": "Ödemeler",
+    "newRequest": "Yeni Talep",
+    "newOrder": "Yeni Satın Alma Siparişi",
+    "convertToOrder": "Siparişe Dönüştür",
+    "convertToInvoice": "Faturaya Dönüştür"
+  },
+  "warehouse": {
+    "title": "Depo ve Stok",
+    "counts": "Sayım",
+    "newCount": "Yeni Sayım",
+    "postCount": "Farkları Kaydet",
+    "trackBatch": "Parti Takibi",
+    "trackSerial": "Seri Takibi"
+  },
+  "dashboard": {
+    "dailySales": "Günlük Satışlar",
+    "dailyPurchases": "Günlük Alımlar",
+    "last7Days": "Son 7 gün",
+    "last30Days": "Son 30 gün"
+  },
+  "settings": {
+    "users": "Kullanıcılar ve Yetkiler",
+    "roles": "Roller",
+    "permissions": "Yetkiler"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "app": {
+    "name": "Future Account",
+    "tagline": "Integrated accounting system"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "accounts": "Chart of Accounts",
+    "journal": "Journal Entries",
+    "sales": "Sales",
+    "purchases": "Purchases",
+    "warehouse": "Warehouse",
+    "partners": "Customers & Suppliers",
+    "cash": "Cash & Banks",
+    "hr": "Human Resources",
+    "reports": "Reports",
+    "barcodes": "Barcodes & Labels",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "common": {
+    "save": "Save",
+    "post": "Post",
+    "convert": "Convert",
+    "delete": "Delete",
+    "print": "Print",
+    "close": "Close",
+    "status": "Status",
+    "total": "Total",
+    "date": "Date",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "warehouse": "Warehouse",
+    "product": "Product",
+    "quantity": "Quantity",
+    "price": "Price",
+    "cost": "Cost",
+    "batch": "Batch",
+    "serial": "Serial",
+    "loading": "Loading...",
+    "currency": "Currency"
+  },
+  "sales": {
+    "title": "Sales",
+    "subtitle": "Quotes, orders, invoices, returns, and receipts",
+    "quotes": "Sales Quotes",
+    "orders": "Sales Orders",
+    "invoices": "Invoices",
+    "returns": "Returns",
+    "receipts": "Receipts",
+    "newQuote": "New Quote",
+    "newOrder": "New Sales Order",
+    "newInvoice": "Sales Invoice",
+    "newReturn": "Sales Return",
+    "convertToOrder": "Convert to Order",
+    "convertToInvoice": "Convert to Invoice",
+    "eInvoice": "E-Invoice"
+  },
+  "purchases": {
+    "title": "Purchases",
+    "subtitle": "Requests, orders, invoices, returns, and payments",
+    "requests": "Purchase Requests",
+    "orders": "Purchase Orders",
+    "invoices": "Supplier Invoices",
+    "returns": "Purchase Returns",
+    "payments": "Payments",
+    "newRequest": "New Purchase Request",
+    "newOrder": "New Purchase Order",
+    "convertToOrder": "Convert to PO",
+    "convertToInvoice": "Convert to Invoice"
+  },
+  "warehouse": {
+    "title": "Warehouse & Inventory",
+    "counts": "Inventory Count",
+    "newCount": "New Count",
+    "postCount": "Post Variances",
+    "trackBatch": "Track Batches",
+    "trackSerial": "Track Serials"
+  },
+  "dashboard": {
+    "dailySales": "Daily Sales",
+    "dailyPurchases": "Daily Purchases",
+    "last7Days": "Last 7 days",
+    "last30Days": "Last 30 days"
+  },
+  "settings": {
+    "users": "Users & Permissions",
+    "roles": "Roles",
+    "permissions": "Permissions"
+  }
+}

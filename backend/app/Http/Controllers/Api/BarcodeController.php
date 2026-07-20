@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Models\Product;
 use App\Models\SalesInvoice;
 use App\Models\Setting;
+use App\Services\EInvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class BarcodeController extends ApiController
 {
+    public function __construct(protected EInvoiceService $eInvoice) {}
     public function productLabels(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
@@ -83,20 +85,22 @@ class BarcodeController extends ApiController
     {
         $this->authorizePermission('sales.view');
 
-        $payload = json_encode([
-            'seller' => Setting::getValue('company_name', 'Future Account'),
-            'invoice' => $salesInvoice->invoice_number,
-            'date' => optional($salesInvoice->invoice_date)->toDateString(),
-            'total' => (float) $salesInvoice->total,
-            'currency' => $salesInvoice->currency ?? Setting::getValue('currency', 'SYP'),
-            'tax' => (float) $salesInvoice->tax_amount,
-        ], JSON_UNESCAPED_UNICODE);
+        $payload = $this->eInvoice->buildPayload($salesInvoice);
 
         return $this->ok([
             'invoice_number' => $salesInvoice->invoice_number,
-            'qr_payload' => $payload,
+            'e_invoice_uuid' => $payload['uuid'],
+            'e_invoice' => $payload,
+            'qr_payload' => $this->eInvoice->qrPayload($salesInvoice),
             'print_url' => '/sales?print='.$salesInvoice->id,
         ]);
+    }
+
+    public function eInvoice(SalesInvoice $salesInvoice): JsonResponse
+    {
+        $this->authorizePermission('sales.view');
+
+        return $this->ok($this->eInvoice->buildPayload($salesInvoice));
     }
 
     protected function suggestBarcode(Product $product): string

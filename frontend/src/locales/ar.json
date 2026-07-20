@@ -1,0 +1,91 @@
+{
+  "app": {
+    "name": "فيوتشر أكونت",
+    "tagline": "نظام محاسبة متكامل"
+  },
+  "nav": {
+    "dashboard": "لوحة التحكم",
+    "accounts": "دليل الحسابات",
+    "journal": "القيود اليومية",
+    "sales": "المبيعات",
+    "purchases": "المشتريات",
+    "warehouse": "المخازن",
+    "partners": "العملاء والموردون",
+    "cash": "الصناديق والبنوك",
+    "hr": "الموارد البشرية",
+    "reports": "التقارير",
+    "barcodes": "الباركود والملصقات",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
+  },
+  "common": {
+    "save": "حفظ",
+    "post": "ترحيل",
+    "convert": "تحويل",
+    "delete": "حذف",
+    "print": "طباعة",
+    "close": "إغلاق",
+    "status": "حالة",
+    "total": "الإجمالي",
+    "date": "التاريخ",
+    "customer": "عميل",
+    "supplier": "مورد",
+    "warehouse": "مخزن",
+    "product": "صنف",
+    "quantity": "كمية",
+    "price": "سعر",
+    "cost": "تكلفة",
+    "batch": "دفعة",
+    "serial": "تسلسلي",
+    "loading": "جاري التحميل...",
+    "currency": "العملة"
+  },
+  "sales": {
+    "title": "المبيعات",
+    "subtitle": "عروض، أوامر، فواتير، مرتجعات، وتحصيلات",
+    "quotes": "عروض الأسعار",
+    "orders": "أوامر البيع",
+    "invoices": "الفواتير",
+    "returns": "المرتجعات",
+    "receipts": "التحصيلات",
+    "newQuote": "عرض سعر جديد",
+    "newOrder": "أمر بيع جديد",
+    "newInvoice": "فاتورة مبيعات",
+    "newReturn": "مرتجع مبيعات",
+    "convertToOrder": "تحويل لأمر بيع",
+    "convertToInvoice": "تحويل لفاتورة",
+    "eInvoice": "فاتورة إلكترونية"
+  },
+  "purchases": {
+    "title": "المشتريات",
+    "subtitle": "طلبات، أوامر، فواتير، مرتجعات، ومدفوعات",
+    "requests": "طلبات الشراء",
+    "orders": "أوامر الشراء",
+    "invoices": "فواتير الموردين",
+    "returns": "مرتجعات المشتريات",
+    "payments": "المدفوعات",
+    "newRequest": "طلب شراء جديد",
+    "newOrder": "أمر شراء جديد",
+    "convertToOrder": "تحويل لأمر شراء",
+    "convertToInvoice": "تحويل لفاتورة"
+  },
+  "warehouse": {
+    "title": "المخازن والمخزون",
+    "counts": "الجرد",
+    "newCount": "جرد جديد",
+    "postCount": "ترحيل الفروقات",
+    "trackBatch": "تتبع الدفعات",
+    "trackSerial": "تتبع التسلسلي"
+  },
+  "dashboard": {
+    "dailySales": "مبيعات يومية",
+    "dailyPurchases": "مشتريات يومية",
+    "last7Days": "آخر 7 أيام",
+    "last30Days": "آخر 30 يوم"
+  },
+  "settings": {
+    "users": "المستخدمون والصلاحيات",
+    "roles": "الأدوار",
+    "permissions": "الصلاحيات"
+  }
+}

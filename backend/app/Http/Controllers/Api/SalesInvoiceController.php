@@ -35,6 +35,8 @@ class SalesInvoiceController extends ApiController
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_price' => ['nullable', 'numeric', 'min:0'],
             'lines.*.tax_rate' => ['nullable', 'numeric', 'min:0'],
+            'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
+            'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
 
         return $this->ok($this->sales->createInvoice($data, $data['lines'], $request->user()), 201);

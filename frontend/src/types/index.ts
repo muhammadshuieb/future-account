@@ -55,6 +55,8 @@ export type DashboardSummary = {
   payables?: number
   month_sales?: number
   month_purchases?: number
+  daily_sales?: { date: string; total: number; count: number }[]
+  daily_purchases?: { date: string; total: number; count: number }[]
   customers_count?: number
   suppliers_count?: number
   products_count?: number

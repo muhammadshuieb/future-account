@@ -7,10 +7,13 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Receipt;
 use App\Models\SalesInvoice;
+use App\Models\SalesOrder;
+use App\Models\SalesQuote;
 use App\Models\SalesReturn;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class SalesService
@@ -36,10 +39,12 @@ class SalesService
 
             $invoice = SalesInvoice::query()->create([
                 'invoice_number' => $this->nextNumber('SI'),
+                'e_invoice_uuid' => (string) Str::uuid(),
                 'invoice_date' => $data['invoice_date'],
                 'customer_id' => $data['customer_id'],
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'branch_id' => $data['branch_id'] ?? null,
+                'sales_order_id' => $data['sales_order_id'] ?? null,
                 'status' => 'draft',
                 'currency' => $fx['currency'],
                 'exchange_rate' => $fx['exchange_rate'],
@@ -117,6 +122,8 @@ class SalesService
                     [
                         'movement_date' => $invoice->invoice_date->toDateString(),
                         'unit_cost' => $line->cost_price,
+                        'batch_no' => $line->batch_no,
+                        'serial_no' => $line->serial_no,
                         'reference_type' => $invoice::class,
                         'reference_id' => $invoice->id,
                         'notes' => 'صرف مبيعات '.$invoice->invoice_number,
@@ -161,6 +168,8 @@ class SalesService
                     'quantity' => $line['quantity'],
                     'unit_price' => $line['unit_price'],
                     'line_total' => $lineTotal,
+                    'batch_no' => $line['batch_no'] ?? null,
+                    'serial_no' => $line['serial_no'] ?? null,
                 ];
             }
 
@@ -318,6 +327,7 @@ class SalesService
 
         foreach ($lines as $line) {
             $product = Product::query()->findOrFail($line['product_id']);
+            $this->inventory->validateBatchSerial($product, $line);
             $qty = (float) $line['quantity'];
             $price = (float) ($line['unit_price'] ?? $product->sale_price);
             $rate = (float) ($line['tax_rate'] ?? $taxRateDefault);
@@ -332,10 +342,175 @@ class SalesService
                 'tax_rate' => $rate,
                 'line_total' => round($lineSub + $lineTax, 2),
                 'cost_price' => (float) ($line['cost_price'] ?? $product->cost_price),
+                'batch_no' => $line['batch_no'] ?? null,
+                'serial_no' => $line['serial_no'] ?? null,
             ];
         }
 
         return [$subtotal, $tax, round($subtotal + $tax, 2), $normalized];
+    }
+
+    public function createQuote(array $data, array $lines, User $user): SalesQuote
+    {
+        return DB::transaction(function () use ($data, $lines, $user) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['quote_date'] ?? null);
+
+            $quote = SalesQuote::query()->create([
+                'quote_number' => $this->nextNumber('SQ'),
+                'quote_date' => $data['quote_date'],
+                'valid_until' => $data['valid_until'] ?? null,
+                'customer_id' => $data['customer_id'],
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? null,
+                'status' => $data['status'] ?? 'draft',
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $user->id,
+            ]);
+
+            foreach ($normalized as $line) {
+                $quote->items()->create($line);
+            }
+
+            return $quote->load(['items.product', 'customer', 'warehouse']);
+        });
+    }
+
+    public function updateQuote(SalesQuote $quote, array $data, array $lines, User $user): SalesQuote
+    {
+        if (in_array($quote->status, ['converted', 'cancelled'], true)) {
+            throw ValidationException::withMessages(['status' => ['لا يمكن تعديل عرض محوّل أو ملغى.']]);
+        }
+
+        return DB::transaction(function () use ($quote, $data, $lines) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $quote->update([
+                'quote_date' => $data['quote_date'] ?? $quote->quote_date,
+                'valid_until' => $data['valid_until'] ?? $quote->valid_until,
+                'customer_id' => $data['customer_id'] ?? $quote->customer_id,
+                'warehouse_id' => $data['warehouse_id'] ?? $quote->warehouse_id,
+                'notes' => $data['notes'] ?? $quote->notes,
+                'status' => $data['status'] ?? $quote->status,
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+            ]);
+            $quote->items()->delete();
+            foreach ($normalized as $line) {
+                $quote->items()->create($line);
+            }
+
+            return $quote->fresh(['items.product', 'customer', 'warehouse']);
+        });
+    }
+
+    public function convertQuoteToOrder(SalesQuote $quote, User $user, array $overrides = []): SalesOrder
+    {
+        if ($quote->status === 'converted') {
+            throw ValidationException::withMessages(['status' => ['عرض السعر محوّل مسبقاً.']]);
+        }
+
+        return DB::transaction(function () use ($quote, $user, $overrides) {
+            $quote->load('items');
+            $order = SalesOrder::query()->create([
+                'order_number' => $this->nextNumber('SO'),
+                'order_date' => $overrides['order_date'] ?? now()->toDateString(),
+                'customer_id' => $quote->customer_id,
+                'sales_quote_id' => $quote->id,
+                'warehouse_id' => $overrides['warehouse_id'] ?? $quote->warehouse_id,
+                'branch_id' => $quote->branch_id,
+                'status' => 'confirmed',
+                'currency' => $quote->currency,
+                'exchange_rate' => $quote->exchange_rate,
+                'base_amount' => $quote->base_amount,
+                'subtotal' => $quote->subtotal,
+                'tax_amount' => $quote->tax_amount,
+                'total' => $quote->total,
+                'notes' => $quote->notes,
+                'created_by' => $user->id,
+            ]);
+
+            foreach ($quote->items as $item) {
+                $order->items()->create($item->only([
+                    'product_id', 'quantity', 'unit_price', 'tax_rate', 'line_total', 'batch_no', 'serial_no',
+                ]));
+            }
+
+            $quote->update(['status' => 'converted']);
+
+            return $order->load(['items.product', 'customer', 'quote']);
+        });
+    }
+
+    public function createOrder(array $data, array $lines, User $user): SalesOrder
+    {
+        return DB::transaction(function () use ($data, $lines, $user) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['order_date'] ?? null);
+
+            $order = SalesOrder::query()->create([
+                'order_number' => $this->nextNumber('SO'),
+                'order_date' => $data['order_date'],
+                'customer_id' => $data['customer_id'],
+                'sales_quote_id' => $data['sales_quote_id'] ?? null,
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? null,
+                'status' => $data['status'] ?? 'draft',
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $user->id,
+            ]);
+
+            foreach ($normalized as $line) {
+                $order->items()->create($line);
+            }
+
+            return $order->load(['items.product', 'customer', 'warehouse']);
+        });
+    }
+
+    public function convertOrderToInvoice(SalesOrder $order, User $user, array $overrides = []): SalesInvoice
+    {
+        if ($order->status === 'converted') {
+            throw ValidationException::withMessages(['status' => ['أمر البيع محوّل مسبقاً.']]);
+        }
+
+        $order->load('items');
+        $lines = $order->items->map(fn ($item) => [
+            'product_id' => $item->product_id,
+            'quantity' => $item->quantity,
+            'unit_price' => $item->unit_price,
+            'tax_rate' => $item->tax_rate,
+            'batch_no' => $item->batch_no,
+            'serial_no' => $item->serial_no,
+        ])->all();
+
+        $invoice = $this->createInvoice([
+            'invoice_date' => $overrides['invoice_date'] ?? now()->toDateString(),
+            'customer_id' => $order->customer_id,
+            'warehouse_id' => $overrides['warehouse_id'] ?? $order->warehouse_id,
+            'branch_id' => $order->branch_id,
+            'sales_order_id' => $order->id,
+            'currency' => $order->currency,
+            'exchange_rate' => $order->exchange_rate,
+            'status' => $overrides['status'] ?? 'draft',
+            'notes' => $order->notes,
+        ], $lines, $user);
+
+        $order->update(['status' => 'converted']);
+
+        return $invoice;
     }
 
     public function nextNumber(string $prefix): string
@@ -347,6 +522,8 @@ class SalesService
             'SI' => SalesInvoice::query()->where('invoice_number', 'like', $full.'%')->orderByDesc('invoice_number')->value('invoice_number'),
             'SR' => SalesReturn::query()->where('return_number', 'like', $full.'%')->orderByDesc('return_number')->value('return_number'),
             'RC' => Receipt::query()->where('receipt_number', 'like', $full.'%')->orderByDesc('receipt_number')->value('receipt_number'),
+            'SQ' => SalesQuote::query()->where('quote_number', 'like', $full.'%')->orderByDesc('quote_number')->value('quote_number'),
+            'SO' => SalesOrder::query()->where('order_number', 'like', $full.'%')->orderByDesc('order_number')->value('order_number'),
             default => null,
         };
 

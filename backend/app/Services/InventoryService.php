@@ -27,6 +27,9 @@ class InventoryService
         array $meta = []
     ): StockMovement {
         return DB::transaction(function () use ($warehouseId, $productId, $quantityDelta, $type, $user, $meta) {
+            $product = Product::query()->findOrFail($productId);
+            $this->validateBatchSerial($product, $meta);
+
             $batch = $meta['batch_no'] ?? '';
             $level = StockLevel::query()->firstOrCreate(
                 [
@@ -131,6 +134,24 @@ class InventoryService
                 'journal_entry_id' => $journalId,
             ]
         );
+    }
+
+    /**
+     * Validate batch/serial requirements for products with tracking flags.
+     */
+    public function validateBatchSerial(Product $product, array $line): void
+    {
+        if ($product->track_batch && empty($line['batch_no'])) {
+            throw ValidationException::withMessages([
+                'batch_no' => ["الصنف {$product->name} يتطلب رقم دفعة."],
+            ]);
+        }
+
+        if ($product->track_serial && empty($line['serial_no'])) {
+            throw ValidationException::withMessages([
+                'serial_no' => ["الصنف {$product->name} يتطلب رقم تسلسلي."],
+            ]);
+        }
     }
 
     public function transfer(array $data, array $lines, User $user): \App\Models\WarehouseTransfer

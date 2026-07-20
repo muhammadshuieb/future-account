@@ -22,8 +22,14 @@ use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\PurchaseOrderController;
+use App\Http\Controllers\Api\PurchaseRequestController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\PurchaseInvoiceController;
 use App\Http\Controllers\Api\PurchaseReturnController;
+use App\Http\Controllers\Api\SalesOrderController;
+use App\Http\Controllers\Api\SalesQuoteController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SalaryRecordController;
@@ -72,6 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('barcodes/labels', [BarcodeController::class, 'productLabels']);
     Route::post('products/{product}/barcode', [BarcodeController::class, 'generateForProduct']);
     Route::get('sales-invoices/{salesInvoice}/qr', [BarcodeController::class, 'invoiceQr']);
+    Route::get('sales-invoices/{salesInvoice}/e-invoice', [BarcodeController::class, 'eInvoice']);
 
     // Notifications stub
     Route::get('notifications', [NotificationController::class, 'index']);
@@ -101,6 +108,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('suppliers', SupplierController::class);
     Route::get('suppliers/{supplier}/statement', [SupplierController::class, 'statement']);
 
+    Route::get('sales-quotes', [SalesQuoteController::class, 'index']);
+    Route::post('sales-quotes', [SalesQuoteController::class, 'store']);
+    Route::get('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'show']);
+    Route::put('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'update']);
+    Route::delete('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'destroy']);
+    Route::post('sales-quotes/{salesQuote}/convert-to-order', [SalesQuoteController::class, 'convertToOrder']);
+
+    Route::get('sales-orders', [SalesOrderController::class, 'index']);
+    Route::post('sales-orders', [SalesOrderController::class, 'store']);
+    Route::get('sales-orders/{salesOrder}', [SalesOrderController::class, 'show']);
+    Route::delete('sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy']);
+    Route::post('sales-orders/{salesOrder}/convert-to-invoice', [SalesOrderController::class, 'convertToInvoice']);
+
     Route::get('sales-invoices', [SalesInvoiceController::class, 'index']);
     Route::post('sales-invoices', [SalesInvoiceController::class, 'store']);
     Route::get('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'show']);
@@ -113,6 +133,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('receipts', [ReceiptController::class, 'index']);
     Route::post('receipts', [ReceiptController::class, 'store']);
     Route::post('receipts/{receipt}/post', [ReceiptController::class, 'post']);
+
+    Route::get('purchase-requests', [PurchaseRequestController::class, 'index']);
+    Route::post('purchase-requests', [PurchaseRequestController::class, 'store']);
+    Route::get('purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show']);
+    Route::put('purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update']);
+    Route::delete('purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy']);
+    Route::post('purchase-requests/{purchaseRequest}/convert-to-order', [PurchaseRequestController::class, 'convertToOrder']);
+
+    Route::get('purchase-orders', [PurchaseOrderController::class, 'index']);
+    Route::post('purchase-orders', [PurchaseOrderController::class, 'store']);
+    Route::get('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
+    Route::delete('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy']);
+    Route::post('purchase-orders/{purchaseOrder}/convert-to-invoice', [PurchaseOrderController::class, 'convertToInvoice']);
 
     Route::get('purchase-invoices', [PurchaseInvoiceController::class, 'index']);
     Route::post('purchase-invoices', [PurchaseInvoiceController::class, 'store']);
@@ -164,4 +197,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('companies', CompanyController::class)->except(['show', 'destroy']);
     Route::apiResource('branches', BranchController::class)->except(['show', 'destroy']);
     Route::get('audit-logs', [AuditLogController::class, 'index']);
+
+    Route::get('users', [UserController::class, 'index']);
+    Route::post('users', [UserController::class, 'store']);
+    Route::put('users/{user}', [UserController::class, 'update']);
+    Route::delete('users/{user}', [UserController::class, 'destroy']);
+    Route::get('roles', [RoleController::class, 'index']);
+    Route::put('roles/{role}', [RoleController::class, 'update']);
 });

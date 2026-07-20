@@ -31,6 +31,8 @@ class PurchaseReturnController extends ApiController
             'lines.*.product_id' => ['required', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
+            'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
+            'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
 
         return $this->ok($this->purchases->createReturn($data, $data['lines'], $request->user()), 201);

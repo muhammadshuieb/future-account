@@ -10,7 +10,7 @@ class PurchaseInvoice extends Model
 {
     protected $fillable = [
         'invoice_number', 'invoice_date', 'supplier_id', 'warehouse_id', 'branch_id',
-        'status', 'currency', 'exchange_rate', 'base_amount',
+        'purchase_order_id', 'status', 'currency', 'exchange_rate', 'base_amount',
         'subtotal', 'tax_amount', 'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
@@ -30,6 +30,7 @@ class PurchaseInvoice extends Model
     }
 
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
+    public function purchaseOrder(): BelongsTo { return $this->belongsTo(PurchaseOrder::class); }
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
     public function lines(): HasMany { return $this->hasMany(PurchaseInvoiceLine::class); }
     public function payments(): HasMany { return $this->hasMany(SupplierPayment::class); }
