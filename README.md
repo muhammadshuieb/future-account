@@ -258,6 +258,154 @@ DEPLOY_ENV=prod ./scripts/deploy.sh
 
 ---
 
+## النشر على Hostinger | Deploy on Hostinger
+
+فيوتشر أكونت يعمل عبر **Docker + PostgreSQL + Laravel** — لذلك تحتاج **VPS من Hostinger** (Ubuntu/Debian). **الاستضافة المشتركة (Shared Hosting) لا تدعم Docker** ولا PostgreSQL بهذا الشكل؛ لا تستخدمها لهذا المشروع.
+
+### ماذا يفعل Hostinger API؟
+
+مفتاح API من [hPanel → Profile → API](https://hpanel.hostinger.com/profile/api) يتيح التحكم **برمجياً** عبر `https://developers.hostinger.com` (Bearer token):
+
+| الخدمة | أمثلة | مفيد لفيوتشر أكونت؟ |
+|--------|--------|---------------------|
+| **VPS** | تشغيل/إيقاف/إعادة تشغيل، معلومات الجهاز | إدارة السيرفر (اختياري) |
+| **DNS** | A / CNAME / MX، تحديث السجلات | **نعم** — ربط الدومين بـ IP الـ VPS |
+| **Domains** | قائمة النطاقات، WHOIS | إدارة النطاق |
+| **Docker Manager** | نشر `docker-compose` عبر [deploy-on-vps](https://github.com/hostinger/deploy-on-vps) | بديل — **غير موصى به** لهذا المشروع (انظر أدناه) |
+
+**ما لا يفعله API:** لا يستبدل SSH للنشر الكامل. لا ينفّذ `php artisan migrate` أو فحوصات الصحة الموجودة في `scripts/deploy.sh`.
+
+### أين تضع مفتاح API؟
+
+| المكان | متى |
+|--------|-----|
+| **GitHub Secret** `HOSTINGER_API_KEY` | إذا أردت أتمتة DNS أو استخدام action رسمي لاحقاً |
+| **hPanel → Profile → API** | **هنا تُنشئ** المفتاح فقط — لا تلصقه في الكود |
+| **`.env.prod` على VPS** | **لا** — مفتاح Hostinger ليس جزءاً من تطبيق Laravel |
+| **المستودع / README** | **ممنوع** — لا ترفع المفتاح إلى Git |
+
+> **أمان:** إذا ظهر المفتاح في محادثة أو رسالة، **ألغِه فوراً** من hPanel وأنشئ مفتاحاً جديداً، ثم ضعه في GitHub Secrets فقط.
+
+### الطريقة الموصى بها: VPS + نشر SSH (الموجود حالياً)
+
+المشروع يستخدم بالفعل `.github/workflows/deploy.yml` → SSH → `scripts/deploy.sh` (pull، build، migrate، فحص صحة). هذا **أنسب** من Hostinger Docker Manager لأنه يشغّل migrations و seeders بشكل آمن.
+
+**الأسرار المطلوبة في GitHub** (Settings → Secrets and variables → Actions):
+
+| Secret | الوصف |
+|--------|--------|
+| `DEPLOY_HOST` | IP عام لـ VPS (مثلاً من hPanel → VPS → Overview) |
+| `DEPLOY_USER` | مستخدم SSH (مثلاً `root` أو `ubuntu`) |
+| `DEPLOY_SSH_KEY` | المفتاح الخاص Ed25519 (كامل) |
+| `DEPLOY_PATH` | `/opt/future-account` |
+| `DEPLOY_PORT` | `22` *(اختياري)* |
+| `HOSTINGER_API_KEY` | *(اختياري)* للـ DNS أو إدارة VPS — **ليس للنشر الأساسي** |
+
+مفتاح Hostinger **لا يحل محل** `DEPLOY_SSH_KEY` — تحتاج **الاثنين** فقط إذا أردت أتمتة DNS؛ للنشر اليومي يكفي أسرار `DEPLOY_*`.
+
+### إعداد VPS على Hostinger (خطوة بخطوة)
+
+#### 1) إنشاء VPS
+
+1. من [hPanel](https://hpanel.hostinger.com/) → **VPS** → أنشئ VPS (Ubuntu 22.04 أو 24.04 موصى به).
+2. سجّل **IP العام** و**VM ID** (من الرابط `.../vps/123456/overview` أو من hostname `srv123456.hstgr.cloud` → ID = `123456`).
+3. فعّل **SSH** (مفتاح أو كلمة مرور — يُفضّل مفتاح SSH).
+
+#### 2) تثبيت Docker على VPS
+
+```bash
+ssh root@YOUR_VPS_IP
+# اتبع: https://docs.docker.com/engine/install/ubuntu/
+apt update && apt install -y git
+```
+
+#### 3) استنساخ المشروع وإعداد الإنتاج
+
+```bash
+mkdir -p /opt/future-account
+git clone https://github.com/muhammadshuieb/future-account.git /opt/future-account
+cd /opt/future-account
+cp .env.prod.example .env.prod
+nano .env.prod   # APP_KEY, POSTGRES_PASSWORD, APP_URL, FRONTEND_URL, SANCTUM_STATEFUL_DOMAINS
+chmod +x scripts/*.sh
+DEPLOY_ENV=prod ./scripts/deploy.sh
+```
+
+#### 4) مفتاح SSH لـ GitHub Actions
+
+```bash
+ssh-keygen -t ed25519 -C "github-deploy-future-account" -f ~/.ssh/future_account_deploy -N ""
+cat ~/.ssh/future_account_deploy.pub >> ~/.ssh/authorized_keys
+# انسخ المفتاح الخاص إلى GitHub Secret: DEPLOY_SSH_KEY
+cat ~/.ssh/future_account_deploy
+```
+
+#### 5) جدار ناري (موصى به)
+
+```bash
+ufw allow OpenSSH
+ufw allow 80/tcp
+ufw allow 443/tcp
+# للاختبار المباشر بدون reverse proxy فقط:
+# ufw allow 8080/tcp
+ufw enable
+```
+
+#### 6) HTTPS (اختياري لكن موصى به)
+
+ثبّت **Nginx** أو **Caddy** كـ reverse proxy أمام المنفذ `8080` (frontend) و `8000` (API)، مع Let's Encrypt. حدّث `.env.prod`:
+
+- `APP_URL=https://your-domain.example`
+- `FRONTEND_URL=https://your-domain.example`
+- `SANCTUM_STATEFUL_DOMAINS=your-domain.example,www.your-domain.example`
+
+### ربط الدومين بالـ VPS
+
+#### الطريقة أ — hPanel (يدوي، الأسهل)
+
+1. hPanel → **Domains** → اختر النطاق → **DNS / DNS Zone**.
+2. أضف أو عدّل:
+   - **A** `@` → IP الـ VPS
+   - **A** `www` → IP الـ VPS (أو **CNAME** `www` → `@`)
+3. انتظر انتشار DNS (حتى 24 ساعة، غالباً أقل).
+
+#### الطريقة ب — Hostinger API (أتمتة)
+
+1. أضف `HOSTINGER_API_KEY` في GitHub Secrets.
+2. استخدم [DNS API](https://developers.hostinger.com/) — مثال تحديث سجل A:
+
+```bash
+curl -X PUT "https://developers.hostinger.com/api/dns/v1/zones/your-domain.example" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"overwrite":false,"zone":[{"name":"@","type":"A","ttl":14400,"records":[{"content":"YOUR_VPS_IP"}]}]}'
+```
+
+يُفضّل التحقق أولاً عبر `POST .../zones/{domain}/validate` قبل التطبيق.
+
+### لماذا لا يوجد `deploy-hostinger.yml`؟
+
+Action الرسمي `hostinger/deploy-on-vps` ينشر `docker-compose` عبر API لكن **لا يشغّل** `scripts/deploy.sh` (migrations، AdminUserSeeder الشرطي، health checks). النشر عبر SSH الموجود أدق لهذا ERP. استخدم مفتاح Hostinger للـ **DNS/VPS** إن احتجت، وليس كبديل لـ `DEPLOY_SSH_KEY`.
+
+### سير العمل بعد الإعداد
+
+```bash
+git push origin main
+# CI → Deploy (SSH) → VPS يحدّث الحاويات تلقائياً
+```
+
+### استضافة مشتركة Hostinger؟
+
+| الميزة | VPS | Shared |
+|--------|-----|--------|
+| Docker | ✅ | ❌ |
+| PostgreSQL | ✅ | ❌ (غالباً MySQL فقط) |
+| Laravel queue/cron | ✅ | محدود |
+| فيوتشر أكونت | **مدعوم** | **غير مدعوم** |
+
+---
+
+
 ## تشغيل محلي (اختياري) | Local without full Docker
 
 1. `docker compose up -d postgres`
