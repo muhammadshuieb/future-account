@@ -22,6 +22,7 @@ import {
 import { useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
+import { APP_VERSION } from '@/version'
 
 const navItems = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard, end: true },
@@ -84,6 +85,7 @@ export default function AppLayout() {
           <div>
             <p className="text-lg font-bold leading-tight">فيوتشر أكونت</p>
             <p className="text-xs text-white/55">نظام محاسبة متكامل</p>
+            <p className="text-[10px] text-white/40">v{APP_VERSION}</p>
           </div>
         </div>
       </div>

@@ -268,3 +268,11 @@ DEPLOY_ENV=prod ./scripts/deploy.sh
 - الواجهة عربية **RTL** بخط **Cairo** (+ IBM Plex Sans Arabic احتياطي)
 - مفتاح `APP_KEY` في compose ثابت للتجربة المحلية — لا تستخدمه في الإنتاج
 - لا ترفع أسراراً إنتاجية — قيم Docker للتجربة فقط
+
+---
+
+## Changelog
+
+### v1.0.1 (2026-07-20)
+- Test release for CI/CD auto-deploy pipeline.
+
