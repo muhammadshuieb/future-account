@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { Account } from '@/types'
+import { Button, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
 
 const typeLabels: Record<Account['type'], string> = {
   asset: 'أصول',
@@ -28,6 +29,7 @@ export default function AccountsPage() {
   const [search, setSearch] = useState('')
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -44,33 +46,15 @@ export default function AccountsPage() {
     [accounts],
   )
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const payload = {
-        ...form,
-        parent_id: form.parent_id === '' ? null : Number(form.parent_id),
-      }
-      if (editingId) {
-        return api.put(`/accounts/${editingId}`, payload)
-      }
-      return api.post('/accounts', payload)
-    },
-    onSuccess: () => {
-      setMessage(editingId ? 'تم تحديث الحساب.' : 'تم إنشاء الحساب.')
-      setError('')
-      setForm(emptyForm)
-      setEditingId(null)
-      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
-    },
-    onError: (err: { response?: { data?: { message?: string; errors?: Record<string, string[]> } } }) => {
-      const first = err.response?.data?.errors
-        ? Object.values(err.response.data.errors)[0]?.[0]
-        : undefined
-      setError(first || err.response?.data?.message || 'تعذر حفظ الحساب')
-    },
-  })
+  function openCreate() {
+    setEditingId(null)
+    setForm(emptyForm)
+    setMessage('')
+    setError('')
+    setModalOpen(true)
+  }
 
-  function startEdit(account: Account) {
+  function openEdit(account: Account) {
     setEditingId(account.id)
     setForm({
       code: account.code,
@@ -85,7 +69,36 @@ export default function AccountsPage() {
     })
     setMessage('')
     setError('')
+    setModalOpen(true)
   }
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditingId(null)
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        ...form,
+        parent_id: form.parent_id === '' ? null : Number(form.parent_id),
+      }
+      if (editingId) return api.put(`/accounts/${editingId}`, payload)
+      return api.post('/accounts', payload)
+    },
+    onSuccess: () => {
+      setMessage(editingId ? 'تم تحديث الحساب.' : 'تم إنشاء الحساب.')
+      setError('')
+      closeModal()
+      void queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    },
+    onError: (err: { response?: { data?: { message?: string; errors?: Record<string, string[]> } } }) => {
+      const first = err.response?.data?.errors
+        ? Object.values(err.response.data.errors)[0]?.[0]
+        : undefined
+      setError(first || err.response?.data?.message || 'تعذر حفظ الحساب')
+    },
+  })
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -94,104 +107,113 @@ export default function AccountsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">دليل الحسابات</h1>
-          <p className="mt-1 text-black/55">هيكل حسابات هرمي مع أنواع القيد الخمسة</p>
-        </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="بحث بالرمز أو الاسم..."
-          className="w-64 rounded-lg border border-black/10 bg-white px-3 py-2 outline-none ring-teal focus:ring-2"
-        />
-      </header>
+      <PageHeader
+        title="دليل الحسابات"
+        subtitle="هيكل حسابات هرمي مع أنواع القيد الخمسة"
+        actions={
+          <>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="بحث بالرمز أو الاسم..."
+              className="w-64 rounded-lg border border-black/10 bg-white px-3 py-2 outline-none ring-teal focus:ring-2"
+            />
+            <Button variant="primary" onClick={openCreate}>إضافة</Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
+      <Msg message={message} error={error} />
+
+      <Panel>
+        <table className="w-full text-sm">
+          <thead className="bg-mist text-right text-black/60">
+            <tr>
+              <th className="px-4 py-3 font-medium">الرمز</th>
+              <th className="px-4 py-3 font-medium">الاسم</th>
+              <th className="px-4 py-3 font-medium">النوع</th>
+              <th className="px-4 py-3 font-medium">حالة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
               <tr>
-                <th className="px-4 py-3 font-medium">الرمز</th>
-                <th className="px-4 py-3 font-medium">الاسم</th>
-                <th className="px-4 py-3 font-medium">النوع</th>
-                <th className="px-4 py-3 font-medium">حالة</th>
-                <th className="px-4 py-3 font-medium"></th>
+                <td colSpan={4} className="px-4 py-8 text-center text-black/45">جاري التحميل...</td>
               </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-black/45">
-                    جاري التحميل...
-                  </td>
-                </tr>
-              )}
-              {!isLoading && accounts.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-black/45">
-                    لا توجد حسابات
-                  </td>
-                </tr>
-              )}
-              {accounts.map((account) => (
-                <tr key={account.id} className="border-t border-black/5">
-                  <td className="px-4 py-3 font-mono text-xs" style={{ paddingInlineStart: `${account.level * 12}px` }}>
-                    {account.code}
-                  </td>
-                  <td className="px-4 py-3">
-                    {account.name}
-                    {account.is_group && (
-                      <span className="ms-2 rounded bg-mist px-1.5 py-0.5 text-[10px] text-black/50">مجموعة</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{typeLabels[account.type]}</td>
-                  <td className="px-4 py-3">
-                    <span className={account.is_active ? 'text-success' : 'text-danger'}>
-                      {account.is_active ? 'نشط' : 'موقوف'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-left">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(account)}
-                      className="text-teal hover:underline"
-                    >
-                      تعديل
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            )}
+            {!isLoading && accounts.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-black/45">لا توجد حسابات</td>
+              </tr>
+            )}
+            {accounts.map((account) => (
+              <tr
+                key={account.id}
+                className="row-clickable border-t border-black/5"
+                onClick={() => openEdit(account)}
+                onKeyDown={(e) => e.key === 'Enter' && openEdit(account)}
+                tabIndex={0}
+                title="انقر للتعديل"
+              >
+                <td className="px-4 py-3 font-mono text-xs" style={{ paddingInlineStart: `${account.level * 12}px` }}>
+                  {account.code}
+                </td>
+                <td className="px-4 py-3">
+                  {account.name}
+                  {account.is_group && (
+                    <span className="ms-2 rounded bg-mist px-1.5 py-0.5 text-[10px] text-black/50">مجموعة</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">{typeLabels[account.type]}</td>
+                <td className="px-4 py-3">
+                  <span className={account.is_active ? 'text-success' : 'text-danger'}>
+                    {account.is_active ? 'نشط' : 'موقوف'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
 
-        <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-semibold">{editingId ? 'تعديل حساب' : 'حساب جديد'}</h2>
+      <Modal
+        open={modalOpen}
+        onClose={closeModal}
+        title={editingId ? 'تعديل حساب' : 'حساب جديد'}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>إلغاء</Button>
+            <Button variant="primary" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              حفظ
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={onSubmit} className="space-y-3">
           <input
             required
             value={form.code}
             onChange={(e) => setForm({ ...form, code: e.target.value })}
             placeholder="رمز الحساب"
-            className="w-full rounded-lg border border-black/10 px-3 py-2"
+            className={inputClass}
           />
           <input
             required
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             placeholder="اسم الحساب"
-            className="w-full rounded-lg border border-black/10 px-3 py-2"
+            className={inputClass}
           />
           <input
             value={form.name_en}
             onChange={(e) => setForm({ ...form, name_en: e.target.value })}
             placeholder="الاسم بالإنجليزية (اختياري)"
-            className="w-full rounded-lg border border-black/10 px-3 py-2"
+            className={inputClass}
           />
           <select
             value={form.parent_id}
             onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
-            className="w-full rounded-lg border border-black/10 px-3 py-2"
+            className={inputClass}
           >
             <option value="">بدون أب (جذر)</option>
             {parents.map((p) => (
@@ -204,7 +226,7 @@ export default function AccountsPage() {
             <select
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value as Account['type'] })}
-              className="rounded-lg border border-black/10 px-3 py-2"
+              className={inputClass}
             >
               {Object.entries(typeLabels).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -213,7 +235,7 @@ export default function AccountsPage() {
             <select
               value={form.nature}
               onChange={(e) => setForm({ ...form, nature: e.target.value as Account['nature'] })}
-              className="rounded-lg border border-black/10 px-3 py-2"
+              className={inputClass}
             >
               <option value="debit">مدين</option>
               <option value="credit">دائن</option>
@@ -235,30 +257,9 @@ export default function AccountsPage() {
             />
             نشط
           </label>
-          {message && <p className="text-sm text-success">{message}</p>}
           {error && <p className="text-sm text-danger">{error}</p>}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="rounded-lg bg-teal px-4 py-2 text-white hover:bg-teal-dark"
-            >
-              حفظ
-            </button>
-            {editingId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingId(null)
-                  setForm(emptyForm)
-                }}
-                className="rounded-lg border border-black/10 px-4 py-2"
-              >
-                إلغاء
-              </button>
-            )}
-          </div>
         </form>
-      </div>
+      </Modal>
     </div>
   )
 }

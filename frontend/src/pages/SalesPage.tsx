@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
-import { Button, Field, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -25,6 +25,9 @@ export default function SalesPage() {
   const [tab, setTab] = useState('invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
+  const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
 
   const quotes = useQuery({ queryKey: ['sales-quotes'], queryFn: async () => (await api.get('/sales-quotes')).data.data, enabled: tab === 'quotes' })
   const orders = useQuery({ queryKey: ['sales-orders'], queryFn: async () => (await api.get('/sales-orders')).data.data, enabled: tab === 'orders' })
@@ -85,6 +88,9 @@ export default function SalesPage() {
   }
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
+  const openCreate = () => { setPrintId(null); setSelectedId(null); setSelectedRow(null); setModal('create') }
+  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setPrintId(null); setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
 
   const saveQuote = useMutation({
     mutationFn: () => api.post('/sales-quotes', {
@@ -95,7 +101,7 @@ export default function SalesPage() {
       currency: quote.currency,
       lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ عرض السعر'); invalidateSales() },
+    onSuccess: () => { msg.setMessage('تم حفظ عرض السعر'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -107,7 +113,7 @@ export default function SalesPage() {
       currency: order.currency,
       lines: [linePayload(order.product_id, order.quantity, order.unit_price, order.batch_no, order.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ أمر البيع'); invalidateSales() },
+    onSuccess: () => { msg.setMessage('تم حفظ أمر البيع'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -121,7 +127,7 @@ export default function SalesPage() {
       status: inv.status,
       lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم إنشاء/ترحيل فاتورة المبيعات'); invalidateSales() },
+    onSuccess: () => { msg.setMessage('تم إنشاء/ترحيل فاتورة المبيعات'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -134,13 +140,26 @@ export default function SalesPage() {
       status: ret.status,
       lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_price: Number(ret.unit_price), batch_no: ret.batch_no || undefined, serial_no: ret.serial_no || undefined }],
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل مرتجع المبيعات'); invalidateSales() },
+    onSuccess: () => { msg.setMessage('تم ترحيل مرتجع المبيعات'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
   const convertQuote = useMutation({
     mutationFn: (id: number) => api.post(`/sales-quotes/${id}/convert-to-order`),
     onSuccess: () => { msg.setMessage('تم التحويل لأمر بيع'); invalidateSales() },
+    onError: msg.fromErr,
+  })
+
+  const updateQuote = useMutation({
+    mutationFn: (id: number) => api.put(`/sales-quotes/${id}`, {
+      quote_date: quote.quote_date,
+      valid_until: quote.valid_until || undefined,
+      customer_id: Number(quote.customer_id),
+      warehouse_id: Number(quote.warehouse_id) || undefined,
+      currency: quote.currency,
+      lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no)],
+    }),
+    onSuccess: () => { msg.setMessage('تم تحديث عرض السعر'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -158,7 +177,7 @@ export default function SalesPage() {
       cash_box_id: rc.cash_box_id ? Number(rc.cash_box_id) : null,
       amount: Number(rc.amount),
     }),
-    onSuccess: () => { msg.setMessage('تم تسجيل سند القبض'); void qc.invalidateQueries({ queryKey: ['receipts', 'sales-invoices'] }) },
+    onSuccess: () => { msg.setMessage('تم تسجيل سند القبض'); void qc.invalidateQueries({ queryKey: ['receipts', 'sales-invoices'] }); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -177,6 +196,33 @@ export default function SalesPage() {
       e_invoice_uuid?: string
     },
   })
+
+  const detailPath = tab === 'quotes' ? 'sales-quotes' : tab === 'orders' ? 'sales-orders' : tab === 'invoices' ? 'sales-invoices' : tab === 'returns' ? 'sales-returns' : 'receipts'
+  const hasDetailEndpoint = tab !== 'returns' && tab !== 'receipts'
+  const detail = useQuery({
+    queryKey: ['sales-detail', tab, selectedId],
+    enabled: !!selectedId && modal !== null && hasDetailEndpoint,
+    queryFn: async () => (await api.get(`/${detailPath}/${selectedId}`)).data.data,
+  })
+
+  useEffect(() => {
+    if (modal !== 'edit' || !detail.data) return
+    const d = detail.data
+    const line = d.items?.[0] || d.lines?.[0] || {}
+    setQuote({
+      quote_date: String(d.quote_date || '').slice(0, 10),
+      valid_until: String(d.valid_until || '').slice(0, 10),
+      customer_id: String(d.customer_id || d.customer?.id || ''),
+      warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
+      product_id: String(line.product_id || line.product?.id || ''),
+      quantity: String(line.quantity || 1),
+      unit_price: String(line.unit_price || ''),
+      batch_no: line.batch_no || '',
+      serial_no: line.serial_no || '',
+      currency: d.currency || 'SYP',
+      exchange_rate: String(d.exchange_rate || ''),
+    })
+  }, [detail.data, modal])
 
   const tabs = [
     { id: 'quotes', label: t('sales.quotes') },
@@ -218,107 +264,93 @@ export default function SalesPage() {
     </>
   )
 
+  const customerField = <T extends { customer_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
+    <>
+      <Field label={t('common.customer')}><select className={inputClass} value={state.customer_id} onChange={(e) => setState({ ...state, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
+    </>
+  )
+
+  const summary = (data: Record<string, unknown>) => (
+    <div className="space-y-3 text-sm">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <p><b>رقم:</b> {String(data.quote_number || data.order_number || data.invoice_number || data.return_number || data.receipt_number || '—')}</p>
+        <p><b>{t('common.status')}:</b> {String(data.status || '—')}</p>
+        <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
+        <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')}</p>
+      </div>
+      {!!((data.items || data.lines) as unknown[] | undefined)?.length && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(((data.items || data.lines) as { product?: { name?: string }; quantity?: number; line_total?: number }[]) || []).map((line, index) => <tr key={index}><td>{line.product?.name}</td><td>{line.quantity}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}
+    </div>
+  )
+
   return (
     <div className="space-y-6">
-      <PageHeader title={t('sales.title')} subtitle={t('sales.subtitle')} />
+      <PageHeader title={t('sales.title')} subtitle={t('sales.subtitle')} actions={<Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>} />
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <Msg message={msg.message} error={msg.error} />
 
       {tab === 'quotes' && (
-        <div className="page-grid-split">
-          <Panel>
+        <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(quotes.data || []).map((q: { id: number; quote_number: string; total: number; status: string; customer?: { name: string } }) => (
-                  <tr key={q.id}>
+                  <tr key={q.id} className="cursor-pointer" onClick={() => openRow(q, q.status !== 'converted')}>
                     <td className="font-mono text-xs">{q.quote_number}</td>
                     <td>{q.customer?.name}</td>
                     <td>{q.total}</td>
                     <td>{q.status}</td>
-                    <td>{q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={() => convertQuote.mutate(q.id)}>{t('sales.convertToOrder')}</button>}</td>
+                    <td>{q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertQuote.mutate(q.id) }}>{t('sales.convertToOrder')}</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             </div>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveQuote.mutate() }}>
-            <h2 className="font-semibold">{t('sales.newQuote')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field>
-            <Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>
-            <Field label={t('common.customer')}><select className={inputClass} value={quote.customer_id} onChange={(e) => setQuote({ ...quote, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={quote.warehouse_id} onChange={(e) => setQuote({ ...quote, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'))}
-            <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'orders' && (
-        <div className="page-grid-split">
-          <Panel>
+        <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; customer?: { name: string } }) => (
-                  <tr key={o.id}>
+                  <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.customer?.name}</td>
                     <td>{o.total}</td>
                     <td>{o.status}</td>
-                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={() => convertOrder.mutate(o.id)}>{t('sales.convertToInvoice')}</button>}</td>
+                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             </div>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveOrder.mutate() }}>
-            <h2 className="font-semibold">{t('sales.newOrder')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
-            <Field label={t('common.customer')}><select className={inputClass} value={order.customer_id} onChange={(e) => setOrder({ ...order, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={order.warehouse_id} onChange={(e) => setOrder({ ...order, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'))}
-            <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'invoices' && (
-        <div className="page-grid-split">
-          <Panel>
+        <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; customer?: { name: string } }) => (
-                  <tr key={i.id}>
+                  <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">{i.invoice_number}</td>
                     <td>{i.customer?.name}</td>
                     <td>{i.currency || 'SYP'}</td>
                     <td className="tabular-nums">{i.total}</td>
                     <td>{i.status}</td>
-                    <td><button type="button" className="text-xs text-teal print-hide" onClick={() => setPrintId(i.id)}>{t('common.print')}</button></td>
+                    <td><button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); setPrintId(i.id) }}>{t('common.print')}</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
             </div>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm print-hide" onSubmit={(e) => { e.preventDefault(); saveInv.mutate() }}>
-            <h2 className="font-semibold">{t('sales.newInvoice')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
-            <Field label={t('common.customer')}><select className={inputClass} value={inv.customer_id} onChange={(e) => setInv({ ...inv, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={inv.warehouse_id} onChange={(e) => setInv({ ...inv, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'))}
-            {selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}
-            {selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}
-            <button type="submit" className="btn btn-primary w-full">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {printId && invoiceDetail.data && (
@@ -332,59 +364,45 @@ export default function SalesPage() {
       )}
 
       {tab === 'returns' && (
-        <div className="page-grid-split">
-          <Panel>
+        <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; customer?: { name: string } }) => (
-                  <tr key={r.id}><td className="font-mono text-xs">{r.return_number}</td><td>{r.customer?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.return_number}</td><td>{r.customer?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
                 ))}
               </tbody>
             </table>
             </div>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveRet.mutate() }}>
-            <h2 className="font-semibold">{t('sales.newReturn')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>
-            <Field label={t('common.customer')}><select className={inputClass} value={ret.customer_id} onChange={(e) => setRet({ ...ret, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={ret.warehouse_id} onChange={(e) => setRet({ ...ret, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            <Field label="فاتورة"><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => setRet({ ...ret, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>
-            <Field label={t('common.product')}><select className={inputClass} value={ret.product_id} onChange={(e) => setRet({ ...ret, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-            <div className="form-grid-2">
-              <Field label={t('common.quantity')}><input className={inputClass} value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} /></Field>
-              <Field label={t('common.price')}><input className={inputClass} value={ret.unit_price} onChange={(e) => setRet({ ...ret, unit_price: e.target.value })} required /></Field>
-            </div>
-            <button type="submit" className="btn btn-primary w-full">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'receipts' && (
-        <div className="page-grid-split">
-          <Panel>
+        <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>مبلغ</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(receipts.data || []).map((r: { id: number; receipt_number: string; amount: number; status: string; customer?: { name: string } }) => (
-                  <tr key={r.id}><td className="font-mono text-xs">{r.receipt_number}</td><td>{r.customer?.name}</td><td>{r.amount}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.receipt_number}</td><td>{r.customer?.name}</td><td>{r.amount}</td><td>{r.status}</td></tr>
                 ))}
               </tbody>
             </table>
             </div>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveRc.mutate() }}>
-            <h2 className="font-semibold">سند قبض</h2>
-            <Field label={t('common.customer')}><select className={inputClass} value={rc.customer_id} onChange={(e) => setRc({ ...rc, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label="فاتورة"><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => setRc({ ...rc, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>
-            <Field label="صندوق"><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label="المبلغ"><input className={inputClass} value={rc.amount} onChange={(e) => setRc({ ...rc, amount: e.target.value })} required /></Field>
-            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
+      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>}>
+        {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : (
+          <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
+            {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote)}{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'))}</>}
+            {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder)}{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'))}</>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv)}{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'))}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}</>}
+            {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => setRet({ ...ret, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>{productFields(ret, setRet)}</>}
+            {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label="فاتورة"><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => setRc({ ...rc, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><input className={inputClass} value={rc.amount} onChange={(e) => setRc({ ...rc, amount: e.target.value })} required /></Field></>}
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

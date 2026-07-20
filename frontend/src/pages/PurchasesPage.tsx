@@ -1,8 +1,8 @@
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
-import { Field, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -22,6 +22,9 @@ export default function PurchasesPage() {
   const [tab, setTab] = useState('invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
+  const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
 
   const requests = useQuery({ queryKey: ['purchase-requests'], queryFn: async () => (await api.get('/purchase-requests')).data.data, enabled: tab === 'requests' })
   const orders = useQuery({ queryKey: ['purchase-orders'], queryFn: async () => (await api.get('/purchase-orders')).data.data, enabled: tab === 'orders' })
@@ -61,6 +64,9 @@ export default function PurchasesPage() {
   })
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'stock-levels'] })
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
+  const openCreate = () => { setSelectedId(null); setSelectedRow(null); setModal('create') }
+  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
 
   const saveReq = useMutation({
     mutationFn: () => api.post('/purchase-requests', {
@@ -70,7 +76,7 @@ export default function PurchasesPage() {
       warehouse_id: Number(req.warehouse_id) || undefined,
       lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ طلب الشراء'); invalidate() },
+    onSuccess: () => { msg.setMessage('تم حفظ طلب الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -81,7 +87,7 @@ export default function PurchasesPage() {
       warehouse_id: Number(po.warehouse_id) || undefined,
       lines: [purchaseLine(po.product_id, po.quantity, po.unit_cost, po.batch_no, po.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ أمر الشراء'); invalidate() },
+    onSuccess: () => { msg.setMessage('تم حفظ أمر الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -95,7 +101,7 @@ export default function PurchasesPage() {
       status: inv.status,
       lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no)],
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل فاتورة المشتريات'); invalidate() },
+    onSuccess: () => { msg.setMessage('تم ترحيل فاتورة المشتريات'); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -108,13 +114,25 @@ export default function PurchasesPage() {
       status: ret.status,
       lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_cost: Number(ret.unit_cost), batch_no: ret.batch_no || undefined, serial_no: ret.serial_no || undefined }],
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل مرتجع المشتريات'); invalidate() },
+    onSuccess: () => { msg.setMessage('تم ترحيل مرتجع المشتريات'); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
   const convertReq = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-requests/${id}/convert-to-order`),
     onSuccess: () => { msg.setMessage('تم التحويل لأمر شراء'); invalidate() },
+    onError: msg.fromErr,
+  })
+
+  const updateReq = useMutation({
+    mutationFn: (id: number) => api.put(`/purchase-requests/${id}`, {
+      request_date: req.request_date,
+      required_date: req.required_date || undefined,
+      supplier_id: Number(req.supplier_id) || undefined,
+      warehouse_id: Number(req.warehouse_id) || undefined,
+      lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no)],
+    }),
+    onSuccess: () => { msg.setMessage('تم تحديث طلب الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -132,7 +150,7 @@ export default function PurchasesPage() {
       cash_box_id: pay.cash_box_id ? Number(pay.cash_box_id) : null,
       amount: Number(pay.amount),
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل سند الصرف'); void qc.invalidateQueries({ queryKey: ['supplier-payments', 'purchase-invoices'] }) },
+    onSuccess: () => { msg.setMessage('تم ترحيل سند الصرف'); void qc.invalidateQueries({ queryKey: ['supplier-payments', 'purchase-invoices'] }); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -155,6 +173,42 @@ export default function PurchasesPage() {
     </>
   )
 
+  const detailPath = tab === 'requests' ? 'purchase-requests' : tab === 'orders' ? 'purchase-orders' : tab === 'invoices' ? 'purchase-invoices' : tab === 'returns' ? 'purchase-returns' : 'supplier-payments'
+  const hasDetailEndpoint = tab !== 'returns' && tab !== 'payments'
+  const detail = useQuery({
+    queryKey: ['purchase-detail', tab, selectedId],
+    enabled: !!selectedId && modal !== null && hasDetailEndpoint,
+    queryFn: async () => (await api.get(`/${detailPath}/${selectedId}`)).data.data,
+  })
+
+  useEffect(() => {
+    if (modal !== 'edit' || !detail.data) return
+    const data = detail.data
+    const line = data.items?.[0] || data.lines?.[0] || {}
+    setReq({
+      request_date: String(data.request_date || '').slice(0, 10),
+      required_date: String(data.required_date || '').slice(0, 10),
+      supplier_id: String(data.supplier_id || data.supplier?.id || ''),
+      warehouse_id: String(data.warehouse_id || data.warehouse?.id || ''),
+      product_id: String(line.product_id || line.product?.id || ''),
+      quantity: String(line.quantity || 1),
+      unit_cost: String(line.unit_cost || ''),
+      batch_no: line.batch_no || '',
+      serial_no: line.serial_no || '',
+      currency: data.currency || 'SYP',
+      exchange_rate: String(data.exchange_rate || ''),
+    })
+  }, [detail.data, modal])
+
+  const supplierFields = <T extends { supplier_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
+    <>
+      <Field label={t('common.supplier')}><select className={inputClass} value={state.supplier_id} onChange={(e) => setState({ ...state, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
+      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
+    </>
+  )
+
+  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {data.status || '—'}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td>{line.quantity}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
+
   const tabs = [
     { id: 'requests', label: t('purchases.requests') },
     { id: 'orders', label: t('purchases.orders') },
@@ -165,141 +219,95 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('purchases.title')} subtitle={t('purchases.subtitle')} />
+      <PageHeader title={t('purchases.title')} subtitle={t('purchases.subtitle')} actions={<Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>} />
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <Msg message={msg.message} error={msg.error} />
 
       {tab === 'requests' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
+        <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(requests.data || []).map((r: { id: number; request_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r, r.status !== 'converted')}>
                     <td className="font-mono text-xs">{r.request_number}</td>
                     <td>{r.supplier?.name || '—'}</td>
                     <td>{r.total}</td>
                     <td>{r.status}</td>
-                    <td>{r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={() => convertReq.mutate(r.id)}>{t('purchases.convertToOrder')}</button>}</td>
+                    <td>{r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertReq.mutate(r.id) }}>{t('purchases.convertToOrder')}</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveReq.mutate() }}>
-            <h2 className="font-semibold">{t('purchases.newRequest')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>
-            <Field label={t('common.supplier')}><select className={inputClass} value={req.supplier_id} onChange={(e) => setReq({ ...req, supplier_id: e.target.value })}><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={req.warehouse_id} onChange={(e) => setReq({ ...req, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(req, setReq)}
-            <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'orders' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
+        <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={o.id}>
+                  <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.supplier?.name}</td>
                     <td>{o.total}</td>
                     <td>{o.status}</td>
-                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={() => convertPo.mutate(o.id)}>{t('purchases.convertToInvoice')}</button>}</td>
+                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertPo.mutate(o.id) }}>{t('purchases.convertToInvoice')}</button>}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); savePo.mutate() }}>
-            <h2 className="font-semibold">{t('purchases.newOrder')}</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>
-            <Field label={t('common.supplier')}><select className={inputClass} value={po.supplier_id} onChange={(e) => setPo({ ...po, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={po.warehouse_id} onChange={(e) => setPo({ ...po, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(po, setPo)}
-            <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'invoices' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
+        <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={i.id}><td className="font-mono text-xs">{i.invoice_number}</td><td>{i.supplier?.name}</td><td>{i.total}</td><td>{i.status}</td></tr>
+                  <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}><td className="font-mono text-xs">{i.invoice_number}</td><td>{i.supplier?.name}</td><td>{i.total}</td><td>{i.status}</td></tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveInv.mutate() }}>
-            <h2 className="font-semibold">فاتورة مشتريات</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
-            <Field label={t('common.supplier')}><select className={inputClass} value={inv.supplier_id} onChange={(e) => setInv({ ...inv, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={inv.warehouse_id} onChange={(e) => setInv({ ...inv, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(inv, setInv)}
-            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'returns' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
+        <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={r.id}><td className="font-mono text-xs">{r.return_number}</td><td>{r.supplier?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.return_number}</td><td>{r.supplier?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveRet.mutate() }}>
-            <h2 className="font-semibold">مرتجع مشتريات</h2>
-            <Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>
-            <Field label={t('common.supplier')}><select className={inputClass} value={ret.supplier_id} onChange={(e) => setRet({ ...ret, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label={t('common.warehouse')}><select className={inputClass} value={ret.warehouse_id} onChange={(e) => setRet({ ...ret, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            <Field label="فاتورة"><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => setRet({ ...ret, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>
-            <Field label={t('common.product')}><select className={inputClass} value={ret.product_id} onChange={(e) => setRet({ ...ret, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label={t('common.quantity')}><input className={inputClass} value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} /></Field>
-              <Field label={t('common.cost')}><input className={inputClass} value={ret.unit_cost} onChange={(e) => setRet({ ...ret, unit_cost: e.target.value })} required /></Field>
-            </div>
-            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
 
       {tab === 'payments' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
+        <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>مبلغ</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(payments.data || []).map((p: { id: number; payment_number: string; amount: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={p.id}><td className="font-mono text-xs">{p.payment_number}</td><td>{p.supplier?.name}</td><td>{p.amount}</td><td>{p.status}</td></tr>
+                  <tr key={p.id} className="cursor-pointer" onClick={() => openRow(p)}><td className="font-mono text-xs">{p.payment_number}</td><td>{p.supplier?.name}</td><td>{p.amount}</td><td>{p.status}</td></tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-          <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); savePay.mutate() }}>
-            <h2 className="font-semibold">سند صرف مورد</h2>
-            <Field label={t('common.supplier')}><select className={inputClass} value={pay.supplier_id} onChange={(e) => setPay({ ...pay, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-            <Field label="فاتورة"><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => setPay({ ...pay, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>
-            <Field label="صندوق"><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-            <Field label="المبلغ"><input className={inputClass} value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} required /></Field>
-            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.post')}</button>
-          </form>
-        </div>
+        </Panel>
       )}
+      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>}>
+        {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
+          {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}{productFields(req, setReq)}</>}
+          {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}{productFields(po, setPo)}</>}
+          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}{productFields(inv, setInv)}</>}
+          {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => setRet({ ...ret, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>{productFields(ret, setRet)}</>}
+          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label="فاتورة"><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => setPay({ ...pay, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><input className={inputClass} value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} required /></Field></>}
+        </form>}
+      </Modal>
     </div>
   )
 }

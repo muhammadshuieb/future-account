@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type ButtonHTMLAttributes } from 'react'
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
@@ -149,3 +149,68 @@ export function useFormMessage() {
 }
 
 export type SubmitHandler = (e: FormEvent) => void
+
+/** Overlay dialog — full-screen on mobile, centered panel on desktop. RTL-friendly. */
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  size = 'md',
+}: {
+  open: boolean
+  onClose: () => void
+  title: string
+  children: ReactNode
+  footer?: ReactNode
+  size?: 'sm' | 'md' | 'lg' | 'xl'
+}) {
+  const titleId = useId()
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    panelRef.current?.focus()
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  const sizeClass =
+    size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : 'max-w-xl'
+
+  return (
+    <div className="modal-root" role="presentation">
+      <button type="button" className="modal-backdrop" aria-label="إغلاق" onClick={onClose} />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className={`modal-panel ${sizeClass}`}
+      >
+        <header className="modal-header">
+          <h2 id={titleId} className="modal-title">
+            {title}
+          </h2>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="إغلاق">
+            ×
+          </button>
+        </header>
+        <div className="modal-body">{children}</div>
+        {footer && <footer className="modal-footer">{footer}</footer>}
+      </div>
+    </div>
+  )
+}
