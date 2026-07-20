@@ -131,14 +131,14 @@ class DashboardController extends Controller
         if (AppNotification::query()->count() === 0) {
             AppNotification::query()->create([
                 'type' => 'info',
-                'title' => 'مرحباً بك في فيوتشر أكونت',
+                'title' => 'مرحباً بك في Syna Co',
                 'body' => 'لوحة الإشعارات جاهزة — ستظهر هنا تنبيهات المخزون والذمم.',
             ]);
         }
 
         return response()->json([
             'data' => [
-                'company_name' => Setting::getValue('company_name', 'Future Account'),
+                'company_name' => Setting::getValue('company_name', 'Syna Co'),
                 'accounts_count' => Account::query()->count(),
                 'journal_entries_count' => JournalEntry::query()->count(),
                 'posted_entries_count' => JournalEntry::query()->where('status', 'posted')->count(),

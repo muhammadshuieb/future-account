@@ -1,9 +1,17 @@
 {
   "app": {
-    "name": "فيوتشر أكونت",
-    "tagline": "نظام محاسبة متكامل"
+    "name": "شركة ساينا",
+    "tagline": "Syna Co — نظام ERP متكامل",
+    "welcome": "مرحباً، {{name}}",
+    "headerHint": "Syna Co — إدارة محاسبة ومخزون ومبيعات"
   },
   "nav": {
+    "group": {
+      "main": "الرئيسية",
+      "accounting": "المحاسبة",
+      "operations": "العمليات",
+      "admin": "الإدارة"
+    },
     "dashboard": "لوحة التحكم",
     "accounts": "دليل الحسابات",
     "journal": "القيود اليومية",
@@ -16,7 +24,12 @@
     "reports": "التقارير",
     "barcodes": "الباركود والملصقات",
     "settings": "الإعدادات",
-    "logout": "تسجيل الخروج"
+    "auditLog": "سجل التدقيق",
+    "companies": "الشركات والفروع",
+    "logout": "تسجيل الخروج",
+    "notifications": "الإشعارات",
+    "markAllRead": "تعليم الكل كمقروء",
+    "noNotifications": "لا توجد إشعارات"
   },
   "common": {
     "save": "حفظ",
@@ -38,7 +51,11 @@
     "batch": "دفعة",
     "serial": "تسلسلي",
     "loading": "جاري التحميل...",
-    "currency": "العملة"
+    "currency": "العملة",
+    "name": "الاسم",
+    "debit": "مدين",
+    "credit": "دائن",
+    "balance": "الرصيد"
   },
   "sales": {
     "title": "المبيعات",
@@ -54,7 +71,8 @@
     "newReturn": "مرتجع مبيعات",
     "convertToOrder": "تحويل لأمر بيع",
     "convertToInvoice": "تحويل لفاتورة",
-    "eInvoice": "فاتورة إلكترونية"
+    "eInvoice": "فاتورة إلكترونية",
+    "creditLimitExceeded": "تجاوز حد الائتمان للعميل"
   },
   "purchases": {
     "title": "المشتريات",
@@ -72,10 +90,49 @@
   "warehouse": {
     "title": "المخازن والمخزون",
     "counts": "الجرد",
+    "categories": "التصنيفات",
+    "units": "وحدات القياس",
+    "newCategory": "تصنيف جديد",
+    "newUnit": "وحدة جديد",
     "newCount": "جرد جديد",
     "postCount": "ترحيل الفروقات",
     "trackBatch": "تتبع الدفعات",
     "trackSerial": "تتبع التسلسلي"
+  },
+  "reports": {
+    "generalLedger": "دفتر الأستاذ العام",
+    "selectAccount": "اختر حساباً",
+    "openingBalance": "رصيد افتتاحي",
+    "closingBalance": "رصيد ختامي",
+    "entryNumber": "رقم القيد",
+    "description": "البيان"
+  },
+  "audit": {
+    "title": "سجل التدقيق",
+    "subtitle": "تتبع العمليات والتغييرات في النظام",
+    "user": "المستخدم",
+    "action": "الإجراء",
+    "entity": "الكيان",
+    "ip": "IP",
+    "empty": "لا توجد سجلات"
+  },
+  "companies": {
+    "title": "الشركات والفروع",
+    "subtitle": "إدارة الكيانات القانونية والفروع التشغيلية",
+    "tabCompanies": "الشركات",
+    "tabBranches": "الفروع",
+    "code": "الرمز",
+    "nameAr": "الاسم (عربي)",
+    "nameEn": "الاسم (إنجليزي)",
+    "taxNumber": "الرقم الضريبي",
+    "company": "الشركة",
+    "branchName": "اسم الفرع",
+    "city": "المدينة",
+    "mainBranch": "فرع رئيسي",
+    "newCompany": "شركة جديدة",
+    "newBranch": "فرع جديد",
+    "saved": "تم حفظ الشركة",
+    "branchSaved": "تم حفظ الفرع"
   },
   "dashboard": {
     "dailySales": "مبيعات يومية",
@@ -86,6 +143,11 @@
   "settings": {
     "users": "المستخدمون والصلاحيات",
     "roles": "الأدوار",
-    "permissions": "الصلاحيات"
+    "permissions": "الصلاحيات",
+    "autoBackupNote": "النسخ الاحتياطي التلقائي يعمل يومياً الساعة 2:00 ص (يتطلب cron للـ scheduler)"
+  },
+  "login": {
+    "subtitle": "Syna Co — نظام ERP للمحاسبة وإدارة الأعمال",
+    "demoHint": "حساب تجريبي: admin@future-account.test / password"
   }
 }

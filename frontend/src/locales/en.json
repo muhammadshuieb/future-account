@@ -1,9 +1,17 @@
 {
   "app": {
-    "name": "Future Account",
-    "tagline": "Integrated accounting system"
+    "name": "Syna Co",
+    "tagline": "Syna Co — Integrated ERP",
+    "welcome": "Welcome, {{name}}",
+    "headerHint": "Syna Co — accounting, inventory & sales"
   },
   "nav": {
+    "group": {
+      "main": "Main",
+      "accounting": "Accounting",
+      "operations": "Operations",
+      "admin": "Administration"
+    },
     "dashboard": "Dashboard",
     "accounts": "Chart of Accounts",
     "journal": "Journal Entries",
@@ -16,7 +24,12 @@
     "reports": "Reports",
     "barcodes": "Barcodes & Labels",
     "settings": "Settings",
-    "logout": "Logout"
+    "auditLog": "Audit Log",
+    "companies": "Companies & Branches",
+    "logout": "Logout",
+    "notifications": "Notifications",
+    "markAllRead": "Mark all read",
+    "noNotifications": "No notifications"
   },
   "common": {
     "save": "Save",
@@ -38,7 +51,11 @@
     "batch": "Batch",
     "serial": "Serial",
     "loading": "Loading...",
-    "currency": "Currency"
+    "currency": "Currency",
+    "name": "Name",
+    "debit": "Debit",
+    "credit": "Credit",
+    "balance": "Balance"
   },
   "sales": {
     "title": "Sales",
@@ -54,7 +71,8 @@
     "newReturn": "Sales Return",
     "convertToOrder": "Convert to Order",
     "convertToInvoice": "Convert to Invoice",
-    "eInvoice": "E-Invoice"
+    "eInvoice": "E-Invoice",
+    "creditLimitExceeded": "Customer credit limit exceeded"
   },
   "purchases": {
     "title": "Purchases",
@@ -72,10 +90,49 @@
   "warehouse": {
     "title": "Warehouse & Inventory",
     "counts": "Inventory Count",
+    "categories": "Categories",
+    "units": "Units of Measure",
+    "newCategory": "New Category",
+    "newUnit": "New Unit",
     "newCount": "New Count",
     "postCount": "Post Variances",
     "trackBatch": "Track Batches",
     "trackSerial": "Track Serials"
+  },
+  "reports": {
+    "generalLedger": "General Ledger",
+    "selectAccount": "Select account",
+    "openingBalance": "Opening balance",
+    "closingBalance": "Closing balance",
+    "entryNumber": "Entry #",
+    "description": "Description"
+  },
+  "audit": {
+    "title": "Audit Log",
+    "subtitle": "Track system actions and changes",
+    "user": "User",
+    "action": "Action",
+    "entity": "Entity",
+    "ip": "IP",
+    "empty": "No audit records"
+  },
+  "companies": {
+    "title": "Companies & Branches",
+    "subtitle": "Manage legal entities and operating branches",
+    "tabCompanies": "Companies",
+    "tabBranches": "Branches",
+    "code": "Code",
+    "nameAr": "Name (Arabic)",
+    "nameEn": "Name (English)",
+    "taxNumber": "Tax number",
+    "company": "Company",
+    "branchName": "Branch name",
+    "city": "City",
+    "mainBranch": "Main branch",
+    "newCompany": "New company",
+    "newBranch": "New branch",
+    "saved": "Company saved",
+    "branchSaved": "Branch saved"
   },
   "dashboard": {
     "dailySales": "Daily Sales",
@@ -86,6 +143,11 @@
   "settings": {
     "users": "Users & Permissions",
     "roles": "Roles",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "autoBackupNote": "Automatic backup runs daily at 2:00 AM (requires Laravel scheduler cron)"
+  },
+  "login": {
+    "subtitle": "Syna Co — ERP for accounting & business management",
+    "demoHint": "Demo: admin@future-account.test / password"
   }
 }

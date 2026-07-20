@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const { user, loading, login } = useAuth()
   const [email, setEmail] = useState('admin@future-account.test')
   const [password, setPassword] = useState('password')
@@ -44,9 +46,10 @@ export default function LoginPage() {
       />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl shadow-black/20">
         <div className="bg-slate-panel px-8 py-10 text-white">
-          <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-teal text-xl font-extrabold">ف</div>
-          <p className="text-3xl font-extrabold tracking-tight">فيوتشر أكونت</p>
-          <p className="mt-2 text-sm leading-6 text-white/65">نظام المحاسبة وإدارة الأعمال — عربي بالكامل</p>
+          <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-teal to-teal-dark text-xl font-extrabold">س</div>
+          <p className="text-3xl font-extrabold tracking-tight">{t('app.name')}</p>
+          <p className="mt-1 text-sm font-medium text-teal-soft/90">Syna Co</p>
+          <p className="mt-2 text-sm leading-6 text-white/65">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
           <div>
@@ -79,9 +82,7 @@ export default function LoginPage() {
           >
             {submitting ? 'جاري الدخول...' : 'تسجيل الدخول'}
           </button>
-          <p className="text-center text-xs text-black/45">
-            حساب تجريبي: admin@future-account.test / password
-          </p>
+          <p className="text-center text-xs text-black/45">{t('login.demoHint')}</p>
         </form>
       </div>
     </div>

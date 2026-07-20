@@ -15,6 +15,8 @@ import CashBanksPage from '@/pages/CashBanksPage'
 import HrPage from '@/pages/HrPage'
 import ReportsPage from '@/pages/ReportsPage'
 import BarcodeLabelsPage from '@/pages/BarcodeLabelsPage'
+import AuditLogPage from '@/pages/AuditLogPage'
+import CompaniesPage from '@/pages/CompaniesPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +44,8 @@ export default function App() {
               <Route path="hr" element={<HrPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="barcodes" element={<BarcodeLabelsPage />} />
+              <Route path="audit-log" element={<AuditLogPage />} />
+              <Route path="companies" element={<CompaniesPage />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

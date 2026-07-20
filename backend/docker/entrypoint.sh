@@ -39,7 +39,7 @@ ensure_app_key() {
 # compose environment so DB_HOST/APP_KEY are correct for HTTP requests.
 write_dotenv_from_environ() {
   cat > .env <<EOF
-APP_NAME="${APP_NAME:-Future Account}"
+APP_NAME="${APP_NAME:-Syna Co}"
 APP_ENV="${APP_ENV:-local}"
 APP_KEY="${APP_KEY}"
 APP_DEBUG="${APP_DEBUG:-true}"

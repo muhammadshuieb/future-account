@@ -258,6 +258,69 @@ class ReportService
         ];
     }
 
+    public function generalLedger(int $accountId, ?string $from = null, ?string $to = null): array
+    {
+        $from = $from ?: now()->startOfYear()->toDateString();
+        $to = $to ?: now()->toDateString();
+        $account = Account::query()->findOrFail($accountId);
+
+        $openingAgg = JournalDetail::query()
+            ->where('account_id', $accountId)
+            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->whereDate('entry_date', '<', $from))
+            ->selectRaw('COALESCE(SUM(debit),0) as debit, COALESCE(SUM(credit),0) as credit')
+            ->first();
+
+        $openingDebit = (float) ($openingAgg->debit ?? 0);
+        $openingCredit = (float) ($openingAgg->credit ?? 0);
+        $openingBalance = $account->nature === 'debit'
+            ? $openingDebit - $openingCredit
+            : $openingCredit - $openingDebit;
+
+        $details = JournalDetail::query()
+            ->with(['journalEntry:id,entry_number,entry_date,description,status'])
+            ->where('account_id', $accountId)
+            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->whereBetween('entry_date', [$from, $to]))
+            ->join('journal_entries', 'journal_details.journal_entry_id', '=', 'journal_entries.id')
+            ->orderBy('journal_entries.entry_date')
+            ->orderBy('journal_entries.id')
+            ->orderBy('journal_details.line_order')
+            ->select('journal_details.*')
+            ->get();
+
+        $running = $openingBalance;
+        $rows = [];
+
+        foreach ($details as $detail) {
+            $debit = (float) $detail->debit;
+            $credit = (float) $detail->credit;
+            $running += $account->nature === 'debit' ? $debit - $credit : $credit - $debit;
+
+            $entry = $detail->journalEntry;
+            $rows[] = [
+                'date' => $entry->entry_date->toDateString(),
+                'entry_number' => $entry->entry_number,
+                'description' => $detail->memo ?: $entry->description,
+                'debit' => $debit,
+                'credit' => $credit,
+                'balance' => round($running, 2),
+            ];
+        }
+
+        return [
+            'account' => [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name,
+                'nature' => $account->nature,
+            ],
+            'from' => $from,
+            'to' => $to,
+            'opening_balance' => round($openingBalance, 2),
+            'closing_balance' => round($running, 2),
+            'rows' => $rows,
+        ];
+    }
+
     public function profitReport(?string $from = null, ?string $to = null): array
     {
         $sales = $this->salesReport($from, $to);

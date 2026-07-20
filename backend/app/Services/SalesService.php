@@ -30,6 +30,10 @@ class SalesService
         return DB::transaction(function () use ($data, $lines, $user) {
             [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
 
+            if (($data['status'] ?? 'draft') === 'posted') {
+                $this->assertCustomerCreditLimit((int) $data['customer_id'], $total);
+            }
+
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? null,
@@ -84,6 +88,8 @@ class SalesService
             if (! $invoice->warehouse_id) {
                 throw ValidationException::withMessages(['warehouse_id' => ['يجب تحديد المخزن قبل الترحيل.']]);
             }
+
+            $this->assertCustomerCreditLimit((int) $invoice->customer_id, (float) $invoice->total);
 
             $customer = $invoice->customer;
             $arAccount = $customer->account_id
@@ -567,5 +573,31 @@ class SalesService
         usort($rows, fn ($a, $b) => strcmp($a['date'], $b['date']));
 
         return ['customer' => $customer, 'rows' => $rows, 'balance' => $balance];
+    }
+
+    protected function assertCustomerCreditLimit(int $customerId, float $additionalAmount): void
+    {
+        $customer = Customer::query()->findOrFail($customerId);
+        $limit = (float) $customer->credit_limit;
+
+        if ($limit <= 0) {
+            return;
+        }
+
+        $statement = $this->customerStatement($customer);
+        $projected = (float) $statement['balance'] + $additionalAmount;
+
+        if ($projected > $limit) {
+            throw ValidationException::withMessages([
+                'customer_id' => [
+                    sprintf(
+                        'تجاوز حد الائتمان للعميل (%s). الرصيد الحالي: %s — الحد: %s',
+                        $customer->name,
+                        number_format((float) $statement['balance'], 2),
+                        number_format($limit, 2),
+                    ),
+                ],
+            ]);
+        }
     }
 }

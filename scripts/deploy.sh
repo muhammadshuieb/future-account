@@ -12,6 +12,9 @@ BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE=(docker compose)
 if [[ "$DEPLOY_ENV" == "prod" && -f docker-compose.prod.yml ]]; then
   COMPOSE+=(-f docker-compose.yml -f docker-compose.prod.yml)
+  if [[ -f .env.prod ]]; then
+    COMPOSE+=(--env-file .env.prod)
+  fi
 fi
 
 log() { printf '==> %s\n' "$*"; }
@@ -70,7 +73,7 @@ fi
 if [[ "${DEPLOY_SMOKE_LOGIN:-0}" == "1" ]]; then
   log "Smoke login check..."
   HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
-    -X POST "http://127.0.0.1:${BACKEND_PORT}/api/login" \
+    -X POST "http://127.0.0.1:${BACKEND_PORT}/api/auth/login" \
     -H 'Content-Type: application/json' \
     -H 'Accept: application/json' \
     -d '{"email":"admin@future-account.test","password":"password"}' || true)"

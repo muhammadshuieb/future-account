@@ -29,7 +29,7 @@ class BarcodeController extends ApiController
         }
 
         $copies = $data['copies'] ?? 1;
-        $company = Setting::getValue('company_name', 'فيوتشر أكونت');
+        $company = Setting::getValue('company_name', 'شركة ساينا');
 
         $labels = [];
         foreach ($query->get() as $product) {

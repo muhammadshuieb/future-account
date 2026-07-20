@@ -392,7 +392,7 @@ function InvoicePrintView({
       </div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-lg font-bold">{structured?.seller?.name || 'Future Account'}</p>
+          <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
           {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
           <p className="mt-2 font-mono">{invoice.invoice_number}</p>
           <p>{String(invoice.invoice_date).slice(0, 10)}</p>

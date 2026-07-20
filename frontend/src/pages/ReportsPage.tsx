@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, inputClass } from '@/components/ui'
 
 type ReportKey =
   | 'trial-balance'
+  | 'general-ledger'
   | 'income-statement'
   | 'balance-sheet'
   | 'cash-flow'
@@ -18,8 +20,9 @@ type ReportKey =
   | 'supplier-statement'
   | 'product-movement'
 
-const reportTitles: Record<ReportKey, string> = {
+const reportTitleFallback: Record<ReportKey, string> = {
   'trial-balance': 'ميزان المراجعة',
+  'general-ledger': 'دفتر الأستاذ العام',
   'income-statement': 'قائمة الدخل (الأرباح والخسائر)',
   'balance-sheet': 'الميزانية العمومية',
   'cash-flow': 'قائمة التدفقات النقدية',
@@ -34,6 +37,7 @@ const reportTitles: Record<ReportKey, string> = {
 }
 
 export default function ReportsPage() {
+  const { t } = useTranslation()
   const [tab, setTab] = useState<ReportKey>('trial-balance')
   const [from, setFrom] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10))
   const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
@@ -42,7 +46,14 @@ export default function ReportsPage() {
   const [supplierId, setSupplierId] = useState('')
   const [productId, setProductId] = useState('')
 
+  const [accountId, setAccountId] = useState('')
+
   const branches = useQuery({ queryKey: ['branches'], queryFn: async () => (await api.get('/branches')).data.data })
+  const accounts = useQuery({
+    queryKey: ['accounts'],
+    queryFn: async () => (await api.get('/accounts')).data.data as { id: number; code: string; name: string; is_group: boolean }[],
+    enabled: tab === 'general-ledger',
+  })
   const customers = useQuery({
     queryKey: ['customers'],
     queryFn: async () => (await api.get('/customers')).data.data,
@@ -65,18 +76,23 @@ export default function ReportsPage() {
   const base = currencies.data?.base_currency || 'SYP'
 
   const reportUrl = useMemo(() => {
+    if (tab === 'general-ledger') return accountId ? '/reports/general-ledger' : null
     if (tab === 'customer-statement') return customerId ? `/customers/${customerId}/statement` : null
     if (tab === 'supplier-statement') return supplierId ? `/suppliers/${supplierId}/statement` : null
     if (tab === 'product-movement') return productId ? `/reports/product-movement/${productId}` : null
     return `/reports/${tab}`
-  }, [tab, customerId, supplierId, productId])
+  }, [tab, customerId, supplierId, productId, accountId])
 
   const report = useQuery({
-    queryKey: ['report', tab, from, to, branchId, customerId, supplierId, productId],
+    queryKey: ['report', tab, from, to, branchId, customerId, supplierId, productId, accountId],
     enabled: !!reportUrl,
     queryFn: async () => {
       const params: Record<string, string> = {}
-      if (tab === 'trial-balance' || tab === 'balance-sheet') {
+      if (tab === 'general-ledger') {
+        params.account_id = accountId
+        params.from = from
+        params.to = to
+      } else if (tab === 'trial-balance' || tab === 'balance-sheet') {
         params.as_of = to
       } else if (tab !== 'inventory') {
         params.from = from
@@ -106,7 +122,10 @@ export default function ReportsPage() {
       />
 
       <Tabs
-        tabs={Object.entries(reportTitles).map(([id, label]) => ({ id, label }))}
+        tabs={Object.entries(reportTitleFallback).map(([id, label]) => ({
+          id,
+          label: id === 'general-ledger' ? t('reports.generalLedger') : label,
+        }))}
         active={tab}
         onChange={(id) => setTab(id as ReportKey)}
       />
@@ -158,11 +177,21 @@ export default function ReportsPage() {
             </select>
           </Field>
         )}
+        {tab === 'general-ledger' && (
+          <Field label={t('reports.selectAccount')}>
+            <select className={inputClass} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">{t('reports.selectAccount')}</option>
+              {(accounts.data || []).filter((a) => !a.is_group).map((a) => (
+                <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+              ))}
+            </select>
+          </Field>
+        )}
       </div>
 
       <Panel className="print-area">
         <div className="hidden border-b border-black/10 px-4 py-3 print:block">
-          <p className="text-lg font-bold">فيوتشر أكونت — {reportTitles[tab]}</p>
+          <p className="text-lg font-bold">{t('app.name')} — {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}</p>
           <p className="text-xs text-black/60">
             العملة الأساسية: {base}
             {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
@@ -186,6 +215,49 @@ export default function ReportsPage() {
                   <tfoot>
                     <tr className="font-semibold"><td colSpan={2}>الإجمالي</td><td>{formatMoney(report.data.total_debit, base)}</td><td>{formatMoney(report.data.total_credit, base)}</td></tr>
                   </tfoot>
+                </table>
+              </div>
+            )}
+
+            {tab === 'general-ledger' && (
+              <div>
+                <p className="mb-3 font-semibold">
+                  {report.data.account?.code} — {report.data.account?.name}
+                </p>
+                <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                  <p>{t('reports.openingBalance')}: <strong>{formatMoney(report.data.opening_balance, base)}</strong></p>
+                  <p>{t('reports.closingBalance')}: <strong>{formatMoney(report.data.closing_balance, base)}</strong></p>
+                </div>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>{t('common.date')}</th>
+                      <th>{t('reports.entryNumber')}</th>
+                      <th>{t('reports.description')}</th>
+                      <th>{t('common.debit')}</th>
+                      <th>{t('common.credit')}</th>
+                      <th>{t('common.balance')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report.data.rows || []).map((r: {
+                      date: string
+                      entry_number: string
+                      description: string
+                      debit: number
+                      credit: number
+                      balance: number
+                    }, i: number) => (
+                      <tr key={i}>
+                        <td>{r.date}</td>
+                        <td className="font-mono">{r.entry_number}</td>
+                        <td>{r.description}</td>
+                        <td className="tabular-nums">{formatMoney(r.debit, base)}</td>
+                        <td className="tabular-nums">{formatMoney(r.credit, base)}</td>
+                        <td className="tabular-nums">{formatMoney(r.balance, base)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             )}

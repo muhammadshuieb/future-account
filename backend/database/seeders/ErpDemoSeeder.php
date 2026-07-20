@@ -24,8 +24,8 @@ class ErpDemoSeeder extends Seeder
         $company = Company::query()->updateOrCreate(
             ['code' => 'MAIN'],
             [
-                'name' => 'فيوتشر أكونت',
-                'name_en' => 'Future Account',
+                'name' => 'شركة ساينا',
+                'name_en' => 'Syna Co',
                 'tax_number' => '300000000000003',
                 'currency' => 'SYP',
                 'is_active' => true,

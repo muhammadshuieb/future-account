@@ -26,7 +26,7 @@ class EInvoiceService
     {
         $invoice = $this->ensureUuid($invoice->load(['customer', 'lines.product', 'warehouse']));
 
-        $companyName = Setting::getValue('company_name', 'Future Account');
+        $companyName = Setting::getValue('company_name', 'Syna Co');
         $taxNumber = Setting::getValue('tax_number', '');
         $baseCurrency = Setting::getValue('currency', 'SYP');
 

@@ -1,7 +1,7 @@
 {
   "name": "future-account",
   "private": true,
-  "description": "Future Account — Arabic ERP monorepo",
+  "description": "Syna Co — Arabic ERP monorepo",
   "scripts": {
     "dev:api": "cd backend && php artisan serve",
     "dev:web": "cd frontend && npm run dev",

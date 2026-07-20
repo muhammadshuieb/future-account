@@ -1,8 +1,8 @@
-# فيوتشر أكونت | Future Account
+# شركة ساينا | Syna Co
 
-نظام محاسبة / ERP عربي RTL — **Laravel + React + PostgreSQL** عبر Docker.
+نظام ERP / محاسبة عربي RTL — **Laravel + React + PostgreSQL** عبر Docker.
 
-Arabic accounting/ERP — Docker-first full stack with multi-currency (SYP / TRY / USD), barcodes, backups, and printable reports.
+Syna Co — Arabic accounting/ERP with multi-currency (SYP / TRY / USD), barcodes, backups, and printable reports.
 
 ---
 
@@ -423,6 +423,16 @@ git push origin main
 ---
 
 ## Changelog
+
+### v1.2.0 (2026-07-20)
+- **Rebrand** — Syna Co / شركة ساينا across UI, seeders, Docker, and print views
+- **Sidebar** — Fixed sticky layout, grouped navigation, permission-based menu, mobile drawer
+- **General Ledger** — Account ledger report with opening/closing balance
+- **Categories & units** — CRUD tabs in Warehouse
+- **Audit log UI** — Admin audit trail page
+- **Companies & branches** — Management screens under Admin
+- **Credit limit** — Enforced on sales invoice posting
+- **Auto-backup** — Laravel `syna:backup` scheduled daily at 02:00 (requires scheduler cron)
 
 ### v1.1.0 (2026-07-20)
 - Sales quotes & orders — CRUD + Quote → Order → Invoice conversion

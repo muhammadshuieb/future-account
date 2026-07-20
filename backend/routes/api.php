@@ -180,6 +180,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('inventory', [ReportController::class, 'inventory']);
         Route::get('profit', [ReportController::class, 'profit']);
         Route::get('tax', [ReportController::class, 'tax']);
+        Route::get('general-ledger', [ReportController::class, 'generalLedger']);
         Route::get('product-movement/{product}', [ReportController::class, 'productMovement']);
     });
 

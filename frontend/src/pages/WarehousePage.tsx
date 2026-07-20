@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { Field, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
-type Tab = 'warehouses' | 'products' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
+type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
 
 export default function WarehousePage() {
   const { t } = useTranslation()
@@ -55,6 +55,8 @@ export default function WarehousePage() {
   })
 
   const [whForm, setWhForm] = useState({ code: '', name: '', location: '' })
+  const [catForm, setCatForm] = useState({ name: '', parent_id: '' })
+  const [unitForm, setUnitForm] = useState({ name: '', symbol: '' })
   const [prForm, setPrForm] = useState({
     sku: '',
     barcode: '',
@@ -97,6 +99,26 @@ export default function WarehousePage() {
       msg.setMessage('تم حفظ المخزن')
       setWhForm({ code: '', name: '', location: '' })
       void qc.invalidateQueries({ queryKey: ['warehouses'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const saveCat = useMutation({
+    mutationFn: () => api.post('/categories', { name: catForm.name, parent_id: catForm.parent_id || null }),
+    onSuccess: () => {
+      msg.setMessage('تم حفظ التصنيف')
+      setCatForm({ name: '', parent_id: '' })
+      void qc.invalidateQueries({ queryKey: ['categories'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const saveUnit = useMutation({
+    mutationFn: () => api.post('/units', unitForm),
+    onSuccess: () => {
+      msg.setMessage('تم حفظ الوحدة')
+      setUnitForm({ name: '', symbol: '' })
+      void qc.invalidateQueries({ queryKey: ['units'] })
     },
     onError: msg.fromErr,
   })
@@ -182,6 +204,8 @@ export default function WarehousePage() {
         tabs={[
           { id: 'warehouses', label: 'المخازن' },
           { id: 'products', label: 'الأصناف' },
+          { id: 'categories', label: t('warehouse.categories') },
+          { id: 'units', label: t('warehouse.units') },
           { id: 'stock', label: 'الأرصدة' },
           { id: 'movements', label: 'الحركات' },
           { id: 'transfers', label: 'التحويلات' },
@@ -290,6 +314,53 @@ export default function WarehousePage() {
               <label className="flex items-center gap-2"><input type="checkbox" checked={prForm.track_serial} onChange={(e) => setPrForm({ ...prForm, track_serial: e.target.checked })} />{t('warehouse.trackSerial')}</label>
             </div>
             <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">حفظ</button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'categories' && (
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <Panel>
+            <table className="data-table">
+              <thead><tr><th>{t('common.name')}</th><th>تصنيف أب</th></tr></thead>
+              <tbody>
+                {(categories.data || []).map((c: { id: number; name: string; parent?: { name: string } }) => (
+                  <tr key={c.id}><td>{c.name}</td><td>{c.parent?.name || '—'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+          <form className="space-y-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveCat.mutate() }}>
+            <h2 className="font-semibold">{t('warehouse.newCategory')}</h2>
+            <Field label={t('common.name')}><input className={inputClass} value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required /></Field>
+            <Field label="تصنيف أب">
+              <select className={inputClass} value={catForm.parent_id} onChange={(e) => setCatForm({ ...catForm, parent_id: e.target.value })}>
+                <option value="">—</option>
+                {(categories.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </Field>
+            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.save')}</button>
+          </form>
+        </div>
+      )}
+
+      {tab === 'units' && (
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <Panel>
+            <table className="data-table">
+              <thead><tr><th>{t('common.name')}</th><th>رمز</th></tr></thead>
+              <tbody>
+                {(units.data || []).map((u: { id: number; name: string; symbol?: string }) => (
+                  <tr key={u.id}><td>{u.name}</td><td>{u.symbol || '—'}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+          <form className="space-y-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveUnit.mutate() }}>
+            <h2 className="font-semibold">{t('warehouse.newUnit')}</h2>
+            <Field label={t('common.name')}><input className={inputClass} value={unitForm.name} onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })} required /></Field>
+            <Field label="رمز"><input className={inputClass} value={unitForm.symbol} onChange={(e) => setUnitForm({ ...unitForm, symbol: e.target.value })} /></Field>
+            <button type="submit" className="rounded-lg bg-teal px-4 py-2 text-white">{t('common.save')}</button>
           </form>
         </div>
       )}

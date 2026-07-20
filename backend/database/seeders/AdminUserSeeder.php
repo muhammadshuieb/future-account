@@ -33,8 +33,8 @@ class AdminUserSeeder extends Seeder
         }
 
         $settings = [
-            ['key' => 'company_name', 'value' => 'فيوتشر أكونت', 'group' => 'company', 'label' => 'اسم الشركة'],
-            ['key' => 'company_name_en', 'value' => 'Future Account', 'group' => 'company', 'label' => 'Company Name'],
+            ['key' => 'company_name', 'value' => 'شركة ساينا', 'group' => 'company', 'label' => 'اسم الشركة'],
+            ['key' => 'company_name_en', 'value' => 'Syna Co', 'group' => 'company', 'label' => 'Company Name'],
             ['key' => 'currency', 'value' => 'SYP', 'group' => 'finance', 'label' => 'العملة الأساسية'],
             ['key' => 'multi_currency', 'value' => '1', 'group' => 'finance', 'type' => 'boolean', 'label' => 'تفعيل تعدد العملات'],
             ['key' => 'fiscal_year_start', 'value' => '01-01', 'group' => 'finance', 'label' => 'بداية السنة المالية'],

@@ -90,4 +90,16 @@ class ReportController extends ApiController
 
         return $this->ok($this->reports->productMovement($product, $request->query('from'), $request->query('to')));
     }
+
+    public function generalLedger(Request $request): JsonResponse
+    {
+        $this->authorizePermission('reports.view');
+        $request->validate(['account_id' => ['required', 'integer', 'exists:accounts,id']]);
+
+        return $this->ok($this->reports->generalLedger(
+            (int) $request->query('account_id'),
+            $request->query('from'),
+            $request->query('to'),
+        ));
+    }
 }

@@ -1,9 +1,17 @@
 {
   "app": {
-    "name": "Future Account",
-    "tagline": "Entegre muhasebe sistemi"
+    "name": "Syna Co",
+    "tagline": "Syna Co — Entegre ERP",
+    "welcome": "Hoş geldiniz, {{name}}",
+    "headerHint": "Syna Co — muhasebe, stok ve satış"
   },
   "nav": {
+    "group": {
+      "main": "Ana",
+      "accounting": "Muhasebe",
+      "operations": "Operasyon",
+      "admin": "Yönetim"
+    },
     "dashboard": "Kontrol Paneli",
     "accounts": "Hesap Planı",
     "journal": "Yevmiye Fişleri",
@@ -16,7 +24,12 @@
     "reports": "Raporlar",
     "barcodes": "Barkod ve Etiketler",
     "settings": "Ayarlar",
-    "logout": "Çıkış"
+    "auditLog": "Denetim Kaydı",
+    "companies": "Şirketler ve Şubeler",
+    "logout": "Çıkış",
+    "notifications": "Bildirimler",
+    "markAllRead": "Tümünü okundu işaretle",
+    "noNotifications": "Bildirim yok"
   },
   "common": {
     "save": "Kaydet",
@@ -38,7 +51,11 @@
     "batch": "Parti",
     "serial": "Seri No",
     "loading": "Yükleniyor...",
-    "currency": "Para Birimi"
+    "currency": "Para Birimi",
+    "name": "Ad",
+    "debit": "Borç",
+    "credit": "Alacak",
+    "balance": "Bakiye"
   },
   "sales": {
     "title": "Satışlar",
@@ -54,7 +71,8 @@
     "newReturn": "Satış İadesi",
     "convertToOrder": "Siparişe Dönüştür",
     "convertToInvoice": "Faturaya Dönüştür",
-    "eInvoice": "E-Fatura"
+    "eInvoice": "E-Fatura",
+    "creditLimitExceeded": "Müşteri kredi limiti aşıldı"
   },
   "purchases": {
     "title": "Satın Alma",
@@ -72,10 +90,49 @@
   "warehouse": {
     "title": "Depo ve Stok",
     "counts": "Sayım",
+    "categories": "Kategoriler",
+    "units": "Ölçü Birimleri",
+    "newCategory": "Yeni Kategori",
+    "newUnit": "Yeni Birim",
     "newCount": "Yeni Sayım",
     "postCount": "Farkları Kaydet",
     "trackBatch": "Parti Takibi",
     "trackSerial": "Seri Takibi"
+  },
+  "reports": {
+    "generalLedger": "Genel Defter",
+    "selectAccount": "Hesap seçin",
+    "openingBalance": "Açılış bakiyesi",
+    "closingBalance": "Kapanış bakiyesi",
+    "entryNumber": "Fiş No",
+    "description": "Açıklama"
+  },
+  "audit": {
+    "title": "Denetim Kaydı",
+    "subtitle": "Sistem işlemlerini izleyin",
+    "user": "Kullanıcı",
+    "action": "İşlem",
+    "entity": "Varlık",
+    "ip": "IP",
+    "empty": "Kayıt yok"
+  },
+  "companies": {
+    "title": "Şirketler ve Şubeler",
+    "subtitle": "Tüzel kişilikler ve şubeleri yönetin",
+    "tabCompanies": "Şirketler",
+    "tabBranches": "Şubeler",
+    "code": "Kod",
+    "nameAr": "Ad (Arapça)",
+    "nameEn": "Ad (İngilizce)",
+    "taxNumber": "Vergi no",
+    "company": "Şirket",
+    "branchName": "Şube adı",
+    "city": "Şehir",
+    "mainBranch": "Ana şube",
+    "newCompany": "Yeni şirket",
+    "newBranch": "Yeni şube",
+    "saved": "Şirket kaydedildi",
+    "branchSaved": "Şube kaydedildi"
   },
   "dashboard": {
     "dailySales": "Günlük Satışlar",
@@ -86,6 +143,11 @@
   "settings": {
     "users": "Kullanıcılar ve Yetkiler",
     "roles": "Roller",
-    "permissions": "Yetkiler"
+    "permissions": "Yetkiler",
+    "autoBackupNote": "Otomatik yedekleme her gün 02:00'de çalışır (scheduler cron gerekir)"
+  },
+  "login": {
+    "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP",
+    "demoHint": "Demo: admin@future-account.test / password"
   }
 }

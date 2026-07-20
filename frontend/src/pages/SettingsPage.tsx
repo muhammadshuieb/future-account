@@ -304,6 +304,7 @@ export default function SettingsPage() {
             <div>
               <h2 className="font-semibold">نسخ قاعدة البيانات الاحتياطي</h2>
               <p className="text-xs text-black/50">PostgreSQL عبر Docker — للمدير فقط. الاستعادة تستبدل البيانات الحالية.</p>
+              <p className="mt-1 text-xs text-teal-dark">{t('settings.autoBackupNote')}</p>
             </div>
             <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
               إنشاء نسخة الآن
