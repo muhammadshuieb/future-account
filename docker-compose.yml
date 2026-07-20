@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: future_account_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: future_account
+      POSTGRES_USER: future
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - future_account_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U future -d future_account"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: future_account_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_NAME: "Future Account"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      # AES-256-CBC requires exactly 32 bytes after base64 decode (local demo key only)
+      APP_KEY: base64:ZnV0dXJlYWNjb3VudGRvY2tlcmRldmtleTEyMzQ1Njc=
+      APP_CIPHER: AES-256-CBC
+      APP_LOCALE: ar
+      LOG_CHANNEL: stderr
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: future_account
+      DB_USERNAME: future
+      DB_PASSWORD: secret
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      SANCTUM_STATEFUL_DOMAINS: localhost,localhost:8080,127.0.0.1,127.0.0.1:8080
+      FRONTEND_URL: http://localhost:8080
+      BACKUP_PATH: /var/www/html/storage/app/backups
+    ports:
+      - "8000:8000"
+    volumes:
+      - future_account_backups:/var/www/html/storage/app/backups
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api
+    container_name: future_account_web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  future_account_pgdata:
+  future_account_backups:

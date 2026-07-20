@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --color-ink: #0c1a22;
+  --color-slate-panel: #123040;
+  --color-slate-deep: #0a1f2a;
+  --color-mist: #e6eef2;
+  --color-paper: #f3f7f8;
+  --color-surface: #ffffff;
+  --color-teal: #0d7377;
+  --color-teal-dark: #08585b;
+  --color-teal-soft: #d7ecec;
+  --color-amber: #b7791f;
+  --color-danger: #b42318;
+  --color-success: #067647;
+  --color-line: rgba(15, 28, 36, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background:
+    radial-gradient(ellipse 90% 55% at 100% -10%, rgba(13, 115, 119, 0.1), transparent 55%),
+    radial-gradient(ellipse 50% 40% at -5% 100%, rgba(18, 48, 64, 0.06), transparent 50%),
+    linear-gradient(180deg, #f7fafb 0%, var(--color-paper) 100%);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+/* Shared UI utilities */
+.app-shell-main {
+  min-width: 0;
+}
+
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.data-table th {
+  background: var(--color-mist);
+  color: rgba(12, 26, 34, 0.65);
+  font-weight: 600;
+  text-align: right;
+  padding: 0.65rem 0.85rem;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.7rem 0.85rem;
+  border-top: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(13, 115, 119, 0.03);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border-radius: 0.65rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s, opacity 0.15s, box-shadow 0.15s;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-teal);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-teal-dark);
+}
+
+.btn-secondary {
+  background: #fff;
+  border-color: var(--color-line);
+  color: var(--color-ink);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-mist);
+}
+
+.btn-danger {
+  background: #fef3f2;
+  color: var(--color-danger);
+  border-color: rgba(180, 35, 24, 0.15);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: rgba(12, 26, 34, 0.7);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--color-mist);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  color: rgba(12, 26, 34, 0.55);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #e8eef1 25%, #f5f8f9 50%, #e8eef1 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+  border-radius: 0.5rem;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.1rem;
+  font-size: 0.875rem;
+  box-shadow: 0 10px 30px rgba(12, 26, 34, 0.12);
+  background: #fff;
+  border: 1px solid var(--color-line);
+}
+
+.no-print {
+  /* marker class */
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print,
+  aside,
+  .app-topbar,
+  .print-hide {
+    display: none !important;
+  }
+
+  main,
+  .app-shell-main,
+  .print-area {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+    overflow: visible !important;
+  }
+
+  .print-area {
+    display: block !important;
+  }
+
+  .data-table th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .barcode-sheet {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8mm;
+  }
+
+  .barcode-label {
+    break-inside: avoid;
+    border: 1px solid #ccc;
+    padding: 4mm;
+    text-align: center;
+  }
+}
