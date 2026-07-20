@@ -84,10 +84,13 @@ echo "PostgreSQL is ready."
 
 php artisan config:clear --no-ansi || true
 php artisan migrate --force --no-ansi
-php artisan db:seed --force --no-ansi
 
-# Always ensure demo admin exists (covers empty DB after restore / partial seed).
-echo "Ensuring demo admin account..."
-php artisan db:seed --class=AdminUserSeeder --force --no-ansi
+if [ "${SKIP_DB_SEED:-0}" = "1" ]; then
+  echo "SKIP_DB_SEED=1 — skipping demo seeders (production / deploy mode)."
+else
+  php artisan db:seed --force --no-ansi
+  echo "Ensuring demo admin account..."
+  php artisan db:seed --class=AdminUserSeeder --force --no-ansi
+fi
 
 exec "$@"
