@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import JsBarcode from 'jsbarcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, EmptyState, Field, LoadingBlock, Msg, PageHeader, Panel, inputClass, useFormMessage } from '@/components/ui'
 
 type Product = {
@@ -88,6 +89,21 @@ export default function BarcodeLabelsPage() {
     setSelected((prev) => (prev.length === allIds.length ? [] : allIds))
   }
 
+  async function handleBarcodeSelect(code: string) {
+    try {
+      const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
+      const found = (res.data.data as Product[])[0]
+      if (!found) {
+        msg.setError('لم يُعثر على صنف بهذا الباركود')
+        return
+      }
+      setSelected((prev) => (prev.includes(found.id) ? prev : [...prev, found.id]))
+      msg.setMessage(`تم تحديد: ${found.name}`)
+    } catch {
+      msg.setError('تعذر البحث بالباركود')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -128,6 +144,11 @@ export default function BarcodeLabelsPage() {
         </Panel>
 
         <Panel className="space-y-4 p-4">
+          <BarcodeScanInput
+            label="مسح لتحديد صنف"
+            hint="امسح باركوداً لإضافته لقائمة الطباعة"
+            onScan={(code) => void handleBarcodeSelect(code)}
+          />
           <Field label="عدد النسخ لكل صنف">
             <input type="number" min={1} max={20} className={inputClass} value={copies} onChange={(e) => setCopies(Number(e.target.value) || 1)} />
           </Field>

@@ -2,7 +2,7 @@ import { NavLink, Outlet, Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LogOut, Shield, Bell, Menu, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { APP_VERSION } from '@/version'
@@ -23,6 +23,13 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const qc = useQueryClient()
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileOpen])
 
   const notifications = useQuery({
     queryKey: ['notifications'],
@@ -61,59 +68,63 @@ export default function AppLayout() {
     }))
     .filter((group) => group.items.length > 0)
 
+  const closeMobile = () => setMobileOpen(false)
+
   const nav = (
     <>
-      <div className="shrink-0 border-b border-white/10 px-5 py-5">
+      <div className="app-sidebar-header shrink-0 border-b border-white/10 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal to-teal-dark text-xl font-extrabold shadow-lg shadow-black/20">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal to-teal-dark text-lg font-extrabold shadow-lg shadow-black/20">
             س
           </div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-bold leading-tight">{t('app.name')}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-bold leading-tight">{t('app.name')}</p>
             <p className="truncate text-xs text-white/55">{t('app.tagline')}</p>
-            <p className="text-[10px] text-white/40">v{APP_VERSION}</p>
+            <p className="text-[10px] text-white/35">v{APP_VERSION}</p>
           </div>
         </div>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
-        {visibleGroups.map((group) => (
-          <div key={group.labelKey} className="mb-4 last:mb-0">
-            <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/35">
-              {t(group.labelKey)}
-            </p>
-            <div className="space-y-0.5">
-              {group.items.map((item) => {
-                const Icon = item.icon
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    onClick={() => setMobileOpen(false)}
-                    className={({ isActive }) =>
-                      [
-                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition',
-                        isActive
-                          ? 'bg-teal text-white shadow-sm ring-1 ring-white/10'
-                          : 'text-white/70 hover:bg-white/8 hover:text-white',
-                      ].join(' ')
-                    }
-                  >
-                    <Icon size={18} strokeWidth={1.75} className="shrink-0" />
-                    <span className="flex-1 leading-snug">{t(`nav.${item.key}`)}</span>
-                  </NavLink>
-                )
-              })}
+      <nav className="app-sidebar-nav min-h-0 flex-1">
+        <div className="app-sidebar-nav-inner px-3 py-4">
+          {visibleGroups.map((group) => (
+            <div key={group.labelKey} className="mb-5 last:mb-0">
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+                {t(group.labelKey)}
+              </p>
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      onClick={closeMobile}
+                      className={({ isActive }) =>
+                        [
+                          'app-sidebar-link flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                          isActive
+                            ? 'bg-teal/90 text-white shadow-sm ring-1 ring-white/15'
+                            : 'text-white/75 hover:bg-white/10 hover:text-white',
+                        ].join(' ')
+                      }
+                    >
+                      <Icon size={18} strokeWidth={1.75} className="shrink-0 opacity-90" />
+                      <span className="flex-1 truncate leading-snug">{t(`nav.${item.key}`)}</span>
+                    </NavLink>
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </nav>
 
-      <div className="shrink-0 border-t border-white/10 p-4">
-        <div className="mb-3 flex items-center gap-2 text-sm text-white/80">
+      <div className="app-sidebar-footer shrink-0 border-t border-white/10 p-4">
+        <div className="mb-3 flex items-center gap-3 text-sm text-white/80">
           <Shield size={16} className="shrink-0 text-teal" />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-white">{user.name}</p>
             <p className="truncate text-xs text-white/45">{user.roles.join(' · ')}</p>
           </div>
@@ -121,7 +132,7 @@ export default function AppLayout() {
         <button
           type="button"
           onClick={() => void logout()}
-          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-white/65 transition hover:bg-white/10 hover:text-white"
+          className="touch-target flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
         >
           <LogOut size={16} />
           {t('nav.logout')}
@@ -133,16 +144,26 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <aside className="print-hide hidden h-screen w-64 shrink-0 flex-col bg-slate-panel text-white lg:flex">
+      <aside className="app-sidebar print-hide hidden h-screen w-[260px] shrink-0 flex-col md:flex">
         {nav}
       </aside>
 
       {mobileOpen && (
-        <div className="print-hide fixed inset-0 z-40 lg:hidden">
-          <button type="button" className="absolute inset-0 bg-black/40" aria-label={t('common.close')} onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 right-0 flex h-full w-72 flex-col bg-slate-panel text-white shadow-2xl">
-            <button type="button" className="absolute left-3 top-3 rounded-lg p-2 text-white/70 hover:bg-white/10" onClick={() => setMobileOpen(false)}>
-              <X size={18} />
+        <div className="print-hide fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50 backdrop-blur-[1px]"
+            aria-label={t('common.close')}
+            onClick={closeMobile}
+          />
+          <aside className="app-sidebar app-sidebar-drawer absolute inset-y-0 right-0 flex h-full w-[min(280px,88vw)] flex-col shadow-2xl">
+            <button
+              type="button"
+              className="touch-target absolute left-3 top-3 z-10 rounded-lg p-2 text-white/70 hover:bg-white/10"
+              aria-label={t('common.close')}
+              onClick={closeMobile}
+            >
+              <X size={20} />
             </button>
             {nav}
           </aside>
@@ -150,15 +171,20 @@ export default function AppLayout() {
       )}
 
       <div className="app-shell-main flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="app-topbar print-hide sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-white/85 backdrop-blur-md">
+        <header className="app-topbar print-hide sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-white/90 backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
-              <button type="button" className="rounded-lg p-2 hover:bg-mist lg:hidden" onClick={() => setMobileOpen(true)}>
-                <Menu size={20} />
+              <button
+                type="button"
+                className="touch-target rounded-lg p-2 hover:bg-mist md:hidden"
+                aria-label="Menu"
+                onClick={() => setMobileOpen(true)}
+              >
+                <Menu size={22} />
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-ink">{t('app.welcome', { name: user.name })}</p>
-                <p className="truncate text-xs text-black/45">{t('app.headerHint')}</p>
+                <p className="truncate text-sm font-semibold text-ink sm:text-base">{t('app.welcome', { name: user.name })}</p>
+                <p className="hidden truncate text-xs text-black/45 sm:block">{t('app.headerHint')}</p>
               </div>
             </div>
 
@@ -167,7 +193,7 @@ export default function AppLayout() {
               <div className="relative">
                 <button
                   type="button"
-                  className="relative rounded-lg border border-[var(--color-line)] bg-white p-2.5 text-ink/70 hover:bg-mist"
+                  className="touch-target relative rounded-lg border border-[var(--color-line)] bg-white p-2.5 text-ink/70 hover:bg-mist"
                   onClick={() => setNotifOpen((v) => !v)}
                   aria-label={t('nav.notifications')}
                 >
@@ -179,10 +205,10 @@ export default function AppLayout() {
                   )}
                 </button>
                 {notifOpen && (
-                  <div className="absolute left-0 mt-2 w-80 overflow-hidden rounded-xl border border-[var(--color-line)] bg-white shadow-xl">
+                  <div className="absolute left-0 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[var(--color-line)] bg-white shadow-xl">
                     <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
                       <p className="text-sm font-semibold">{t('nav.notifications')}</p>
-                      <button type="button" className="text-xs text-teal" onClick={() => markAll.mutate()}>
+                      <button type="button" className="touch-target text-xs text-teal" onClick={() => markAll.mutate()}>
                         {t('nav.markAllRead')}
                       </button>
                     </div>
@@ -204,8 +230,8 @@ export default function AppLayout() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
             <Outlet />
           </div>
         </main>

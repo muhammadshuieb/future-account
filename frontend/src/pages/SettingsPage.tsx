@@ -34,7 +34,7 @@ export default function SettingsPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'general' | 'currencies' | 'backup' | 'users'>('general')
+  const [tab, setTab] = useState<'general' | 'currencies' | 'backup' | 'barcode' | 'users'>('general')
   const [values, setValues] = useState<Record<string, string>>({})
   const msg = useFormMessage()
 
@@ -61,6 +61,16 @@ export default function SettingsPage() {
   const backups = useQuery({
     queryKey: ['backups'],
     queryFn: async () => (await api.get('/backups')).data.data as BackupRow[],
+    enabled: tab === 'backup',
+    retry: false,
+  })
+
+  const backupStatus = useQuery({
+    queryKey: ['backups-status'],
+    queryFn: async () => (await api.get('/backups/status')).data.data as {
+      google_drive: { configured: boolean }
+      telegram: { configured: boolean }
+    },
     enabled: tab === 'backup',
     retry: false,
   })
@@ -191,6 +201,7 @@ export default function SettingsPage() {
           { id: 'general', label: 'عام' },
           { id: 'currencies', label: 'العملات وأسعار الصرف' },
           { id: 'backup', label: 'النسخ الاحتياطي' },
+          { id: 'barcode', label: 'قارئ الباركود' },
           ...((user?.permissions.includes('users.manage') || user?.roles.includes('admin')) ? [{ id: 'users', label: t('settings.users') }] : []),
         ]}
         active={tab}
@@ -299,6 +310,26 @@ export default function SettingsPage() {
       )}
 
       {tab === 'backup' && (
+        <div className="space-y-4">
+          <Panel className="space-y-3 p-5">
+            <h2 className="font-semibold">وجهات النسخ الاحتياطي</h2>
+            <p className="text-xs text-black/50">تُضبط عبر متغيرات البيئة على الخادم (.env.prod) — لا تُخزَّن الأسرار في قاعدة البيانات.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
+                <p className="font-medium">Google Drive</p>
+                <p className={`mt-1 text-xs ${backupStatus.data?.google_drive.configured ? 'text-success' : 'text-black/45'}`}>
+                  {backupStatus.data?.google_drive.configured ? '● مُفعّل' : '○ غير مُعد — GOOGLE_DRIVE_CREDENTIALS_JSON + GOOGLE_DRIVE_FOLDER_ID'}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
+                <p className="font-medium">Telegram</p>
+                <p className={`mt-1 text-xs ${backupStatus.data?.telegram.configured ? 'text-success' : 'text-black/45'}`}>
+                  {backupStatus.data?.telegram.configured ? '● مُفعّل' : '○ غير مُعد — TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID'}
+                </p>
+              </div>
+            </div>
+          </Panel>
+
         <Panel className="space-y-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -349,6 +380,25 @@ export default function SettingsPage() {
               </li>
             ))}
           </ul>
+        </Panel>
+        </div>
+      )}
+
+      {tab === 'barcode' && (
+        <Panel className="space-y-4 p-6">
+          <h2 className="font-semibold">{t('settings.barcodeScanner')}</h2>
+          <p className="text-sm text-black/60">{t('settings.barcodeIntro')}</p>
+          <ol className="list-decimal space-y-2 pr-5 text-sm text-black/70">
+            <li>{t('settings.barcodeStep1')}</li>
+            <li>{t('settings.barcodeStep2')}</li>
+            <li>{t('settings.barcodeStep3')}</li>
+            <li>{t('settings.barcodeStep4')}</li>
+          </ol>
+          <div className="rounded-lg border border-teal/20 bg-teal-soft/40 p-4 text-sm text-teal-dark">
+            <p className="font-medium">{t('settings.barcodeAdvanced')}</p>
+            <p className="mt-1 text-xs">{t('settings.barcodeAdvancedHint')}</p>
+          </div>
+          <p className="text-xs text-black/45">{t('settings.barcodeApi')}</p>
         </Panel>
       )}
 

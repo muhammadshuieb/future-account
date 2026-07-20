@@ -50,6 +50,101 @@ textarea {
   min-width: 0;
 }
 
+/* Sidebar — RTL content with scrollbar on the right */
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-slate-panel);
+  color: #fff;
+}
+
+.app-sidebar-nav {
+  direction: ltr;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+}
+
+.app-sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+}
+
+.app-sidebar-nav-inner {
+  direction: rtl;
+}
+
+.app-sidebar-drawer {
+  animation: slideInRight 0.22s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Touch-friendly targets on mobile */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (min-width: 768px) {
+  .touch-target {
+    min-height: auto;
+    min-width: auto;
+  }
+}
+
+/* Responsive forms and grids */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .form-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .form-grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.page-grid-split {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .page-grid-split {
+    grid-template-columns: 1.2fr 0.8fr;
+  }
+}
+
 .page-title {
   font-size: 1.75rem;
   font-weight: 700;
@@ -98,6 +193,13 @@ textarea {
   transition: background 0.15s, color 0.15s, opacity 0.15s, box-shadow 0.15s;
   border: 1px solid transparent;
   cursor: pointer;
+  min-height: 44px;
+}
+
+@media (min-width: 768px) {
+  .btn {
+    min-height: auto;
+  }
 }
 
 .btn:disabled {

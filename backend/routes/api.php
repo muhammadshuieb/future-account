@@ -68,6 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('currencies/convert', [CurrencyController::class, 'convert']);
 
     // Backups (admin)
+    Route::get('backups/status', [BackupController::class, 'status']);
     Route::get('backups', [BackupController::class, 'index']);
     Route::post('backups', [BackupController::class, 'store']);
     Route::get('backups/{filename}/download', [BackupController::class, 'download'])->where('filename', '.*');

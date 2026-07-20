@@ -144,7 +144,16 @@
     "users": "Kullanıcılar ve Yetkiler",
     "roles": "Roller",
     "permissions": "Yetkiler",
-    "autoBackupNote": "Otomatik yedekleme her gün 02:00'de çalışır (scheduler cron gerekir)"
+    "autoBackupNote": "Otomatik yedekleme her gün 02:00'de çalışır (scheduler cron gerekir)",
+    "barcodeScanner": "Barkod Okuyucu",
+    "barcodeIntro": "Çoğu USB okuyucu klavye gibi çalışır (HID keyboard wedge) — sürücü gerekmez.",
+    "barcodeStep1": "USB barkod okuyucuyu bilgisayara veya tablete takın.",
+    "barcodeStep2": "Satış, Depo veya Barkod sayfasında tarama alanına tıklayın.",
+    "barcodeStep3": "Etiketi tarayın — ürün otomatik eklenir veya seçilir.",
+    "barcodeStep4": "Her ürünün kartında kayıtlı bir barkod olduğundan emin olun.",
+    "barcodeAdvanced": "Gelişmiş okuyucular (isteğe bağlı)",
+    "barcodeAdvancedHint": "Web Serial veya WebHID ileride eklenebilir — birincil yöntem keyboard wedge'dir.",
+    "barcodeApi": "Arama: GET /api/products?barcode=XXX"
   },
   "login": {
     "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP",

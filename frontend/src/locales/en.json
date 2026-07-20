@@ -144,7 +144,16 @@
     "users": "Users & Permissions",
     "roles": "Roles",
     "permissions": "Permissions",
-    "autoBackupNote": "Automatic backup runs daily at 2:00 AM (requires Laravel scheduler cron)"
+    "autoBackupNote": "Automatic backup runs daily at 2:00 AM (requires Laravel scheduler cron)",
+    "barcodeScanner": "Barcode Scanner",
+    "barcodeIntro": "Most USB scanners act as a keyboard (HID keyboard wedge) — no driver needed. The app captures digits then Enter.",
+    "barcodeStep1": "Plug the USB barcode scanner into your PC or tablet.",
+    "barcodeStep2": "Open Sales, Warehouse, or Barcodes and click the scan field.",
+    "barcodeStep3": "Scan the label — the product is added or selected automatically.",
+    "barcodeStep4": "Ensure each product has a barcode saved on its card.",
+    "barcodeAdvanced": "Advanced scanners (optional)",
+    "barcodeAdvancedHint": "Web Serial API or WebHID may be added later for non-wedge devices — keyboard wedge is the primary method.",
+    "barcodeApi": "Lookup: GET /api/products?barcode=XXX"
   },
   "login": {
     "subtitle": "Syna Co — ERP for accounting & business management",

@@ -12,7 +12,9 @@ class ProductController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = Product::query()->with(['category', 'unit'])->withSum('stockLevels as on_hand', 'quantity')->orderBy('sku');
-        if ($request->filled('search')) {
+        if ($request->filled('barcode')) {
+            $query->where('barcode', $request->string('barcode'));
+        } elseif ($request->filled('search')) {
             $s = $request->string('search');
             $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('sku', 'like', "%{$s}%")->orWhere('barcode', 'like', "%{$s}%"));
         }

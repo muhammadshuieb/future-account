@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Services\BackupDistributionService;
 use App\Services\BackupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -9,7 +10,10 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BackupController extends ApiController
 {
-    public function __construct(protected BackupService $backups) {}
+    public function __construct(
+        protected BackupService $backups,
+        protected BackupDistributionService $distribution,
+    ) {}
 
     protected function authorizeAdmin(): void
     {
@@ -26,6 +30,13 @@ class BackupController extends ApiController
         return $this->ok($this->backups->list());
     }
 
+    public function status(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        return $this->ok($this->distribution->status());
+    }
+
     public function store(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
@@ -34,7 +45,10 @@ class BackupController extends ApiController
             'label' => ['nullable', 'string', 'max:64'],
         ]);
 
-        return $this->ok($this->backups->create($data['label'] ?? null), 201);
+        $meta = $this->backups->create($data['label'] ?? null);
+        $meta['distribution'] = $this->distribution->distribute($meta['path'], $meta['filename']);
+
+        return $this->ok($meta, 201);
     }
 
     public function download(string $filename): BinaryFileResponse

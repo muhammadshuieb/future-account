@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
@@ -64,6 +65,24 @@ export default function SalesPage() {
   const [printId, setPrintId] = useState<number | null>(null)
 
   const selectedProduct = (products.data || []).find((p) => String(p.id) === inv.product_id)
+
+  async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
+    try {
+      const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
+      const found = (res.data.data as ProductRow[])[0]
+      if (!found) {
+        msg.setError('لم يُعثر على صنف بهذا الباركود')
+        return
+      }
+      const patch = { product_id: String(found.id), unit_price: String(found.sale_price) }
+      if (target === 'inv') setInv((prev) => ({ ...prev, ...patch }))
+      else if (target === 'order') setOrder((prev) => ({ ...prev, ...patch }))
+      else setQuote((prev) => ({ ...prev, ...patch }))
+      msg.setMessage(`تم العثور على: ${found.name}`)
+    } catch {
+      msg.setError('تعذر البحث بالباركود')
+    }
+  }
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
 
@@ -170,15 +189,23 @@ export default function SalesPage() {
   const productFields = <T extends { product_id: string; quantity: string; unit_price: string; batch_no: string; serial_no: string }>(
     state: T,
     setState: Dispatch<SetStateAction<T>>,
+    onScan?: (code: string) => void,
   ) => (
     <>
+      {onScan && (
+        <BarcodeScanInput
+          label="مسح باركود الصنف"
+          hint="وصّل قارئ USB وامسح — يُضاف الصنف تلقائياً"
+          onScan={onScan}
+        />
+      )}
       <Field label={t('common.product')}>
         <select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required>
           <option value="">—</option>
           {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </Field>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="form-grid-2">
         <Field label={t('common.quantity')}><input className={inputClass} value={state.quantity} onChange={(e) => setState({ ...state, quantity: e.target.value })} /></Field>
         <Field label={t('common.price')}><input className={inputClass} value={state.unit_price} onChange={(e) => setState({ ...state, unit_price: e.target.value })} /></Field>
       </div>
@@ -198,8 +225,9 @@ export default function SalesPage() {
       <Msg message={msg.message} error={msg.error} />
 
       {tab === 'quotes' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
+            <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
@@ -214,6 +242,7 @@ export default function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveQuote.mutate() }}>
             <h2 className="font-semibold">{t('sales.newQuote')}</h2>
@@ -221,15 +250,16 @@ export default function SalesPage() {
             <Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>
             <Field label={t('common.customer')}><select className={inputClass} value={quote.customer_id} onChange={(e) => setQuote({ ...quote, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
             <Field label={t('common.warehouse')}><select className={inputClass} value={quote.warehouse_id} onChange={(e) => setQuote({ ...quote, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(quote, setQuote)}
+            {productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'))}
             <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
           </form>
         </div>
       )}
 
       {tab === 'orders' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
+            <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
@@ -244,21 +274,23 @@ export default function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveOrder.mutate() }}>
             <h2 className="font-semibold">{t('sales.newOrder')}</h2>
             <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
             <Field label={t('common.customer')}><select className={inputClass} value={order.customer_id} onChange={(e) => setOrder({ ...order, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
             <Field label={t('common.warehouse')}><select className={inputClass} value={order.warehouse_id} onChange={(e) => setOrder({ ...order, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(order, setOrder)}
+            {productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'))}
             <button type="submit" className="btn btn-primary w-full">{t('common.save')}</button>
           </form>
         </div>
       )}
 
       {tab === 'invoices' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
+            <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
@@ -274,13 +306,14 @@ export default function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm print-hide" onSubmit={(e) => { e.preventDefault(); saveInv.mutate() }}>
             <h2 className="font-semibold">{t('sales.newInvoice')}</h2>
             <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
             <Field label={t('common.customer')}><select className={inputClass} value={inv.customer_id} onChange={(e) => setInv({ ...inv, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
             <Field label={t('common.warehouse')}><select className={inputClass} value={inv.warehouse_id} onChange={(e) => setInv({ ...inv, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-            {productFields(inv, setInv)}
+            {productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'))}
             {selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}
             {selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}
             <button type="submit" className="btn btn-primary w-full">{t('common.post')}</button>
@@ -299,8 +332,9 @@ export default function SalesPage() {
       )}
 
       {tab === 'returns' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
+            <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
@@ -309,6 +343,7 @@ export default function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveRet.mutate() }}>
             <h2 className="font-semibold">{t('sales.newReturn')}</h2>
@@ -317,7 +352,7 @@ export default function SalesPage() {
             <Field label={t('common.warehouse')}><select className={inputClass} value={ret.warehouse_id} onChange={(e) => setRet({ ...ret, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
             <Field label="فاتورة"><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => setRet({ ...ret, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>
             <Field label={t('common.product')}><select className={inputClass} value={ret.product_id} onChange={(e) => setRet({ ...ret, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="form-grid-2">
               <Field label={t('common.quantity')}><input className={inputClass} value={ret.quantity} onChange={(e) => setRet({ ...ret, quantity: e.target.value })} /></Field>
               <Field label={t('common.price')}><input className={inputClass} value={ret.unit_price} onChange={(e) => setRet({ ...ret, unit_price: e.target.value })} required /></Field>
             </div>
@@ -327,8 +362,9 @@ export default function SalesPage() {
       )}
 
       {tab === 'receipts' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
+            <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>مبلغ</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
@@ -337,6 +373,7 @@ export default function SalesPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form className="space-y-3 rounded-xl border border-[var(--color-line)] bg-white p-4 shadow-sm" onSubmit={(e) => { e.preventDefault(); saveRc.mutate() }}>
             <h2 className="font-semibold">سند قبض</h2>

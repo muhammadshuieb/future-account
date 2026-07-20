@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
+import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Field, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
@@ -54,6 +55,7 @@ export default function WarehousePage() {
     enabled: tab === 'counts',
   })
 
+  const [productFilter, setProductFilter] = useState('')
   const [whForm, setWhForm] = useState({ code: '', name: '', location: '' })
   const [catForm, setCatForm] = useState({ name: '', parent_id: '' })
   const [unitForm, setUnitForm] = useState({ name: '', symbol: '' })
@@ -91,6 +93,35 @@ export default function WarehousePage() {
     product_id: '',
     quantity: '1',
     status: 'posted',
+  })
+
+  async function handleProductBarcodeScan(code: string) {
+    try {
+      const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
+      const found = (res.data.data as { id: number; name: string; sku: string; barcode?: string; cost_price: number; sale_price: number }[])[0]
+      if (!found) {
+        msg.setError('لم يُعثر على صنف بهذا الباركود')
+        return
+      }
+      setProductFilter(found.name)
+      setPrForm((prev) => ({
+        ...prev,
+        sku: found.sku,
+        barcode: found.barcode || code,
+        name: found.name,
+        cost_price: String(found.cost_price),
+        sale_price: String(found.sale_price),
+      }))
+      msg.setMessage(`تم العثور على: ${found.name}`)
+    } catch {
+      msg.setError('تعذر البحث بالباركود')
+    }
+  }
+
+  const filteredProducts = (products.data || []).filter((p: { name: string; sku: string; barcode?: string }) => {
+    if (!productFilter.trim()) return true
+    const q = productFilter.trim().toLowerCase()
+    return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.barcode || '').includes(q)
   })
 
   const saveWh = useMutation({
@@ -256,30 +287,36 @@ export default function WarehousePage() {
       )}
 
       {tab === 'products' && (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="page-grid-split">
           <Panel>
-            <table className="w-full text-sm">
-              <thead className="bg-mist text-right text-black/60">
-                <tr>
-                  <th className="px-4 py-3">SKU</th>
-                  <th className="px-4 py-3">الاسم</th>
-                  <th className="px-4 py-3">تكلفة</th>
-                  <th className="px-4 py-3">بيع</th>
-                  <th className="px-4 py-3">رصيد</th>
-                </tr>
-              </thead>
+            <div className="border-b border-[var(--color-line)] p-4">
+              <BarcodeScanInput
+                label="بحث بالباركود"
+                hint="امسح باركود الصنف للبحث أو تعبئة نموذج الإضافة"
+                onScan={(code) => void handleProductBarcodeScan(code)}
+              />
+              <div className="mt-3">
+                <Field label="تصفية الأصناف">
+                  <input className={inputClass} value={productFilter} onChange={(e) => setProductFilter(e.target.value)} placeholder="اسم أو SKU أو باركود..." />
+                </Field>
+              </div>
+            </div>
+            <div className="table-wrap">
+            <table className="data-table text-sm">
+              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th></tr></thead>
               <tbody>
-                {(products.data || []).map((p: { id: number; sku: string; name: string; cost_price: number; sale_price: number; on_hand?: number }) => (
-                  <tr key={p.id} className="border-t border-black/5">
-                    <td className="px-4 py-3 font-mono">{p.sku}</td>
-                    <td className="px-4 py-3">{p.name}</td>
-                    <td className="px-4 py-3">{p.cost_price}</td>
-                    <td className="px-4 py-3">{p.sale_price}</td>
-                    <td className="px-4 py-3">{p.on_hand ?? 0}</td>
+                {filteredProducts.map((p: { id: number; sku: string; name: string; cost_price: number; sale_price: number; on_hand?: number }) => (
+                  <tr key={p.id}>
+                    <td className="font-mono">{p.sku}</td>
+                    <td>{p.name}</td>
+                    <td>{p.cost_price}</td>
+                    <td>{p.sale_price}</td>
+                    <td>{p.on_hand ?? 0}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </Panel>
           <form
             className="space-y-3 rounded-2xl border border-black/5 bg-white p-4 shadow-sm"
@@ -304,7 +341,7 @@ export default function WarehousePage() {
                 {(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </Field>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="form-grid-3">
               <Field label="تكلفة"><input className={inputClass} value={prForm.cost_price} onChange={(e) => setPrForm({ ...prForm, cost_price: e.target.value })} /></Field>
               <Field label="بيع"><input className={inputClass} value={prForm.sale_price} onChange={(e) => setPrForm({ ...prForm, sale_price: e.target.value })} /></Field>
               <Field label="حد الطلب"><input className={inputClass} value={prForm.reorder_level} onChange={(e) => setPrForm({ ...prForm, reorder_level: e.target.value })} /></Field>

@@ -144,7 +144,16 @@
     "users": "المستخدمون والصلاحيات",
     "roles": "الأدوار",
     "permissions": "الصلاحيات",
-    "autoBackupNote": "النسخ الاحتياطي التلقائي يعمل يومياً الساعة 2:00 ص (يتطلب cron للـ scheduler)"
+    "autoBackupNote": "النسخ الاحتياطي التلقائي يعمل يومياً الساعة 2:00 ص (يتطلب cron للـ scheduler)",
+    "barcodeScanner": "قارئ الباركود",
+    "barcodeIntro": "معظم قارئات USB تعمل كلوحة مفاتيح (HID keyboard wedge) — لا تحتاج تعريفاً. النظام يستقبل الأرقام ثم Enter.",
+    "barcodeStep1": "وصّل قارئ الباركود USB بالحاسوب أو الجهاز اللوحي.",
+    "barcodeStep2": "افتح صفحة المبيعات أو المخزن أو الباركود وانقر حقل «مسح باركود».",
+    "barcodeStep3": "امسح الملصق — يُضاف الصنف أو يُحدَّد تلقائياً.",
+    "barcodeStep4": "تأكد أن كل صنف له باركود مسجّل في بطاقة الصنف.",
+    "barcodeAdvanced": "قارئات متقدمة (اختياري)",
+    "barcodeAdvancedHint": "يمكن لاحقاً دعم Web Serial API أو WebHID للأجهزة غير keyboard wedge — الطريقة الأساسية هي keyboard wedge.",
+    "barcodeApi": "البحث: GET /api/products?barcode=XXX"
   },
   "login": {
     "subtitle": "Syna Co — نظام ERP للمحاسبة وإدارة الأعمال",
