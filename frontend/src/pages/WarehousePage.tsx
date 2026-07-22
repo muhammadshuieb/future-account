@@ -198,18 +198,6 @@ export default function WarehousePage() {
     deletePr.mutate(editingId)
   }
 
-  const deletePr = useMutation({
-    mutationFn: (id: number) => api.delete(`/products/${id}`),
-    onSuccess: () => { msg.setMessage(t('common.deleted')); closeModal(); void qc.invalidateQueries({ queryKey: ['products'] }) },
-    onError: msg.fromErr,
-  })
-
-  const askDeleteProduct = () => {
-    if (!editingId) return
-    if (!window.confirm(t('common.confirmDelete'))) return
-    deletePr.mutate(editingId)
-  }
-
   const saveMv = useMutation({
     mutationFn: () =>
       api.post('/stock-movements', {
