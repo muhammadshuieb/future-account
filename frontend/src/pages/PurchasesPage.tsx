@@ -8,6 +8,7 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
@@ -412,7 +413,7 @@ export default function PurchasesPage() {
             <table className="data-table text-sm">
               <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; supplier?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">{i.invoice_number}</td>
                     <td>{i.supplier?.name}</td>
@@ -421,6 +422,15 @@ export default function PurchasesPage() {
                     <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
+                      <span className="print-hide inline-block">
+                        <WhatsAppSendButton
+                          compact
+                          defaultPhone={i.supplier?.phone}
+                          printPath={`/print/purchase-invoices/${i.id}`}
+                          fileName={i.invoice_number}
+                          documentLabel={`فاتورة مشتريات ${i.invoice_number}`}
+                        />
+                      </span>
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -481,7 +491,18 @@ export default function PurchasesPage() {
       )}
       <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
           {tab === 'invoices' && selectedId && (
-            <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+            <>
+              <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+              <WhatsAppSendButton
+                defaultPhone={(detail.data as { supplier?: { phone?: string } } | undefined)?.supplier?.phone
+                  || (selectedRow as { supplier?: { phone?: string } } | null)?.supplier?.phone}
+                printPath={`/print/purchase-invoices/${selectedId}`}
+                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                  || `purchase-${selectedId}`)}
+                documentLabel={`فاتورة مشتريات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+              />
+            </>
           )}
           {selectedId && selectedRow && canDeletePurchase(tab, String(selectedRow.status || '')) && (
             <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>

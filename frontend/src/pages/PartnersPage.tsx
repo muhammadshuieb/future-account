@@ -6,6 +6,7 @@ import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { useQueryTab } from '@/lib/useQueryTab'
 import { statementTypeLabel } from '@/components/StatementPrintView'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean }
@@ -150,6 +151,15 @@ export default function PartnersPage() {
                     >
                       <Printer size={14} /> طباعة
                     </button>
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <WhatsAppSendButton
+                        compact
+                        defaultPhone={r.phone}
+                        printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                        fileName={`statement-${tab}-${r.id}`}
+                        documentLabel={`كشف حساب — ${r.name}`}
+                      />
+                    </span>
                   </div>
                 </td>
               </tr>
@@ -165,9 +175,17 @@ export default function PartnersPage() {
               كشف حساب — الرصيد الختامي:{' '}
               {statement.data ? formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base) : '…'}
             </div>
-            <Button variant="secondary" className="print-hide" onClick={() => printStatement(statementId)}>
-              <Printer size={16} /> طباعة
-            </Button>
+            <div className="print-hide flex flex-wrap items-center gap-2">
+              <Button variant="secondary" onClick={() => printStatement(statementId)}>
+                <Printer size={16} /> طباعة
+              </Button>
+              <WhatsAppSendButton
+                defaultPhone={(rows || []).find((r) => r.id === statementId)?.phone}
+                printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                fileName={`statement-${tab}-${statementId}`}
+                documentLabel={`كشف حساب — ${(rows || []).find((r) => r.id === statementId)?.name || ''}`}
+              />
+            </div>
           </div>
           <div className="print-hide flex flex-wrap gap-3 border-b border-black/5 px-4 py-3">
             <Field label="من">

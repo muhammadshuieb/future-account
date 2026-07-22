@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\SupplierPaymentController;
 use App\Http\Controllers\Api\UnitController;
 use App\Http\Controllers\Api\WarehouseController;
+use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function () {
@@ -68,6 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exchange-rates', [CurrencyController::class, 'rates']);
     Route::post('exchange-rates', [CurrencyController::class, 'storeRate']);
     Route::post('currencies/convert', [CurrencyController::class, 'convert']);
+
+    // WhatsApp (Cloud API optional — wa.me + download always works client-side)
+    Route::get('whatsapp/status', [WhatsAppController::class, 'status']);
+    Route::post('whatsapp/send', [WhatsAppController::class, 'send']);
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);

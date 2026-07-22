@@ -9,7 +9,7 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import type { Setting } from '@/types'
 import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
-const SETTINGS_TABS = ['general', 'currencies', 'backup', 'barcode', 'users'] as const
+const SETTINGS_TABS = ['general', 'currencies', 'backup', 'whatsapp', 'barcode', 'users'] as const
 
 type CurrencyRow = {
   id: number
@@ -93,6 +93,13 @@ export default function SettingsPage() {
       telegram: { configured: boolean }
     },
     enabled: tab === 'backup',
+    retry: false,
+  })
+
+  const whatsappStatus = useQuery({
+    queryKey: ['whatsapp-status'],
+    queryFn: async () => (await api.get('/whatsapp/status')).data.data as { configured: boolean },
+    enabled: tab === 'whatsapp',
     retry: false,
   })
 
@@ -285,6 +292,7 @@ export default function SettingsPage() {
           { id: 'general', label: t('settings.tabGeneral') },
           { id: 'currencies', label: t('settings.tabCurrencies') },
           { id: 'backup', label: t('settings.tabBackup') },
+          { id: 'whatsapp', label: t('settings.tabWhatsapp') },
           { id: 'barcode', label: t('settings.barcodeScanner') },
           ...((user?.permissions.includes('users.manage') || user?.roles.includes('admin')) ? [{ id: 'users', label: t('settings.users') }] : []),
         ]}
@@ -540,6 +548,31 @@ export default function SettingsPage() {
                 </li>
               ))}
             </ul>
+          </Panel>
+        </div>
+      )}
+
+      {tab === 'whatsapp' && (
+        <div className="space-y-4">
+          <Panel className="space-y-4 p-5">
+            <h2 className="font-semibold">{t('settings.whatsappSection')}</h2>
+            <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
+              <p className="font-medium">{t('settings.whatsappStatus')}</p>
+              <p className={`mt-1 text-xs ${whatsappStatus.data?.configured ? 'text-success' : 'text-black/45'}`}>
+                {whatsappStatus.data?.configured ? t('settings.whatsappConnected') : t('settings.whatsappDisconnected')}
+              </p>
+            </div>
+            <div className="space-y-2 text-sm text-black/70">
+              <p className="font-medium">{t('settings.whatsappHowTitle')}</p>
+              <ol className="list-decimal space-y-1.5 pr-5">
+                <li>{t('settings.whatsappHow1')}</li>
+                <li>{t('settings.whatsappHow2')}</li>
+                <li>{t('settings.whatsappHow3')}</li>
+              </ol>
+            </div>
+            <p className="rounded-lg border border-black/10 bg-mist/60 px-3 py-2 text-xs text-black/65">
+              {t('settings.whatsappEnvHint')}
+            </p>
           </Panel>
         </div>
       )}

@@ -7,6 +7,7 @@ import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { LOGO } from '@/lib/brand'
 import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
@@ -123,23 +124,61 @@ export default function ReportsPage() {
     window.print()
   }
 
+  const statementPhone = (() => {
+    if (tab === 'customer-statement' && customerId) {
+      const c = (customers.data || []).find((x: { id: number }) => String(x.id) === customerId) as { phone?: string } | undefined
+      return c?.phone || ''
+    }
+    if (tab === 'supplier-statement' && supplierId) {
+      const s = (suppliers.data || []).find((x: { id: number }) => String(x.id) === supplierId) as { phone?: string } | undefined
+      return s?.phone || ''
+    }
+    return ''
+  })()
+
+  const whatsappPrintPath = (() => {
+    if (tab === 'customer-statement' && customerId) {
+      return `/print/customers/${customerId}/statement?${new URLSearchParams({ from, to }).toString()}`
+    }
+    if (tab === 'supplier-statement' && supplierId) {
+      return `/print/suppliers/${supplierId}/statement?${new URLSearchParams({ from, to }).toString()}`
+    }
+    return undefined
+  })()
+
+  const whatsappDisabled =
+    (tab === 'customer-statement' && !customerId) ||
+    (tab === 'supplier-statement' && !supplierId) ||
+    !report.data
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="التقارير"
         subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة"
         actions={
-          <Button
-            variant="secondary"
-            className="print-hide"
-            onClick={printReport}
-            disabled={
-              (tab === 'customer-statement' && !customerId) ||
-              (tab === 'supplier-statement' && !supplierId)
-            }
-          >
-            <Printer size={16} /> طباعة / PDF
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              className="print-hide"
+              onClick={printReport}
+              disabled={
+                (tab === 'customer-statement' && !customerId) ||
+                (tab === 'supplier-statement' && !supplierId)
+              }
+            >
+              <Printer size={16} /> طباعة / PDF
+            </Button>
+            <WhatsAppSendButton
+              className="print-hide"
+              disabled={whatsappDisabled}
+              defaultPhone={statementPhone}
+              printPath={whatsappPrintPath}
+              captureSelector=".print-area"
+              fileName={`report-${tab}`}
+              documentLabel={tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
+            />
+          </div>
         }
       />
 

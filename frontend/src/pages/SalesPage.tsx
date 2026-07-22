@@ -9,6 +9,7 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
@@ -598,7 +599,7 @@ export default function SalesPage() {
             <table className="data-table text-sm">
               <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; customer?: { name: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; customer?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">{i.invoice_number}</td>
                     <td>{i.customer?.name}</td>
@@ -607,6 +608,15 @@ export default function SalesPage() {
                     <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
+                      <span className="print-hide inline-block">
+                        <WhatsAppSendButton
+                          compact
+                          defaultPhone={i.customer?.phone}
+                          printPath={`/print/sales-invoices/${i.id}`}
+                          fileName={i.invoice_number}
+                          documentLabel={`فاتورة مبيعات ${i.invoice_number}`}
+                        />
+                      </span>
                       {canDeleteSales('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -672,7 +682,18 @@ export default function SalesPage() {
       )}
       <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <>
           {tab === 'invoices' && selectedId && (
-            <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+            <>
+              <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+              <WhatsAppSendButton
+                defaultPhone={(detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
+                  || (selectedRow as { customer?: { phone?: string } } | null)?.customer?.phone}
+                printPath={`/print/sales-invoices/${selectedId}`}
+                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                  || `sales-${selectedId}`)}
+                documentLabel={`فاتورة مبيعات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+              />
+            </>
           )}
           {selectedId && selectedRow && canDeleteSales(tab, String(selectedRow.status || '')) && (
             <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>

@@ -12,7 +12,7 @@ export type SalesInvoicePrintData = {
   tax_amount: number
   subtotal: number
   currency?: string
-  customer?: { name: string; tax_number?: string }
+  customer?: { name: string; tax_number?: string; phone?: string }
   lines?: {
     product?: { name: string; sku?: string }
     quantity: number
@@ -30,7 +30,7 @@ export type PurchaseInvoicePrintData = {
   tax_amount?: number
   subtotal?: number
   currency?: string
-  supplier?: { name: string; tax_number?: string }
+  supplier?: { name: string; tax_number?: string; phone?: string }
   lines?: {
     product?: { name: string; sku?: string }
     quantity: number

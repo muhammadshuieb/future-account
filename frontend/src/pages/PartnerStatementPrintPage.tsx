@@ -6,6 +6,7 @@ import { Printer } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { StatementPrintView, type PartnerStatementData } from '@/components/StatementPrintView'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button } from '@/components/ui'
 
 type Kind = 'customers' | 'suppliers'
@@ -42,6 +43,9 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
   const partnerName = isCustomer
     ? statement.data?.customer?.name
     : statement.data?.supplier?.name
+  const partnerPhone = isCustomer
+    ? statement.data?.customer?.phone
+    : statement.data?.supplier?.phone
 
   useEffect(() => {
     if (partnerName) {
@@ -71,6 +75,11 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
+        <WhatsAppSendButton
+          defaultPhone={partnerPhone}
+          fileName={`statement-${kind}-${partnerId}`}
+          documentLabel={`${documentLabel}${partnerName ? ` — ${partnerName}` : ''}`}
+        />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}
         </Button>

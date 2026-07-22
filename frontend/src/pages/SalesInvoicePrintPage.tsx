@@ -6,6 +6,7 @@ import { Printer } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { SalesInvoicePrintView, type EInvoiceData, type SalesInvoicePrintData } from '@/components/InvoicePrintView'
+import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import { Button } from '@/components/ui'
 
 export default function SalesInvoicePrintPage() {
@@ -54,6 +55,11 @@ export default function SalesInvoicePrintPage() {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
+        <WhatsAppSendButton
+          defaultPhone={invoice.data.customer?.phone}
+          fileName={invoice.data.invoice_number || `sales-invoice-${invoiceId}`}
+          documentLabel={`فاتورة مبيعات ${invoice.data.invoice_number || ''}`}
+        />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}
         </Button>

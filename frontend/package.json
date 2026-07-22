@@ -12,8 +12,10 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "axios": "^1.18.1",
+    "html2canvas": "^1.4.1",
     "i18next": "^26.3.6",
     "jsbarcode": "^3.12.3",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.25.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
