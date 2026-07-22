@@ -1,21 +1,26 @@
-/** Human-readable document status labels (UI). */
-const LABELS: Record<string, string> = {
-  draft: 'مسودة',
-  posted: 'مرحّل',
-  void: 'ملغى',
-  converted: 'محوّل',
-  cancelled: 'ملغى',
-  pending: 'قيد الانتظار',
-  approved: 'معتمد',
-  rejected: 'مرفوض',
-  paid: 'مدفوع',
-  partial: 'جزئي',
-  open: 'مفتوح',
-  closed: 'مغلق',
-}
+import i18n from '@/i18n'
 
+const STATUS_KEYS = [
+  'draft',
+  'posted',
+  'void',
+  'converted',
+  'cancelled',
+  'pending',
+  'approved',
+  'rejected',
+  'paid',
+  'partial',
+  'open',
+  'closed',
+] as const
+
+/** Human-readable document status labels via i18n (ar / en / tr). */
 export function documentStatusLabel(status: string | null | undefined): string {
   if (!status) return '—'
   const key = String(status).toLowerCase()
-  return LABELS[key] || status
+  if ((STATUS_KEYS as readonly string[]).includes(key)) {
+    return i18n.t(`status.${key}`)
+  }
+  return status
 }

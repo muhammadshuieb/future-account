@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { Account, JournalEntry } from '@/types'
+import { documentStatusLabel } from '@/lib/statusLabels'
 import { Button, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
 
 type LineDraft = {
@@ -150,12 +151,6 @@ export default function JournalEntriesPage() {
     createMutation.mutate(status)
   }
 
-  const statusLabel = {
-    draft: 'مسودة',
-    posted: 'مرحّل',
-    void: 'ملغى',
-  }
-
   return (
     <div className="space-y-6">
       <PageHeader
@@ -193,7 +188,7 @@ export default function JournalEntriesPage() {
                 <td className="px-4 py-3 font-mono text-xs">{entry.entry_number}</td>
                 <td className="px-4 py-3">{String(entry.entry_date).slice(0, 10)}</td>
                 <td className="px-4 py-3">{entry.description}</td>
-                <td className="px-4 py-3">{statusLabel[entry.status]}</td>
+                <td className="px-4 py-3">{documentStatusLabel(entry.status)}</td>
                 <td className="px-4 py-3">
                   {entry.status === 'draft' && (
                     <button

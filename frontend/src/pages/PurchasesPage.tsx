@@ -137,7 +137,7 @@ export default function PurchasesPage() {
       exchange_rate: req.exchange_rate ? Number(req.exchange_rate) : undefined,
       lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no, defaultTaxRate)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ طلب الشراء'); invalidate(); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.requestSaved')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -150,7 +150,7 @@ export default function PurchasesPage() {
       exchange_rate: po.exchange_rate ? Number(po.exchange_rate) : undefined,
       lines: [purchaseLine(po.product_id, po.quantity, po.unit_cost, po.batch_no, po.serial_no, defaultTaxRate)],
     }),
-    onSuccess: () => { msg.setMessage('تم حفظ أمر الشراء'); invalidate(); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.orderSaved')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -164,7 +164,7 @@ export default function PurchasesPage() {
       status: inv.status,
       lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, defaultTaxRate)],
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل فاتورة المشتريات'); invalidate(); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.invoicePosted')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -179,13 +179,13 @@ export default function PurchasesPage() {
       status: ret.status,
       lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_cost: Number(ret.unit_cost), batch_no: ret.batch_no || undefined, serial_no: ret.serial_no || undefined }],
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل مرتجع المشتريات'); invalidate(); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.returnPosted')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
   const convertReq = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-requests/${id}/convert-to-order`),
-    onSuccess: () => { msg.setMessage('تم التحويل لأمر شراء'); invalidate() },
+    onSuccess: () => { msg.setMessage(t('purchases.convertedToOrder')); invalidate() },
     onError: msg.fromErr,
   })
 
@@ -199,13 +199,13 @@ export default function PurchasesPage() {
       exchange_rate: req.exchange_rate ? Number(req.exchange_rate) : undefined,
       lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no, defaultTaxRate)],
     }),
-    onSuccess: () => { msg.setMessage('تم تحديث طلب الشراء'); invalidate(); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.requestUpdated')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
   const convertPo = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-orders/${id}/convert-to-invoice`, { status: 'posted' }),
-    onSuccess: () => { msg.setMessage('تم التحويل لفاتورة'); invalidate() },
+    onSuccess: () => { msg.setMessage(t('purchases.convertedToInvoice')); invalidate() },
     onError: msg.fromErr,
   })
 
@@ -222,7 +222,7 @@ export default function PurchasesPage() {
       exchange_rate: pay.exchange_rate ? Number(pay.exchange_rate) : undefined,
       base_amount: pay.base_amount ? Number(pay.base_amount) : undefined,
     }),
-    onSuccess: () => { msg.setMessage('تم ترحيل سند الصرف'); void qc.invalidateQueries({ queryKey: ['supplier-payments', 'purchase-invoices'] }); closeModal() },
+    onSuccess: () => { msg.setMessage(t('purchases.paymentPosted')); void qc.invalidateQueries({ queryKey: ['supplier-payments', 'purchase-invoices'] }); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -307,7 +307,7 @@ export default function PurchasesPage() {
     return (
       <div className="space-y-3 text-sm">
         <div className="grid gap-3 sm:grid-cols-2">
-          <p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p>
+          <p><b>{t('common.number')}:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p>
           <p><b>{t('common.status')}:</b> {documentStatusLabel(data.status)}</p>
           <p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p>
           <p><b>{t('common.currency')}:</b> {data.currency || baseCurrency}</p>
@@ -359,7 +359,7 @@ export default function PurchasesPage() {
       {tab === 'requests' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(requests.data || []).map((r: { id: number; request_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r, r.status !== 'converted')}>
@@ -384,7 +384,7 @@ export default function PurchasesPage() {
       {tab === 'orders' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
                   <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
@@ -409,7 +409,7 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
@@ -434,7 +434,7 @@ export default function PurchasesPage() {
       {tab === 'returns' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
@@ -458,7 +458,7 @@ export default function PurchasesPage() {
       {tab === 'payments' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>مبلغ</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.amount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(payments.data || []).map((p: { id: number; payment_number: string; amount: number; status: string; currency?: string; supplier?: { name: string } }) => (
                   <tr key={p.id} className="cursor-pointer" onClick={() => openRow(p)}>
@@ -487,12 +487,12 @@ export default function PurchasesPage() {
           )}
           <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
         </>}>
-        {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
+        {modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
           {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0)} />{productFields(inv, setInv)}</>}
-          {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
-          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label="فاتورة"><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
+          {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
+          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
         </form>}
       </Modal>
     </div>

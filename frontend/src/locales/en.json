@@ -78,7 +78,28 @@
     "name": "Name",
     "debit": "Debit",
     "credit": "Credit",
-    "balance": "Balance"
+    "balance": "Balance",
+    "number": "No.",
+    "amount": "Amount",
+    "invoice": "Invoice",
+    "cashBox": "Cash box",
+    "validUntil": "Valid until",
+    "emptyList": "No records",
+    "emptyListHint": "Add a new record using the button above"
+  },
+  "status": {
+    "draft": "Draft",
+    "posted": "Posted",
+    "void": "Void",
+    "converted": "Converted",
+    "cancelled": "Cancelled",
+    "pending": "Pending",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "paid": "Paid",
+    "partial": "Partial",
+    "open": "Open",
+    "closed": "Closed"
   },
   "sales": {
     "title": "Sales",
@@ -102,7 +123,20 @@
     "stockLocation": "Stock location",
     "useBatch": "Use",
     "noStockInWarehouse": "No stock in this warehouse",
-    "viewStock": "View stock"
+    "viewStock": "View stock",
+    "scanBarcode": "Scan product barcode",
+    "scanBarcodeHint": "Connect a USB scanner and scan — the product is added automatically",
+    "barcodeNotFound": "No product found for this barcode",
+    "barcodeFound": "Found: {{name}}",
+    "barcodeSearchFailed": "Barcode lookup failed",
+    "quoteSaved": "Quote saved",
+    "quoteUpdated": "Quote updated",
+    "orderSaved": "Sales order saved",
+    "invoicePosted": "Sales invoice created/posted",
+    "returnPosted": "Sales return posted",
+    "convertedToOrder": "Converted to sales order",
+    "convertedToInvoice": "Converted to invoice",
+    "receiptSaved": "Receipt recorded"
   },
   "purchases": {
     "title": "Purchases",
@@ -115,7 +149,15 @@
     "newRequest": "New Purchase Request",
     "newOrder": "New Purchase Order",
     "convertToOrder": "Convert to PO",
-    "convertToInvoice": "Convert to Invoice"
+    "convertToInvoice": "Convert to Invoice",
+    "requestSaved": "Purchase request saved",
+    "requestUpdated": "Purchase request updated",
+    "orderSaved": "Purchase order saved",
+    "invoicePosted": "Purchase invoice posted",
+    "returnPosted": "Purchase return posted",
+    "convertedToOrder": "Converted to purchase order",
+    "convertedToInvoice": "Converted to invoice",
+    "paymentPosted": "Payment posted"
   },
   "warehouse": {
     "title": "Warehouse & Inventory",

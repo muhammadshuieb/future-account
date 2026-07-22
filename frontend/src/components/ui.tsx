@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const DECIMAL_INPUT_RE = /^-?\d*\.?\d*$/
 
@@ -116,12 +117,13 @@ export function EmptyState({ title, description }: { title: string; description?
   )
 }
 
-export function LoadingBlock({ label = 'جاري التحميل...' }: { label?: string }) {
+export function LoadingBlock({ label }: { label?: string }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-3 p-4">
       <div className="skeleton h-4 w-40" />
       <div className="skeleton h-24 w-full" />
-      <p className="text-sm text-black/45">{label}</p>
+      <p className="text-sm text-black/45">{label ?? t('common.loading')}</p>
     </div>
   )
 }

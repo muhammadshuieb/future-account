@@ -77,7 +77,28 @@
     "name": "Ad",
     "debit": "Borç",
     "credit": "Alacak",
-    "balance": "Bakiye"
+    "balance": "Bakiye",
+    "number": "No",
+    "amount": "Tutar",
+    "invoice": "Fatura",
+    "cashBox": "Kasa",
+    "validUntil": "Geçerlilik",
+    "emptyList": "Kayıt yok",
+    "emptyListHint": "Yukarıdaki düğmeden yeni kayıt ekleyin"
+  },
+  "status": {
+    "draft": "Taslak",
+    "posted": "Onaylandı",
+    "void": "İptal",
+    "converted": "Dönüştürüldü",
+    "cancelled": "İptal",
+    "pending": "Beklemede",
+    "approved": "Onaylı",
+    "rejected": "Reddedildi",
+    "paid": "Ödendi",
+    "partial": "Kısmi",
+    "open": "Açık",
+    "closed": "Kapalı"
   },
   "sales": {
     "title": "Satışlar",
@@ -101,7 +122,20 @@
     "stockLocation": "Stok konumu",
     "useBatch": "Kullan",
     "noStockInWarehouse": "Bu depoda stok yok",
-    "viewStock": "Stoku gör"
+    "viewStock": "Stoku gör",
+    "scanBarcode": "Ürün barkodu tara",
+    "scanBarcodeHint": "USB okuyucu bağlayıp tarayın — ürün otomatik eklenir",
+    "barcodeNotFound": "Bu barkodla ürün bulunamadı",
+    "barcodeFound": "Bulundu: {{name}}",
+    "barcodeSearchFailed": "Barkod araması başarısız",
+    "quoteSaved": "Teklif kaydedildi",
+    "quoteUpdated": "Teklif güncellendi",
+    "orderSaved": "Satış siparişi kaydedildi",
+    "invoicePosted": "Satış faturası oluşturuldu/onaylandı",
+    "returnPosted": "Satış iadesi onaylandı",
+    "convertedToOrder": "Satış siparişine dönüştürüldü",
+    "convertedToInvoice": "Faturaya dönüştürüldü",
+    "receiptSaved": "Tahsilat kaydedildi"
   },
   "purchases": {
     "title": "Satın Alma",
@@ -114,7 +148,15 @@
     "newRequest": "Yeni Talep",
     "newOrder": "Yeni Satın Alma Siparişi",
     "convertToOrder": "Siparişe Dönüştür",
-    "convertToInvoice": "Faturaya Dönüştür"
+    "convertToInvoice": "Faturaya Dönüştür",
+    "requestSaved": "Satın alma talebi kaydedildi",
+    "requestUpdated": "Satın alma talebi güncellendi",
+    "orderSaved": "Satın alma siparişi kaydedildi",
+    "invoicePosted": "Satın alma faturası onaylandı",
+    "returnPosted": "Satın alma iadesi onaylandı",
+    "convertedToOrder": "Satın alma siparişine dönüştürüldü",
+    "convertedToInvoice": "Faturaya dönüştürüldü",
+    "paymentPosted": "Ödeme onaylandı"
   },
   "warehouse": {
     "title": "Depo ve Stok",

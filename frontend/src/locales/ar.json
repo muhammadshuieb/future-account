@@ -78,7 +78,28 @@
     "name": "الاسم",
     "debit": "مدين",
     "credit": "دائن",
-    "balance": "الرصيد"
+    "balance": "الرصيد",
+    "number": "رقم",
+    "amount": "مبلغ",
+    "invoice": "فاتورة",
+    "cashBox": "صندوق",
+    "validUntil": "صالح حتى",
+    "emptyList": "لا توجد سجلات",
+    "emptyListHint": "أضف سجلاً جديداً من الزر أعلاه"
+  },
+  "status": {
+    "draft": "مسودة",
+    "posted": "مرحّل",
+    "void": "ملغى",
+    "converted": "محوّل",
+    "cancelled": "ملغى",
+    "pending": "قيد الانتظار",
+    "approved": "معتمد",
+    "rejected": "مرفوض",
+    "paid": "مدفوع",
+    "partial": "جزئي",
+    "open": "مفتوح",
+    "closed": "مغلق"
   },
   "sales": {
     "title": "المبيعات",
@@ -102,7 +123,20 @@
     "stockLocation": "موقع المخزون",
     "useBatch": "استخدام",
     "noStockInWarehouse": "لا يوجد رصيد في هذا المخزن",
-    "viewStock": "عرض المخزون"
+    "viewStock": "عرض المخزون",
+    "scanBarcode": "مسح باركود الصنف",
+    "scanBarcodeHint": "وصّل قارئ USB وامسح — يُضاف الصنف تلقائياً",
+    "barcodeNotFound": "لم يُعثر على صنف بهذا الباركود",
+    "barcodeFound": "تم العثور على: {{name}}",
+    "barcodeSearchFailed": "تعذر البحث بالباركود",
+    "quoteSaved": "تم حفظ عرض السعر",
+    "quoteUpdated": "تم تحديث عرض السعر",
+    "orderSaved": "تم حفظ أمر البيع",
+    "invoicePosted": "تم إنشاء/ترحيل فاتورة المبيعات",
+    "returnPosted": "تم ترحيل مرتجع المبيعات",
+    "convertedToOrder": "تم التحويل لأمر بيع",
+    "convertedToInvoice": "تم التحويل لفاتورة",
+    "receiptSaved": "تم تسجيل سند القبض"
   },
   "purchases": {
     "title": "المشتريات",
@@ -115,7 +149,15 @@
     "newRequest": "طلب شراء جديد",
     "newOrder": "أمر شراء جديد",
     "convertToOrder": "تحويل لأمر شراء",
-    "convertToInvoice": "تحويل لفاتورة"
+    "convertToInvoice": "تحويل لفاتورة",
+    "requestSaved": "تم حفظ طلب الشراء",
+    "requestUpdated": "تم تحديث طلب الشراء",
+    "orderSaved": "تم حفظ أمر الشراء",
+    "invoicePosted": "تم ترحيل فاتورة المشتريات",
+    "returnPosted": "تم ترحيل مرتجع المشتريات",
+    "convertedToOrder": "تم التحويل لأمر شراء",
+    "convertedToInvoice": "تم التحويل لفاتورة",
+    "paymentPosted": "تم ترحيل سند الصرف"
   },
   "warehouse": {
     "title": "المخازن والمخزون",
