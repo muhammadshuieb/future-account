@@ -24,13 +24,40 @@ class InventoryService
 
         $query = StockLevel::query()
             ->where('warehouse_id', $warehouseId)
-            ->where('product_id', $productId);
+            ->where('product_id', $productId)
+            ->where('quantity', '>', 0);
 
         if ($product->track_batch && $batchNo !== null && $batchNo !== '') {
             $query->where('batch_no', $batchNo);
         }
 
         return round(max(0, (float) $query->sum('quantity')), 3);
+    }
+
+    /**
+     * Positive stock rows for a product, optionally scoped to one warehouse.
+     *
+     * @return array<int, array{warehouse_id: int, warehouse_name: string, batch_no: string, quantity: float}>
+     */
+    public function stockBreakdown(int $productId, ?int $warehouseId = null): array
+    {
+        $query = StockLevel::query()
+            ->with('warehouse:id,name')
+            ->where('product_id', $productId)
+            ->where('quantity', '>', 0)
+            ->orderBy('warehouse_id')
+            ->orderBy('batch_no');
+
+        if ($warehouseId !== null) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        return $query->get()->map(fn (StockLevel $level) => [
+            'warehouse_id' => (int) $level->warehouse_id,
+            'warehouse_name' => $level->warehouse?->name ?? '—',
+            'batch_no' => (string) ($level->batch_no ?? ''),
+            'quantity' => round((float) $level->quantity, 3),
+        ])->all();
     }
 
     public function adjustStock(
@@ -415,11 +442,38 @@ class InventoryService
             $warehouseName,
         );
 
-        if ($batchNo) {
+        if ($batchNo && $product->track_batch) {
             $message .= sprintf(' (دفعة %s)', $batchNo);
         }
 
         if ($availableQty <= 0) {
+            $inWarehouse = $this->stockBreakdown($product->id, $warehouseId);
+
+            if ($batchNo && $product->track_batch && count($inWarehouse) > 0) {
+                $parts = array_map(
+                    fn (array $row) => sprintf(
+                        'دفعة %s: %s',
+                        $row['batch_no'] !== '' ? $row['batch_no'] : '—',
+                        $this->formatQty($row['quantity']),
+                    ),
+                    $inWarehouse,
+                );
+                $message .= ' — المتوفر في '.$warehouseName.': '.implode('، ', $parts);
+            } elseif (count($inWarehouse) === 0) {
+                $elsewhere = array_values(array_filter(
+                    $this->stockBreakdown($product->id),
+                    fn (array $row) => $row['warehouse_id'] !== $warehouseId,
+                ));
+
+                if (count($elsewhere) > 0) {
+                    $parts = array_map(
+                        fn (array $row) => $this->formatStockLocation($row),
+                        $elsewhere,
+                    );
+                    $message .= ' — لا يوجد رصيد في '.$warehouseName.'. المتوفر في: '.implode('؛ ', $parts);
+                }
+            }
+
             $draftPurchases = \App\Models\PurchaseInvoice::query()
                 ->where('warehouse_id', $warehouseId)
                 ->where('status', 'draft')
@@ -437,6 +491,17 @@ class InventoryService
     protected function formatQty(float $qty): string
     {
         return rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
+    }
+
+    protected function formatStockLocation(array $row): string
+    {
+        $part = $row['warehouse_name'].': '.$this->formatQty($row['quantity']);
+
+        if ($row['batch_no'] !== '') {
+            $part .= ' (دفعة '.$row['batch_no'].')';
+        }
+
+        return $part;
     }
 
     protected function nextMovementNumber(): string

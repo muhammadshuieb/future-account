@@ -7,6 +7,8 @@ import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, forma
 
 type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
 
+type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
+
 const emptyWh = { code: '', name: '', location: '' }
 const emptyCat = { name: '', parent_id: '' }
 const emptyUnit = { name: '', symbol: '' }
@@ -293,9 +295,9 @@ export default function WarehousePage() {
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th></tr></thead>
+              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th><th>{t('sales.stockLocation')}</th></tr></thead>
               <tbody>
-                {filteredProducts.map((p: { id: number; sku: string; name: string; barcode?: string; category_id?: number; unit_id?: number; cost_price: number; sale_price: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean; on_hand?: number }) => (
+                {filteredProducts.map((p: { id: number; sku: string; name: string; barcode?: string; category_id?: number; unit_id?: number; cost_price: number; sale_price: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean; on_hand?: number; stock_locations?: StockLocation[] }) => (
                   <tr
                     key={p.id}
                     className="row-clickable"
@@ -322,6 +324,17 @@ export default function WarehousePage() {
                     <td>{p.cost_price}</td>
                     <td>{p.sale_price}</td>
                     <td className="tabular-nums">{formatQuantity(p.on_hand ?? 0)}</td>
+                    <td className="max-w-xs text-xs text-black/60">
+                      {(p.stock_locations || []).length > 0
+                        ? (p.stock_locations || []).map((loc, i) => (
+                            <span key={`${loc.warehouse_id}-${loc.batch_no}-${i}`}>
+                              {i > 0 ? '؛ ' : ''}
+                              {loc.warehouse_name}: {formatQuantity(loc.quantity)}
+                              {loc.batch_no ? ` (${t('common.batch')} ${loc.batch_no})` : ''}
+                            </span>
+                          ))
+                        : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

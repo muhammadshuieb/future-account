@@ -9,6 +9,16 @@ import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, forma
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
 
+type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
+
+type StockInfo = {
+  available_qty: number
+  warehouse_id: number
+  warehouse_name?: string
+  breakdown: StockLocation[]
+  track_batch?: boolean
+}
+
 function linePayload(productId: string, qty: string, price: string, batch: string, serial: string) {
   return {
     product_id: Number(productId),
@@ -20,11 +30,13 @@ function linePayload(productId: string, qty: string, price: string, batch: strin
   }
 }
 
-async function fetchAvailableStock(productId: string, warehouseId: string): Promise<number | null> {
+async function fetchStockInfo(productId: string, warehouseId: string, batchNo?: string): Promise<StockInfo | null> {
   if (!productId || !warehouseId) return null
   try {
-    const res = await api.get(`/products/${productId}/stock`, { params: { warehouse_id: warehouseId } })
-    return Number(res.data.data.available_qty ?? 0)
+    const params: Record<string, string> = { warehouse_id: warehouseId }
+    if (batchNo) params.batch_no = batchNo
+    const res = await api.get(`/products/${productId}/stock`, { params })
+    return res.data.data as StockInfo
   } catch {
     return null
   }
@@ -78,23 +90,24 @@ export default function SalesPage() {
     status: 'posted',
   })
   const [printId, setPrintId] = useState<number | null>(null)
-  const [availableStock, setAvailableStock] = useState<number | null>(null)
+  const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
 
   const selectedProduct = (products.data || []).find((p) => String(p.id) === inv.product_id)
 
-  const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string }>(
+  const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string; batch_no?: string }>(
     setState: Dispatch<SetStateAction<T>>,
     productId: string,
     warehouseId: string,
+    batchNo?: string,
   ) => {
-    const qty = await fetchAvailableStock(productId, warehouseId)
-    if (qty === null) {
-      setAvailableStock(null)
+    const info = await fetchStockInfo(productId, warehouseId, batchNo)
+    if (info === null) {
+      setStockInfo(null)
       return
     }
-    setAvailableStock(qty)
-    setState((prev) => ({ ...prev, quantity: String(qty) }))
+    setStockInfo(info)
+    setState((prev) => ({ ...prev, quantity: String(info.available_qty) }))
   }, [])
 
   async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
@@ -123,12 +136,12 @@ export default function SalesPage() {
   }
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setAvailableStock(null) }
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null) }
   const openCreate = () => {
     setPrintId(null)
     setSelectedId(null)
     setSelectedRow(null)
-    setAvailableStock(null)
+    setStockInfo(null)
     skipStockAutofill.current = false
     if (defaultWarehouseId) {
       setQuote((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
@@ -270,7 +283,7 @@ export default function SalesPage() {
       currency: d.currency || 'SYP',
       exchange_rate: String(d.exchange_rate || ''),
     })
-    setAvailableStock(null)
+    setStockInfo(null)
   }, [detail.data, modal])
 
   const tabs = [
@@ -308,9 +321,9 @@ export default function SalesPage() {
               unit_price: product ? String(product.sale_price) : prev.unit_price,
             }))
             if (autoFillStock && productId && state.warehouse_id && !skipStockAutofill.current) {
-              void applyStockToForm(setState, productId, state.warehouse_id)
+              void applyStockToForm(setState, productId, state.warehouse_id, state.batch_no || undefined)
             } else if (!productId) {
-              setAvailableStock(null)
+              setStockInfo(null)
             }
           }}
           required
@@ -322,14 +335,36 @@ export default function SalesPage() {
       <div className="form-grid-2">
         <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
           <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
-          {autoFillStock && availableStock !== null && state.product_id && state.warehouse_id && (
-            <p className="mt-1 text-xs text-black/55">{t('sales.stockRemaining', { qty: formatQuantity(availableStock) })}</p>
+          {autoFillStock && stockInfo !== null && state.product_id && state.warehouse_id && (
+            <StockAvailabilityHint
+              stockInfo={stockInfo}
+              batchNo={state.batch_no}
+              onSelectBatch={(batch) => {
+                setState((prev) => ({ ...prev, batch_no: batch }))
+                if (state.warehouse_id) {
+                  void applyStockToForm(setState, state.product_id, state.warehouse_id, batch)
+                }
+              }}
+            />
           )}
         </Field>
         <Field label={t('common.price')}><NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} /></Field>
       </div>
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
-        <Field label={t('common.batch')}><input className={inputClass} value={state.batch_no} onChange={(e) => setState({ ...state, batch_no: e.target.value })} required /></Field>
+        <Field label={t('common.batch')}>
+          <input
+            className={inputClass}
+            value={state.batch_no}
+            onChange={(e) => {
+              const batch = e.target.value
+              setState({ ...state, batch_no: batch })
+              if (autoFillStock && state.product_id && state.warehouse_id) {
+                void applyStockToForm(setState, state.product_id, state.warehouse_id, batch || undefined)
+              }
+            }}
+            required
+          />
+        </Field>
       )}
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_serial && (
         <Field label={t('common.serial')}><input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required /></Field>
@@ -370,21 +405,65 @@ export default function SalesPage() {
     if (productId && warehouseId && !skipStockAutofill.current) {
       void applyStockToForm(setState, productId, warehouseId)
     } else if (!warehouseId) {
-      setAvailableStock(null)
+      setStockInfo(null)
     }
   }
 
-  const summary = (data: Record<string, unknown>) => (
-    <div className="space-y-3 text-sm">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <p><b>رقم:</b> {String(data.quote_number || data.order_number || data.invoice_number || data.return_number || data.receipt_number || '—')}</p>
-        <p><b>{t('common.status')}:</b> {String(data.status || '—')}</p>
-        <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
-        <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')}</p>
+  const summary = (data: Record<string, unknown>) => {
+    const warehouseName = (data.warehouse as { name?: string } | undefined)?.name
+    const lines = ((data.items || data.lines) as {
+      product?: { id?: number; name?: string }
+      product_id?: number
+      quantity?: number
+      line_total?: number
+      batch_no?: string
+      serial_no?: string
+    }[] | undefined) || []
+
+    return (
+      <div className="space-y-3 text-sm">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <p><b>رقم:</b> {String(data.quote_number || data.order_number || data.invoice_number || data.return_number || data.receipt_number || '—')}</p>
+          <p><b>{t('common.status')}:</b> {String(data.status || '—')}</p>
+          <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
+          <p><b>{t('common.warehouse')}:</b> {warehouseName || '—'}</p>
+          <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')}</p>
+        </div>
+        {lines.length > 0 && (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('common.product')}</th>
+                  <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
+                  <th>{t('common.batch')}</th>
+                  <th>{t('sales.stockLocation')}</th>
+                  <th>{t('common.total')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr key={index}>
+                    <td>{line.product?.name}</td>
+                    <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
+                    <td className="font-mono text-xs">{line.batch_no || line.serial_no || '—'}</td>
+                    <td>
+                      <LineStockHint
+                        productId={line.product?.id || line.product_id}
+                        warehouseId={data.warehouse_id as number | undefined}
+                        batchNo={line.batch_no}
+                      />
+                    </td>
+                    <td>{line.line_total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-      {!!((data.items || data.lines) as unknown[] | undefined)?.length && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(((data.items || data.lines) as { product?: { name?: string }; quantity?: number; line_total?: number }[]) || []).map((line, index) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}
-    </div>
-  )
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -507,6 +586,100 @@ export default function SalesPage() {
         )}
       </Modal>
     </div>
+  )
+}
+
+function StockAvailabilityHint({
+  stockInfo,
+  batchNo,
+  onSelectBatch,
+}: {
+  stockInfo: StockInfo
+  batchNo?: string
+  onSelectBatch?: (batch: string) => void
+}) {
+  const { t } = useTranslation()
+  const warehouseLabel = stockInfo.warehouse_name || t('common.warehouse')
+
+  return (
+    <div className="mt-1 space-y-1 text-xs text-black/55">
+      <p>
+        {batchNo && stockInfo.track_batch
+          ? t('sales.stockRemainingBatch', {
+              qty: formatQuantity(stockInfo.available_qty),
+              warehouse: warehouseLabel,
+              batch: batchNo,
+            })
+          : t('sales.stockRemainingIn', {
+              qty: formatQuantity(stockInfo.available_qty),
+              warehouse: warehouseLabel,
+            })}
+      </p>
+      {stockInfo.breakdown.length > 0 && (
+        <ul className="space-y-0.5">
+          {stockInfo.breakdown.map((row) => (
+            <li key={`${row.warehouse_id}-${row.batch_no}`} className="flex flex-wrap items-center gap-1">
+              <span>
+                {row.batch_no ? `${t('common.batch')} ${row.batch_no}: ` : ''}
+                {formatQuantity(row.quantity)}
+              </span>
+              {stockInfo.track_batch && row.batch_no && onSelectBatch && batchNo !== row.batch_no && (
+                <button type="button" className="text-teal underline" onClick={() => onSelectBatch(row.batch_no)}>
+                  {t('sales.useBatch')}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {stockInfo.breakdown.length === 0 && (
+        <p className="text-amber">{t('sales.noStockInWarehouse')}</p>
+      )}
+    </div>
+  )
+}
+
+function LineStockHint({
+  productId,
+  warehouseId,
+  batchNo,
+}: {
+  productId?: number
+  warehouseId?: number
+  batchNo?: string
+}) {
+  const { t } = useTranslation()
+  const [info, setInfo] = useState<StockInfo | null>(null)
+
+  useEffect(() => {
+    if (!productId || !warehouseId) {
+      setInfo(null)
+      return
+    }
+    let active = true
+    void fetchStockInfo(String(productId), String(warehouseId), batchNo).then((data) => {
+      if (active) setInfo(data)
+    })
+    return () => { active = false }
+  }, [productId, warehouseId, batchNo])
+
+  if (!productId || !warehouseId) return <span className="text-black/40">—</span>
+  if (!info) return <span className="text-black/40">{t('common.loading')}</span>
+
+  if (info.breakdown.length === 0) {
+    return <span className="text-danger">{t('sales.noStockInWarehouse')}</span>
+  }
+
+  return (
+    <span className="text-xs text-black/60">
+      {info.breakdown.map((row, i) => (
+        <span key={`${row.batch_no}-${i}`}>
+          {i > 0 ? '؛ ' : ''}
+          {row.batch_no ? `${t('common.batch')} ${row.batch_no}: ` : ''}
+          {formatQuantity(row.quantity)}
+        </span>
+      ))}
+    </span>
   )
 }
 

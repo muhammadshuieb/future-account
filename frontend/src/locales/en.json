@@ -79,7 +79,13 @@
     "convertToInvoice": "Convert to Invoice",
     "eInvoice": "E-Invoice",
     "creditLimitExceeded": "Customer credit limit exceeded",
-    "stockRemaining": "Remaining in warehouse: {{qty}}"
+    "stockRemaining": "Remaining in warehouse: {{qty}}",
+    "stockRemainingIn": "Available: {{qty}} in {{warehouse}}",
+    "stockRemainingBatch": "Available: {{qty}} in {{warehouse}} (batch {{batch}})",
+    "stockLocation": "Stock location",
+    "useBatch": "Use",
+    "noStockInWarehouse": "No stock in this warehouse",
+    "viewStock": "View stock"
   },
   "purchases": {
     "title": "Purchases",

@@ -4,15 +4,25 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
 use App\Models\StockLevel;
+use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductController extends ApiController
 {
+    public function __construct(protected InventoryService $inventory) {}
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
-        $query = Product::query()->with(['category', 'unit'])->withSum('stockLevels as on_hand', 'quantity')->orderBy('sku');
+        $query = Product::query()
+            ->with([
+                'category',
+                'unit',
+                'stockLevels' => fn ($q) => $q->where('quantity', '>', 0)->with('warehouse:id,name'),
+            ])
+            ->withSum('stockLevels as on_hand', 'quantity')
+            ->orderBy('sku');
         if ($request->filled('barcode')) {
             $query->where('barcode', $request->string('barcode'));
         } elseif ($request->filled('search')) {
@@ -20,7 +30,23 @@ class ProductController extends ApiController
             $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('sku', 'like', "%{$s}%")->orWhere('barcode', 'like', "%{$s}%"));
         }
 
-        return $this->ok($query->get());
+        $products = $query->get()->map(function (Product $product) {
+            $data = $product->toArray();
+            $data['stock_locations'] = $product->stockLevels
+                ->map(fn (StockLevel $level) => [
+                    'warehouse_id' => (int) $level->warehouse_id,
+                    'warehouse_name' => $level->warehouse?->name ?? '—',
+                    'batch_no' => (string) ($level->batch_no ?? ''),
+                    'quantity' => round((float) $level->quantity, 3),
+                ])
+                ->values()
+                ->all();
+            unset($data['stock_levels']);
+
+            return $data;
+        });
+
+        return $this->ok($products);
     }
 
     public function store(Request $request): JsonResponse
@@ -45,20 +71,20 @@ class ProductController extends ApiController
             'batch_no' => ['nullable', 'string', 'max:64'],
         ]);
 
-        $query = StockLevel::query()
-            ->where('warehouse_id', $data['warehouse_id'])
-            ->where('product_id', $product->id);
-
-        if (array_key_exists('batch_no', $data) && $data['batch_no'] !== null && $data['batch_no'] !== '') {
-            $query->where('batch_no', $data['batch_no']);
-        }
-
-        $availableQty = round((float) $query->sum('quantity'), 3);
+        $warehouseId = (int) $data['warehouse_id'];
+        $batchNo = $data['batch_no'] ?? null;
+        $availableQty = $this->inventory->availableQty($warehouseId, $product->id, $batchNo, $product);
+        $breakdown = $this->inventory->stockBreakdown($product->id, $warehouseId);
+        $warehouseName = $breakdown[0]['warehouse_name'] ?? \App\Models\Warehouse::query()->find($warehouseId)?->name;
 
         return $this->ok([
             'product_id' => $product->id,
-            'warehouse_id' => (int) $data['warehouse_id'],
+            'warehouse_id' => $warehouseId,
+            'warehouse_name' => $warehouseName,
+            'batch_no' => $batchNo,
             'available_qty' => max(0, $availableQty),
+            'breakdown' => $breakdown,
+            'track_batch' => (bool) $product->track_batch,
         ]);
     }
 

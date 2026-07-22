@@ -78,7 +78,13 @@
     "convertToInvoice": "Faturaya Dönüştür",
     "eInvoice": "E-Fatura",
     "creditLimitExceeded": "Müşteri kredi limiti aşıldı",
-    "stockRemaining": "Depoda kalan: {{qty}}"
+    "stockRemaining": "Depoda kalan: {{qty}}",
+    "stockRemainingIn": "Kalan: {{qty}} — {{warehouse}}",
+    "stockRemainingBatch": "Kalan: {{qty}} — {{warehouse}} (parti {{batch}})",
+    "stockLocation": "Stok konumu",
+    "useBatch": "Kullan",
+    "noStockInWarehouse": "Bu depoda stok yok",
+    "viewStock": "Stoku gör"
   },
   "purchases": {
     "title": "Satın Alma",
