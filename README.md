@@ -6,6 +6,10 @@ Syna Co — Arabic accounting/ERP with multi-currency (SYP / TRY / USD), barcode
 
 **التوقيت | Timezone:** النظام يعمل بتوقيت سوريا `Asia/Damascus` (`APP_TIMEZONE` / `TZ`). تواريخ الفواتير والقيود ولوحة التحكم والنسخ الاحتياطي المجدول تعتمد هذا التوقيت.
 
+**دليل الاستخدام (عربي PDF):** [docs/SynaCo-User-Guide-AR.pdf](docs/SynaCo-User-Guide-AR.pdf) — غلاف، فهرس، وخطوات مرقّمة لكل الوحدات. إعادة التوليد: `python scripts/generate_arabic_user_guide.py` (يتطلب fpdf2 + arabic-reshaper + python-bidi وخطوط `docs/fonts`).
+
+**الموقع المباشر:** https://synaacc.cloud
+
 ---
 
 ## التشغيل السريع | Quick start
