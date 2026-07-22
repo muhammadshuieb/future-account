@@ -10,12 +10,18 @@ class SalesReturn extends Model
 {
     protected $fillable = [
         'return_number', 'return_date', 'customer_id', 'sales_invoice_id',
-        'warehouse_id', 'status', 'total', 'journal_entry_id', 'created_by',
+        'warehouse_id', 'status', 'currency', 'exchange_rate', 'base_amount',
+        'total', 'journal_entry_id', 'created_by',
     ];
 
     protected function casts(): array
     {
-        return ['return_date' => 'date', 'total' => 'decimal:2'];
+        return [
+            'return_date' => 'date',
+            'total' => 'decimal:2',
+            'exchange_rate' => 'decimal:8',
+            'base_amount' => 'decimal:2',
+        ];
     }
 
     public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }

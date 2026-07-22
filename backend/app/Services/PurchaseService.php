@@ -161,6 +161,13 @@ class PurchaseService
                 ];
             }
 
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? null,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+                $data['return_date'] ?? null,
+            );
+
             $ret = PurchaseReturn::query()->create([
                 'return_number' => $this->nextNumber('PR'),
                 'return_date' => $data['return_date'],
@@ -168,6 +175,9 @@ class PurchaseService
                 'purchase_invoice_id' => $data['purchase_invoice_id'] ?? null,
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'status' => 'draft',
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
                 'total' => $total,
                 'created_by' => $user->id,
             ]);
@@ -203,8 +213,8 @@ class PurchaseService
                 'reference' => $ret->return_number,
                 'status' => 'posted',
             ], [
-                ['account_id' => $ap->id, 'debit' => (float) $ret->total, 'credit' => 0],
-                ['account_id' => $inventory->id, 'debit' => 0, 'credit' => (float) $ret->total],
+                ['account_id' => $ap->id, 'debit' => (float) ($ret->base_amount ?: $ret->total), 'credit' => 0],
+                ['account_id' => $inventory->id, 'debit' => 0, 'credit' => (float) ($ret->base_amount ?: $ret->total)],
             ], $user);
 
             if ($ret->warehouse_id) {
@@ -234,6 +244,21 @@ class PurchaseService
     public function createPayment(array $data, User $user): SupplierPayment
     {
         return DB::transaction(function () use ($data, $user) {
+            $amount = (float) $data['amount'];
+            $fx = $this->currencies->resolveDocumentFx(
+                $amount,
+                $data['currency'] ?? null,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+                $data['payment_date'] ?? null,
+            );
+
+            if (isset($data['base_amount']) && (float) $data['base_amount'] > 0) {
+                $fx['base_amount'] = round((float) $data['base_amount'], 2);
+                if ($fx['currency'] !== $this->currencies->baseCurrency() && $amount > 0) {
+                    $fx['exchange_rate'] = round($fx['base_amount'] / $amount, 8);
+                }
+            }
+
             $payment = SupplierPayment::query()->create([
                 'payment_number' => $this->nextNumber('SP'),
                 'payment_date' => $data['payment_date'],
@@ -242,7 +267,10 @@ class PurchaseService
                 'cash_box_id' => $data['cash_box_id'] ?? null,
                 'bank_id' => $data['bank_id'] ?? null,
                 'method' => $data['method'] ?? 'cash',
-                'amount' => $data['amount'],
+                'amount' => $amount,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
                 'status' => 'draft',
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $user->id,
@@ -284,25 +312,42 @@ class PurchaseService
                 ? Account::query()->findOrFail($payment->supplier->account_id)
                 : Account::query()->where('code', '2101')->firstOrFail();
 
+            $baseAmount = (float) ($payment->base_amount ?: $payment->amount);
+
             $entry = $this->journals->create([
                 'entry_date' => $payment->payment_date->toDateString(),
                 'description' => 'سند صرف مورد '.$payment->payment_number,
                 'reference' => $payment->payment_number,
                 'status' => 'posted',
             ], [
-                ['account_id' => $ap->id, 'debit' => (float) $payment->amount, 'credit' => 0],
-                ['account_id' => $creditAccount->id, 'debit' => 0, 'credit' => (float) $payment->amount],
+                ['account_id' => $ap->id, 'debit' => $baseAmount, 'credit' => 0],
+                ['account_id' => $creditAccount->id, 'debit' => 0, 'credit' => $baseAmount],
             ], $user);
 
             if ($payment->purchase_invoice_id) {
-                PurchaseInvoice::query()->findOrFail($payment->purchase_invoice_id)
-                    ->increment('paid_amount', (float) $payment->amount);
+                $invoice = PurchaseInvoice::query()->findOrFail($payment->purchase_invoice_id);
+                $invoice->increment('paid_amount', $this->paymentAmountInInvoiceCurrency($payment, $invoice));
             }
 
             $payment->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
             return $payment->fresh(['supplier', 'invoice']);
         });
+    }
+
+    protected function paymentAmountInInvoiceCurrency(SupplierPayment $payment, PurchaseInvoice $invoice): float
+    {
+        $payCurrency = strtoupper((string) ($payment->currency ?: $this->currencies->baseCurrency()));
+        $invoiceCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($payCurrency === $invoiceCurrency) {
+            return (float) $payment->amount;
+        }
+
+        $payBase = (float) ($payment->base_amount ?: round((float) $payment->amount * (float) ($payment->exchange_rate ?: 1), 2));
+        $invRate = (float) ($invoice->exchange_rate ?: 1);
+
+        return $invRate > 0 ? round($payBase / $invRate, 2) : $payBase;
     }
 
     protected function normalizeLines(array $lines): array

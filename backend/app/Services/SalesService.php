@@ -201,6 +201,13 @@ class SalesService
                 ];
             }
 
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? null,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+                $data['return_date'] ?? null,
+            );
+
             $ret = SalesReturn::query()->create([
                 'return_number' => $this->nextNumber('SR'),
                 'return_date' => $data['return_date'],
@@ -208,6 +215,9 @@ class SalesService
                 'sales_invoice_id' => $data['sales_invoice_id'] ?? null,
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'status' => 'draft',
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
                 'total' => $total,
                 'created_by' => $user->id,
             ]);
@@ -244,8 +254,8 @@ class SalesService
                 'reference' => $ret->return_number,
                 'status' => 'posted',
             ], [
-                ['account_id' => $sales->id, 'debit' => (float) $ret->total, 'credit' => 0],
-                ['account_id' => $ar->id, 'debit' => 0, 'credit' => (float) $ret->total],
+                ['account_id' => $sales->id, 'debit' => (float) ($ret->base_amount ?: $ret->total), 'credit' => 0],
+                ['account_id' => $ar->id, 'debit' => 0, 'credit' => (float) ($ret->base_amount ?: $ret->total)],
             ], $user);
 
             if ($ret->warehouse_id) {
@@ -275,6 +285,22 @@ class SalesService
     public function createReceipt(array $data, User $user): Receipt
     {
         return DB::transaction(function () use ($data, $user) {
+            $amount = (float) $data['amount'];
+            $fx = $this->currencies->resolveDocumentFx(
+                $amount,
+                $data['currency'] ?? null,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+                $data['receipt_date'] ?? null,
+            );
+
+            // Allow explicit base_amount override (e.g. user entered SYP and converted)
+            if (isset($data['base_amount']) && (float) $data['base_amount'] > 0) {
+                $fx['base_amount'] = round((float) $data['base_amount'], 2);
+                if ($fx['currency'] !== $this->currencies->baseCurrency() && $amount > 0) {
+                    $fx['exchange_rate'] = round($fx['base_amount'] / $amount, 8);
+                }
+            }
+
             $receipt = Receipt::query()->create([
                 'receipt_number' => $this->nextNumber('RC'),
                 'receipt_date' => $data['receipt_date'],
@@ -283,7 +309,10 @@ class SalesService
                 'cash_box_id' => $data['cash_box_id'] ?? null,
                 'bank_id' => $data['bank_id'] ?? null,
                 'method' => $data['method'] ?? 'cash',
-                'amount' => $data['amount'],
+                'amount' => $amount,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
                 'status' => 'draft',
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $user->id,
@@ -325,25 +354,42 @@ class SalesService
                 ? Account::query()->findOrFail($receipt->customer->account_id)
                 : Account::query()->where('code', '1103')->firstOrFail();
 
+            $baseAmount = (float) ($receipt->base_amount ?: $receipt->amount);
+
             $entry = $this->journals->create([
                 'entry_date' => $receipt->receipt_date->toDateString(),
                 'description' => 'سند قبض '.$receipt->receipt_number,
                 'reference' => $receipt->receipt_number,
                 'status' => 'posted',
             ], [
-                ['account_id' => $debitAccount->id, 'debit' => (float) $receipt->amount, 'credit' => 0],
-                ['account_id' => $ar->id, 'debit' => 0, 'credit' => (float) $receipt->amount],
+                ['account_id' => $debitAccount->id, 'debit' => $baseAmount, 'credit' => 0],
+                ['account_id' => $ar->id, 'debit' => 0, 'credit' => $baseAmount],
             ], $user);
 
             if ($receipt->sales_invoice_id) {
                 $invoice = SalesInvoice::query()->findOrFail($receipt->sales_invoice_id);
-                $invoice->increment('paid_amount', (float) $receipt->amount);
+                $invoice->increment('paid_amount', $this->receiptAmountInInvoiceCurrency($receipt, $invoice));
             }
 
             $receipt->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
             return $receipt->fresh(['customer', 'invoice']);
         });
+    }
+
+    protected function receiptAmountInInvoiceCurrency(Receipt $receipt, SalesInvoice $invoice): float
+    {
+        $receiptCurrency = strtoupper((string) ($receipt->currency ?: $this->currencies->baseCurrency()));
+        $invoiceCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($receiptCurrency === $invoiceCurrency) {
+            return (float) $receipt->amount;
+        }
+
+        $receiptBase = (float) ($receipt->base_amount ?: round((float) $receipt->amount * (float) ($receipt->exchange_rate ?: 1), 2));
+        $invRate = (float) ($invoice->exchange_rate ?: 1);
+
+        return $invRate > 0 ? round($receiptBase / $invRate, 2) : $receiptBase;
     }
 
     protected function normalizeSalesLines(array $lines): array

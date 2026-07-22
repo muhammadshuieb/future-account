@@ -29,6 +29,9 @@ class ReceiptController extends ApiController
             'bank_id' => ['nullable', 'exists:banks,id'],
             'method' => ['required', 'in:cash,bank'],
             'amount' => ['required', 'numeric', 'gt:0'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
+            'base_amount' => ['nullable', 'numeric', 'gt:0'],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', 'in:draft,posted'],
         ]);

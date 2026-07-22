@@ -26,6 +26,8 @@ class SalesReturnController extends ApiController
             'customer_id' => ['required', 'exists:customers,id'],
             'sales_invoice_id' => ['nullable', 'exists:sales_invoices,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],

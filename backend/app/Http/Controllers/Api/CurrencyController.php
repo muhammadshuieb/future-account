@@ -16,9 +16,35 @@ class CurrencyController extends ApiController
     {
         $this->currencies->ensureSeeded();
 
+        $base = $this->currencies->baseCurrency();
+        $asOf = now()->toDateString();
+
+        $list = Currency::query()->orderBy('code')->get()->map(function (Currency $c) use ($base, $asOf) {
+            $code = strtoupper((string) $c->code);
+            $rate = 1.0;
+            if ($code !== $base) {
+                try {
+                    $rate = $this->currencies->getRate($code, $base, $asOf);
+                } catch (\Throwable) {
+                    $rate = 0.0;
+                }
+            }
+
+            return [
+                'id' => $c->id,
+                'code' => $code,
+                'name' => $c->name,
+                'name_en' => $c->name_en,
+                'symbol' => $c->symbol,
+                'decimal_places' => $c->decimal_places,
+                'is_active' => (bool) $c->is_active,
+                'rate_to_base' => $rate,
+            ];
+        });
+
         return $this->ok([
-            'base_currency' => $this->currencies->baseCurrency(),
-            'currencies' => Currency::query()->orderBy('code')->get(),
+            'base_currency' => $base,
+            'currencies' => $list,
         ]);
     }
 

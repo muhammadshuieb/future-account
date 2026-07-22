@@ -26,6 +26,8 @@ class PurchaseReturnController extends ApiController
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'purchase_invoice_id' => ['nullable', 'exists:purchase_invoices,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
