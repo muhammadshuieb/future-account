@@ -71,6 +71,11 @@ EOF
 ensure_app_key
 write_dotenv_from_environ
 
+# Align PHP date.* with business timezone (bare php -r and Carbon).
+TZ_NAME="${APP_TIMEZONE:-${TZ:-Asia/Damascus}}"
+echo "date.timezone=${TZ_NAME}" > /usr/local/etc/php/conf.d/99-timezone.ini
+export TZ="${TZ:-$TZ_NAME}"
+
 echo "Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}..."
 i=0
 until php -r "try { new PDO('pgsql:host='.getenv('DB_HOST').';port='.(getenv('DB_PORT')?:'5432').';dbname='.getenv('DB_DATABASE'), getenv('DB_USERNAME'), getenv('DB_PASSWORD')); exit(0);} catch (Throwable \$e) { fwrite(STDERR, \$e->getMessage().PHP_EOL); exit(1);}"; do

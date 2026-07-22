@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-16 \
     && docker-php-ext-install pdo_pgsql pgsql zip bcmath \
+    && echo 'date.timezone=Asia/Damascus' > /usr/local/etc/php/conf.d/99-timezone.ini \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
