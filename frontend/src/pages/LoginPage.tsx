@@ -52,9 +52,6 @@ export default function LoginPage() {
             alt="SYNAMOR TECHNOLOGY"
             className="brand-logo brand-logo--login mx-auto"
           />
-          <p className="mt-4 text-sm font-semibold text-slate-panel">{t('app.name')}</p>
-          <p className="mt-0.5 text-xs font-medium text-teal">Syna Co</p>
-          <p className="mt-2 text-sm leading-6 text-black/50">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
           <div>
