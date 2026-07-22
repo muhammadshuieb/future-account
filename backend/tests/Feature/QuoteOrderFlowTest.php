@@ -88,6 +88,38 @@ class QuoteOrderFlowTest extends TestCase
         $this->assertNotNull($po->json('data.order_number'));
     }
 
+    public function test_purchase_request_allows_missing_batch_for_tracked_product(): void
+    {
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $product->update(['track_batch' => true, 'track_serial' => false]);
+
+        $this->postJson('/api/purchase-requests', [
+            'request_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 80, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $this->postJson('/api/purchase-orders', [
+            'order_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 80, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        // Invoice (goods receipt) still requires batch for tracked products.
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 80, 'tax_rate' => 0]],
+        ])->assertStatus(422);
+
+        $product->update(['track_batch' => false]);
+    }
+
     public function test_batch_serial_validation_on_sales_invoice(): void
     {
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();

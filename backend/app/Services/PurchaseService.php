@@ -350,7 +350,11 @@ class PurchaseService
         return $invRate > 0 ? round($payBase / $invRate, 2) : $payBase;
     }
 
-    protected function normalizeLines(array $lines): array
+    /**
+     * @param  bool  $requireInboundTracking  When true (invoices/returns), batch/serial are required for tracked products.
+     *                                         Planning docs (requests/orders) may omit batch until goods are received.
+     */
+    protected function normalizeLines(array $lines, bool $requireInboundTracking = true): array
     {
         $taxEnabled = Setting::taxEnabled();
         $taxRateDefault = Setting::defaultTaxRate();
@@ -360,7 +364,7 @@ class PurchaseService
 
         foreach ($lines as $line) {
             $product = Product::query()->findOrFail($line['product_id']);
-            $this->inventory->validateBatchSerial($product, $line);
+            $this->inventory->validateBatchSerial($product, $line, forOutbound: ! $requireInboundTracking);
             $qty = (float) $line['quantity'];
             $cost = (float) ($line['unit_cost'] ?? $product->cost_price);
             $rate = $taxEnabled ? (float) ($line['tax_rate'] ?? $taxRateDefault) : 0.0;
@@ -385,7 +389,7 @@ class PurchaseService
     public function createRequest(array $data, array $lines, User $user): PurchaseRequest
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines, requireInboundTracking: false);
             $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['request_date'] ?? null);
 
             $request = PurchaseRequest::query()->create([
@@ -421,7 +425,7 @@ class PurchaseService
         }
 
         return DB::transaction(function () use ($request, $data, $lines) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines, requireInboundTracking: false);
             $request->update([
                 'request_date' => $data['request_date'] ?? $request->request_date,
                 'required_date' => $data['required_date'] ?? $request->required_date,
@@ -487,7 +491,7 @@ class PurchaseService
     public function createOrder(array $data, array $lines, User $user): PurchaseOrder
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines, requireInboundTracking: false);
             $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['order_date'] ?? null);
 
             $order = PurchaseOrder::query()->create([
