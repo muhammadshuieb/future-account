@@ -184,7 +184,7 @@ export default function BarcodeLabelsPage() {
                   <p className="text-sm font-semibold leading-tight">{l.name}</p>
                   <p className="text-xs text-black/50 font-mono">{l.sku}</p>
                   <BarcodeSvg value={l.barcode} format={l.format} />
-                  <p className="text-xs font-medium">{Number(l.price).toLocaleString('ar')}</p>
+                  <p className="text-xs font-medium">{Number(l.price).toLocaleString('ar-SY-u-nu-latn')}</p>
                 </div>
               ))}
             </div>

@@ -155,7 +155,8 @@ export function StatTile({
   )
 }
 
-const NUMBER_LOCALE = 'ar-SY'
+/** Keep Arabic locale labels/grouping but force Western digits 0-9 (not ٠-٩). */
+const NUMBER_LOCALE = 'ar-SY-u-nu-latn'
 
 const quantityFormatter = new Intl.NumberFormat(NUMBER_LOCALE, {
   maximumFractionDigits: 3,

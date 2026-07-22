@@ -27,7 +27,7 @@ function labelFor(c: CurrencyOption) {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('ar-SY', { maximumFractionDigits: 8 })
+  return n.toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 8 })
 }
 
 /** Document-level currency + exchange rate (quotes, invoices, returns, …). */

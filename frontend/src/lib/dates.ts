@@ -33,5 +33,5 @@ export function monthYm(timeZone: string = APP_TIMEZONE): string {
 export function formatDateTimeLocal(value: string | Date, timeZone: string = APP_TIMEZONE): string {
   const d = typeof value === 'string' ? new Date(value) : value
   if (Number.isNaN(d.getTime())) return String(value)
-  return d.toLocaleString('ar-SY', { timeZone })
+  return d.toLocaleString('ar-SY-u-nu-latn', { timeZone })
 }
