@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
@@ -55,6 +55,64 @@ type StructuredEInvoice = {
   tax_breakdown?: { rate: number; taxable: number; tax: number }[]
 }
 
+function BrandLogo() {
+  return (
+    <img
+      src={LOGO.print}
+      alt="SYNAMOR TECHNOLOGY"
+      className="brand-logo brand-logo--print"
+      onError={(e) => {
+        const img = e.currentTarget
+        if (img.dataset.fallback === '1') return
+        img.dataset.fallback = '1'
+        img.src = LOGO.default
+      }}
+    />
+  )
+}
+
+/** Shared invoice print/view header: logo + شركة ساينا / Syna Co */
+function InvoiceBrandHeader({
+  documentLabel,
+  invoiceNumber,
+  invoiceDate,
+  companyName,
+  taxNumber,
+  extra,
+}: {
+  documentLabel: string
+  invoiceNumber: string
+  invoiceDate: string
+  companyName?: string
+  taxNumber?: string
+  extra?: ReactNode
+}) {
+  const { t } = useTranslation()
+  const brandLine = companyName?.trim()
+    ? companyName
+    : `${t('app.name')} — Syna Co`
+
+  return (
+    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+      <div className="flex items-center gap-3">
+        <BrandLogo />
+        <div>
+          <p className="text-lg font-bold">{brandLine}</p>
+          {taxNumber && (
+            <p className="text-xs text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
+          )}
+          {extra}
+        </div>
+      </div>
+      <div className="text-start">
+        <p className="text-xs font-semibold text-teal">{documentLabel}</p>
+        <p className="font-mono text-base font-bold">{invoiceNumber}</p>
+        <p>{String(invoiceDate).slice(0, 10)}</p>
+      </div>
+    </header>
+  )
+}
+
 export function SalesInvoicePrintView({
   invoice,
   eInvoice,
@@ -66,7 +124,7 @@ export function SalesInvoicePrintView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const payload = eInvoice?.qr_payload
   const structured = eInvoice?.e_invoice as StructuredEInvoice | undefined
-  const companyName = structured?.seller?.name || 'Syna Co'
+  const companyName = structured?.seller?.name
 
   useEffect(() => {
     if (canvasRef.current && payload) {
@@ -76,22 +134,13 @@ export function SalesInvoicePrintView({
 
   return (
     <div className="space-y-4 text-sm" dir="rtl">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
-        <div className="flex items-center gap-3">
-          <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
-          <div>
-            <p className="text-lg font-bold">{companyName}</p>
-            {structured?.seller?.tax_number && (
-              <p className="text-xs text-black/55">{t('companies.taxNumber')}: {structured.seller.tax_number}</p>
-            )}
-          </div>
-        </div>
-        <div className="text-start">
-          <p className="text-xs font-semibold text-teal">{t('sales.invoices')}</p>
-          <p className="font-mono text-base font-bold">{invoice.invoice_number}</p>
-          <p>{String(invoice.invoice_date).slice(0, 10)}</p>
-        </div>
-      </header>
+      <InvoiceBrandHeader
+        documentLabel={t('sales.invoices')}
+        invoiceNumber={invoice.invoice_number}
+        invoiceDate={invoice.invoice_date}
+        companyName={companyName}
+        taxNumber={structured?.seller?.tax_number}
+      />
 
       {(payload || invoice.e_invoice_uuid || eInvoice?.e_invoice_uuid || structured?.uuid) && (
         <div className="rounded-lg border-2 border-teal/30 bg-teal/5 p-4">
@@ -184,19 +233,11 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
 
   return (
     <div className="space-y-4 text-sm" dir="rtl">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
-        <div className="flex items-center gap-3">
-          <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
-          <div>
-            <p className="text-lg font-bold">Syna Co</p>
-          </div>
-        </div>
-        <div className="text-start">
-          <p className="text-xs font-semibold text-teal">{t('purchases.invoices')}</p>
-          <p className="font-mono text-base font-bold">{invoice.invoice_number}</p>
-          <p>{String(invoice.invoice_date).slice(0, 10)}</p>
-        </div>
-      </header>
+      <InvoiceBrandHeader
+        documentLabel={t('purchases.invoices')}
+        invoiceNumber={invoice.invoice_number}
+        invoiceDate={invoice.invoice_date}
+      />
 
       <div className="grid gap-2 sm:grid-cols-2">
         <p>

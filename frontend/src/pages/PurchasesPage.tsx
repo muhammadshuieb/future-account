@@ -5,6 +5,7 @@ import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
+import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
@@ -251,7 +252,47 @@ export default function PurchasesPage() {
     </>
   )
 
-  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {documentStatusLabel(data.status)}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
+  const summary = (data: Record<string, any>) => {
+    if (tab === 'invoices' && data.invoice_number) {
+      return (
+        <div className="rounded-lg border border-black/10 bg-white p-4">
+          <PurchaseInvoicePrintView invoice={data as PurchaseInvoicePrintData} />
+        </div>
+      )
+    }
+    return (
+      <div className="space-y-3 text-sm">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p>
+          <p><b>{t('common.status')}:</b> {documentStatusLabel(data.status)}</p>
+          <p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p>
+          <p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p>
+        </div>
+        {(data.items || data.lines)?.length > 0 && (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t('common.product')}</th>
+                  <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
+                  <th>{t('common.total')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.items || data.lines).map((line: any, index: number) => (
+                  <tr key={index}>
+                    <td>{line.product?.name}</td>
+                    <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
+                    <td>{line.line_total}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const tabs = [
     { id: 'requests', label: t('purchases.requests') },
@@ -384,7 +425,7 @@ export default function PurchasesPage() {
             </table>
         </Panel>
       )}
-      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
+      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
           {tab === 'invoices' && selectedId && (
             <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
           )}

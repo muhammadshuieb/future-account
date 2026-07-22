@@ -77,6 +77,8 @@ body {
   height: 72px;
   width: auto;
   max-width: 220px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 .brand-logo--barcode-mark {
@@ -483,6 +485,12 @@ textarea {
   .print-area,
   .print-document {
     display: block !important;
+  }
+
+  .brand-logo,
+  .brand-logo--print {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .data-table th {
