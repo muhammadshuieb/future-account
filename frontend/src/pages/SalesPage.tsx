@@ -47,6 +47,8 @@ export default function SalesPage() {
   const customers = useQuery({ queryKey: ['customers'], queryFn: async () => (await api.get('/customers')).data.data })
   const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data as ProductRow[] })
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
+  const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
+  const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
   const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'receipts' })
 
   const emptyLine = { customer_id: '', warehouse_id: '', product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '' }
@@ -122,7 +124,19 @@ export default function SalesPage() {
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setAvailableStock(null) }
-  const openCreate = () => { setPrintId(null); setSelectedId(null); setSelectedRow(null); setAvailableStock(null); skipStockAutofill.current = false; setModal('create') }
+  const openCreate = () => {
+    setPrintId(null)
+    setSelectedId(null)
+    setSelectedRow(null)
+    setAvailableStock(null)
+    skipStockAutofill.current = false
+    if (defaultWarehouseId) {
+      setQuote((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+      setOrder((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+      setInv((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+    }
+    setModal('create')
+  }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setPrintId(null); setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
 
   const saveQuote = useMutation({

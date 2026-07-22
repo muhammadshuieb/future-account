@@ -41,12 +41,14 @@ class SalesService
                 $data['invoice_date'] ?? null,
             );
 
+            $warehouseId = $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+
             $invoice = SalesInvoice::query()->create([
                 'invoice_number' => $this->nextNumber('SI'),
                 'e_invoice_uuid' => (string) Str::uuid(),
                 'invoice_date' => $data['invoice_date'],
                 'customer_id' => $data['customer_id'],
-                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'warehouse_id' => $warehouseId,
                 'branch_id' => $data['branch_id'] ?? null,
                 'sales_order_id' => $data['sales_order_id'] ?? null,
                 'status' => 'draft',
@@ -116,6 +118,14 @@ class SalesService
 
             $cogsTotal = 0.0;
             foreach ($invoice->lines as $line) {
+                $this->inventory->assertSufficientStock(
+                    (int) $invoice->warehouse_id,
+                    (int) $line->product_id,
+                    (float) $line->quantity,
+                    $line->batch_no,
+                    $line->product
+                );
+
                 $cost = round((float) $line->quantity * (float) $line->cost_price, 2);
                 $cogsTotal += $cost;
 
@@ -465,7 +475,7 @@ class SalesService
                 'order_date' => $data['order_date'],
                 'customer_id' => $data['customer_id'],
                 'sales_quote_id' => $data['sales_quote_id'] ?? null,
-                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'warehouse_id' => $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null),
                 'branch_id' => $data['branch_id'] ?? null,
                 'status' => $data['status'] ?? 'draft',
                 'currency' => $fx['currency'],
@@ -492,31 +502,37 @@ class SalesService
             throw ValidationException::withMessages(['status' => ['أمر البيع محوّل مسبقاً.']]);
         }
 
-        $order->load('items');
-        $lines = $order->items->map(fn ($item) => [
-            'product_id' => $item->product_id,
-            'quantity' => $item->quantity,
-            'unit_price' => $item->unit_price,
-            'tax_rate' => $item->tax_rate,
-            'batch_no' => $item->batch_no,
-            'serial_no' => $item->serial_no,
-        ])->all();
+        return DB::transaction(function () use ($order, $user, $overrides) {
+            $order->load('items');
+            $lines = $order->items->map(fn ($item) => [
+                'product_id' => $item->product_id,
+                'quantity' => $item->quantity,
+                'unit_price' => $item->unit_price,
+                'tax_rate' => $item->tax_rate,
+                'batch_no' => $item->batch_no,
+                'serial_no' => $item->serial_no,
+            ])->all();
 
-        $invoice = $this->createInvoice([
-            'invoice_date' => $overrides['invoice_date'] ?? now()->toDateString(),
-            'customer_id' => $order->customer_id,
-            'warehouse_id' => $overrides['warehouse_id'] ?? $order->warehouse_id,
-            'branch_id' => $order->branch_id,
-            'sales_order_id' => $order->id,
-            'currency' => $order->currency,
-            'exchange_rate' => $order->exchange_rate,
-            'status' => $overrides['status'] ?? 'draft',
-            'notes' => $order->notes,
-        ], $lines, $user);
+            $warehouseId = $this->resolveWarehouseId(
+                isset($overrides['warehouse_id']) ? (int) $overrides['warehouse_id'] : ($order->warehouse_id ? (int) $order->warehouse_id : null)
+            );
 
-        $order->update(['status' => 'converted']);
+            $invoice = $this->createInvoice([
+                'invoice_date' => $overrides['invoice_date'] ?? now()->toDateString(),
+                'customer_id' => $order->customer_id,
+                'warehouse_id' => $warehouseId,
+                'branch_id' => $order->branch_id,
+                'sales_order_id' => $order->id,
+                'currency' => $order->currency,
+                'exchange_rate' => $order->exchange_rate,
+                'status' => $overrides['status'] ?? 'draft',
+                'notes' => $order->notes,
+            ], $lines, $user);
 
-        return $invoice;
+            $order->update(['status' => 'converted']);
+
+            return $invoice;
+        });
     }
 
     public function nextNumber(string $prefix): string
@@ -573,6 +589,17 @@ class SalesService
         usort($rows, fn ($a, $b) => strcmp($a['date'], $b['date']));
 
         return ['customer' => $customer, 'rows' => $rows, 'balance' => $balance];
+    }
+
+    protected function resolveWarehouseId(?int $warehouseId): ?int
+    {
+        if ($warehouseId) {
+            return $warehouseId;
+        }
+
+        $default = Setting::getValue('default_warehouse_id');
+
+        return $default ? (int) $default : null;
     }
 
     protected function assertCustomerCreditLimit(int $customerId, float $additionalAmount): void

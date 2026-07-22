@@ -3,11 +3,11 @@
 namespace App\Services;
 
 use App\Models\Account;
-use App\Models\AuditLog;
 use App\Models\Product;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -17,6 +17,21 @@ class InventoryService
         protected JournalEntryService $journals,
         protected AuditLogger $audit,
     ) {}
+
+    public function availableQty(int $warehouseId, int $productId, ?string $batchNo = null, ?Product $product = null): float
+    {
+        $product ??= Product::query()->findOrFail($productId);
+
+        $query = StockLevel::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId);
+
+        if ($product->track_batch && $batchNo !== null && $batchNo !== '') {
+            $query->where('batch_no', $batchNo);
+        }
+
+        return round(max(0, (float) $query->sum('quantity')), 3);
+    }
 
     public function adjustStock(
         int $warehouseId,
@@ -30,46 +45,21 @@ class InventoryService
             $product = Product::query()->findOrFail($productId);
             $this->validateBatchSerial($product, $meta);
 
-            $batch = $meta['batch_no'] ?? '';
-            $level = StockLevel::query()->firstOrCreate(
-                [
-                    'warehouse_id' => $warehouseId,
-                    'product_id' => $productId,
-                    'batch_no' => $batch === null ? '' : $batch,
-                ],
-                ['quantity' => 0]
-            );
+            $batch = $this->resolveBatchKey($product, $meta['batch_no'] ?? null);
 
-            $newQty = round((float) $level->quantity + $quantityDelta, 3);
-
-            if ($newQty < -0.0001) {
-                throw ValidationException::withMessages([
-                    'quantity' => ['الكمية غير كافية في المخزن.'],
-                ]);
+            if ($quantityDelta < 0 && $batch === '' && ! $product->track_batch) {
+                return $this->deductAcrossBatches($warehouseId, $product, abs($quantityDelta), $type, $user, $meta);
             }
 
-            $level->update(['quantity' => max(0, $newQty)]);
-
-            $movement = StockMovement::query()->create([
-                'movement_number' => $this->nextMovementNumber(),
-                'movement_date' => $meta['movement_date'] ?? now()->toDateString(),
-                'type' => $type,
-                'warehouse_id' => $warehouseId,
-                'product_id' => $productId,
-                'quantity' => $quantityDelta,
-                'unit_cost' => $meta['unit_cost'] ?? Product::query()->find($productId)?->cost_price ?? 0,
-                'batch_no' => $meta['batch_no'] ?? null,
-                'serial_no' => $meta['serial_no'] ?? null,
-                'reference_type' => $meta['reference_type'] ?? null,
-                'reference_id' => $meta['reference_id'] ?? null,
-                'journal_entry_id' => $meta['journal_entry_id'] ?? null,
-                'notes' => $meta['notes'] ?? null,
-                'created_by' => $user->id,
-            ]);
-
-            $this->audit->log($user, 'stock.'.$type, $movement, null, $movement->toArray());
-
-            return $movement;
+            return $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                $batch,
+                $quantityDelta,
+                $type,
+                $user,
+                $meta
+            );
         });
     }
 
@@ -151,6 +141,21 @@ class InventoryService
             throw ValidationException::withMessages([
                 'serial_no' => ["الصنف {$product->name} يتطلب رقم تسلسلي."],
             ]);
+        }
+    }
+
+    public function assertSufficientStock(
+        int $warehouseId,
+        int $productId,
+        float $requiredQty,
+        ?string $batchNo = null,
+        ?Product $product = null
+    ): void {
+        $product ??= Product::query()->findOrFail($productId);
+        $available = $this->availableQty($warehouseId, $productId, $batchNo, $product);
+
+        if ($requiredQty > $available + 0.0001) {
+            throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available, $batchNo);
         }
     }
 
@@ -280,6 +285,158 @@ class InventoryService
             ])
             ->values()
             ->all();
+    }
+
+    protected function resolveBatchKey(Product $product, ?string $batchNo): string
+    {
+        if (! $product->track_batch) {
+            return '';
+        }
+
+        return $batchNo === null ? '' : $batchNo;
+    }
+
+    protected function adjustSingleBatchLevel(
+        int $warehouseId,
+        Product $product,
+        string $batch,
+        float $quantityDelta,
+        string $type,
+        User $user,
+        array $meta
+    ): StockMovement {
+        $level = StockLevel::query()->firstOrCreate(
+            [
+                'warehouse_id' => $warehouseId,
+                'product_id' => $product->id,
+                'batch_no' => $batch,
+            ],
+            ['quantity' => 0]
+        );
+
+        $newQty = round((float) $level->quantity + $quantityDelta, 3);
+
+        if ($newQty < -0.0001) {
+            throw $this->insufficientStockException(
+                $product,
+                $warehouseId,
+                abs($quantityDelta),
+                (float) $level->quantity,
+                $batch !== '' ? $batch : null
+            );
+        }
+
+        $level->update(['quantity' => max(0, $newQty)]);
+
+        $movement = StockMovement::query()->create([
+            'movement_number' => $this->nextMovementNumber(),
+            'movement_date' => $meta['movement_date'] ?? now()->toDateString(),
+            'type' => $type,
+            'warehouse_id' => $warehouseId,
+            'product_id' => $product->id,
+            'quantity' => $quantityDelta,
+            'unit_cost' => $meta['unit_cost'] ?? $product->cost_price ?? 0,
+            'batch_no' => $meta['batch_no'] ?? null,
+            'serial_no' => $meta['serial_no'] ?? null,
+            'reference_type' => $meta['reference_type'] ?? null,
+            'reference_id' => $meta['reference_id'] ?? null,
+            'journal_entry_id' => $meta['journal_entry_id'] ?? null,
+            'notes' => $meta['notes'] ?? null,
+            'created_by' => $user->id,
+        ]);
+
+        $this->audit->log($user, 'stock.'.$type, $movement, null, $movement->toArray());
+
+        return $movement;
+    }
+
+    protected function deductAcrossBatches(
+        int $warehouseId,
+        Product $product,
+        float $requiredQty,
+        string $type,
+        User $user,
+        array $meta
+    ): StockMovement {
+        $levels = StockLevel::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $product->id)
+            ->where('quantity', '>', 0)
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
+
+        $available = round((float) $levels->sum('quantity'), 3);
+
+        if ($requiredQty > $available + 0.0001) {
+            throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available);
+        }
+
+        $remaining = $requiredQty;
+        $lastMovement = null;
+
+        foreach ($levels as $level) {
+            if ($remaining <= 0.0001) {
+                break;
+            }
+
+            $take = min((float) $level->quantity, $remaining);
+            $remaining = round($remaining - $take, 3);
+
+            $lastMovement = $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                (string) $level->batch_no,
+                -$take,
+                $type,
+                $user,
+                array_merge($meta, ['batch_no' => $level->batch_no ?: null])
+            );
+        }
+
+        return $lastMovement ?? throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available);
+    }
+
+    protected function insufficientStockException(
+        Product $product,
+        int $warehouseId,
+        float $requiredQty,
+        float $availableQty,
+        ?string $batchNo = null
+    ): ValidationException {
+        $warehouse = Warehouse::query()->find($warehouseId);
+        $warehouseName = $warehouse?->name ?? 'غير محدد';
+
+        $message = sprintf(
+            'الصنف %s: المطلوب %s، المتاح %s في المخزن %s',
+            $product->name,
+            $this->formatQty($requiredQty),
+            $this->formatQty($availableQty),
+            $warehouseName,
+        );
+
+        if ($batchNo) {
+            $message .= sprintf(' (دفعة %s)', $batchNo);
+        }
+
+        if ($availableQty <= 0) {
+            $draftPurchases = \App\Models\PurchaseInvoice::query()
+                ->where('warehouse_id', $warehouseId)
+                ->where('status', 'draft')
+                ->whereHas('lines', fn ($q) => $q->where('product_id', $product->id))
+                ->exists();
+
+            if ($draftPurchases) {
+                $message .= ' — يجب ترحيل فاتورة المشتريات أولاً لإضافة الكمية للمخزن.';
+            }
+        }
+
+        return ValidationException::withMessages(['quantity' => [$message]]);
+    }
+
+    protected function formatQty(float $qty): string
+    {
+        return rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.');
     }
 
     protected function nextMovementNumber(): string

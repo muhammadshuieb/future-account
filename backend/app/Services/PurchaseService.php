@@ -40,7 +40,7 @@ class PurchaseService
                 'invoice_number' => $this->nextNumber('PI'),
                 'invoice_date' => $data['invoice_date'],
                 'supplier_id' => $data['supplier_id'],
-                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'warehouse_id' => $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null),
                 'branch_id' => $data['branch_id'] ?? null,
                 'purchase_order_id' => $data['purchase_order_id'] ?? null,
                 'status' => 'draft',
@@ -121,7 +121,7 @@ class PurchaseService
                     [
                         'movement_date' => $invoice->invoice_date->toDateString(),
                         'unit_cost' => $line->unit_cost,
-                        'batch_no' => $line->batch_no,
+                        'batch_no' => $product->track_batch ? ($line->batch_no ?? null) : null,
                         'serial_no' => $line->serial_no,
                         'reference_type' => $invoice::class,
                         'reference_id' => $invoice->id,
@@ -520,6 +520,17 @@ class PurchaseService
         $seq = $last ? ((int) substr($last, strlen($full))) + 1 : 1;
 
         return $full.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+    }
+
+    protected function resolveWarehouseId(?int $warehouseId): ?int
+    {
+        if ($warehouseId) {
+            return $warehouseId;
+        }
+
+        $default = Setting::getValue('default_warehouse_id');
+
+        return $default ? (int) $default : null;
     }
 
     public function supplierStatement(Supplier $supplier): array

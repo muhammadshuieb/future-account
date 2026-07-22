@@ -34,6 +34,8 @@ export default function PurchasesPage() {
   const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: async () => (await api.get('/suppliers')).data.data })
   const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data as ProductRow[] })
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
+  const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
+  const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
   const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'payments' })
 
   const base = { supplier_id: '', warehouse_id: '', product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '' }
@@ -65,7 +67,16 @@ export default function PurchasesPage() {
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'stock-levels'] })
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
-  const openCreate = () => { setSelectedId(null); setSelectedRow(null); setModal('create') }
+  const openCreate = () => {
+    setSelectedId(null)
+    setSelectedRow(null)
+    if (defaultWarehouseId) {
+      setReq((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+      setPo((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+      setInv((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
+    }
+    setModal('create')
+  }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
 
   const saveReq = useMutation({
