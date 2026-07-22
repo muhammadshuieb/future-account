@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -320,10 +320,10 @@ export default function SalesPage() {
         </select>
       </Field>
       <div className="form-grid-2">
-        <Field label={t('common.quantity')}>
+        <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
           <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
           {autoFillStock && availableStock !== null && state.product_id && state.warehouse_id && (
-            <p className="mt-1 text-xs text-black/55">{t('sales.stockRemaining', { qty: availableStock })}</p>
+            <p className="mt-1 text-xs text-black/55">{t('sales.stockRemaining', { qty: formatQuantity(availableStock) })}</p>
           )}
         </Field>
         <Field label={t('common.price')}><NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} /></Field>
@@ -382,7 +382,7 @@ export default function SalesPage() {
         <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
         <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')}</p>
       </div>
-      {!!((data.items || data.lines) as unknown[] | undefined)?.length && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(((data.items || data.lines) as { product?: { name?: string }; quantity?: number; line_total?: number }[]) || []).map((line, index) => <tr key={index}><td>{line.product?.name}</td><td>{line.quantity}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}
+      {!!((data.items || data.lines) as unknown[] | undefined)?.length && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(((data.items || data.lines) as { product?: { name?: string }; quantity?: number; line_total?: number }[]) || []).map((line, index) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}
     </div>
   )
 
@@ -559,12 +559,12 @@ function InvoicePrintView({
         {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
       </div>
       <table className="data-table">
-        <thead><tr><th>{t('common.product')}</th><th>{t('common.quantity')}</th><th>{t('common.price')}</th><th>{t('common.batch')}</th><th>{t('common.total')}</th></tr></thead>
+        <thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.price')}</th><th>{t('common.batch')}</th><th>{t('common.total')}</th></tr></thead>
         <tbody>
           {(invoice.lines || []).map((l, i) => (
             <tr key={i}>
               <td>{l.product?.name}</td>
-              <td>{l.quantity}</td>
+              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td>{l.unit_price}</td>
               <td className="font-mono text-xs">{l.batch_no || l.serial_no || '—'}</td>
               <td>{l.line_total}</td>

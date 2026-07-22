@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -172,7 +172,7 @@ export default function PurchasesPage() {
     <>
       <Field label={t('common.product')}><select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label={t('common.quantity')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
+        <Field label={t('common.quantity')} hint={t('common.quantityUnit')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
         <Field label={t('common.cost')}><NumericInput value={state.unit_cost} onChange={(v) => setState((prev) => ({ ...prev, unit_cost: v }))} /></Field>
       </div>
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
@@ -218,7 +218,7 @@ export default function PurchasesPage() {
     </>
   )
 
-  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {data.status || '—'}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td>{line.quantity}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
+  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {data.status || '—'}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
 
   const tabs = [
     { id: 'requests', label: t('purchases.requests') },

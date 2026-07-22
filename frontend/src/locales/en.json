@@ -51,6 +51,7 @@
     "warehouse": "Warehouse",
     "product": "Product",
     "quantity": "Quantity",
+    "quantityUnit": "Unit count (not thousands)",
     "price": "Price",
     "cost": "Cost",
     "batch": "Batch",

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
 
@@ -321,7 +321,7 @@ export default function WarehousePage() {
                     <td>{p.name}</td>
                     <td>{p.cost_price}</td>
                     <td>{p.sale_price}</td>
-                    <td>{p.on_hand ?? 0}</td>
+                    <td className="tabular-nums">{formatQuantity(p.on_hand ?? 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -384,14 +384,14 @@ export default function WarehousePage() {
         <Panel>
           <table className="w-full text-sm">
             <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3">كمية</th><th className="px-4 py-3">دفعة</th></tr>
+              <tr><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة</th></tr>
             </thead>
             <tbody>
               {(stock.data || []).map((s: { id: number; quantity: number; batch_no?: string; warehouse?: { name: string }; product?: { name: string; sku: string } }) => (
                 <tr key={s.id} className="border-t border-black/5">
                   <td className="px-4 py-3">{s.warehouse?.name}</td>
                   <td className="px-4 py-3">{s.product?.sku} — {s.product?.name}</td>
-                  <td className="px-4 py-3">{s.quantity}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatQuantity(s.quantity)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{s.batch_no || '—'}</td>
                 </tr>
               ))}
@@ -404,7 +404,7 @@ export default function WarehousePage() {
         <Panel>
           <table className="w-full text-sm">
             <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">نوع</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3">كمية</th><th className="px-4 py-3">دفعة/تسلسلي</th></tr>
+              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">نوع</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة/تسلسلي</th></tr>
             </thead>
             <tbody>
               {(movements.data || []).map((m: { id: number; movement_number: string; type: string; quantity: number; batch_no?: string; serial_no?: string; product?: { name: string } }) => (
@@ -417,7 +417,7 @@ export default function WarehousePage() {
                   <td className="px-4 py-3 font-mono text-xs">{m.movement_number}</td>
                   <td className="px-4 py-3">{m.type}</td>
                   <td className="px-4 py-3">{m.product?.name}</td>
-                  <td className="px-4 py-3">{m.quantity}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatQuantity(m.quantity)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{m.batch_no || m.serial_no || '—'}</td>
                 </tr>
               ))}
@@ -494,8 +494,8 @@ export default function WarehousePage() {
                 <tr key={a.id} className="border-t border-black/5">
                   <td className="px-4 py-3 font-mono">{a.sku}</td>
                   <td className="px-4 py-3">{a.name}</td>
-                  <td className="px-4 py-3 text-danger">{a.on_hand}</td>
-                  <td className="px-4 py-3">{a.reorder_level}</td>
+                  <td className="px-4 py-3 text-danger tabular-nums">{formatQuantity(a.on_hand)}</td>
+                  <td className="px-4 py-3 tabular-nums">{formatQuantity(a.reorder_level)}</td>
                 </tr>
               ))}
               {(alerts.data || []).length === 0 && (
@@ -566,7 +566,7 @@ export default function WarehousePage() {
             <div className="flex justify-between gap-4"><dt className="text-black/50">رقم</dt><dd className="font-mono">{String(viewRow.movement_number)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">نوع</dt><dd>{String(viewRow.type)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">صنف</dt><dd>{(viewRow.product as { name?: string } | undefined)?.name}</dd></div>
-            <div className="flex justify-between gap-4"><dt className="text-black/50">كمية</dt><dd>{String(viewRow.quantity)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-black/50">كمية</dt><dd className="tabular-nums">{formatQuantity(viewRow.quantity as number)}</dd></div>
           </dl>
         )}
       </Modal>

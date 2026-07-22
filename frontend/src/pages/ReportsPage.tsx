@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, inputClass } from '@/components/ui'
+import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
   | 'trial-balance'
@@ -375,7 +375,7 @@ export default function ReportsPage() {
                   <thead><tr><th>SKU</th><th>اسم</th><th>كمية</th><th>قيمة</th></tr></thead>
                   <tbody>
                     {(report.data.rows || []).map((r: { id: number; sku: string; name: string; on_hand: number; value: number }) => (
-                      <tr key={r.id}><td className="font-mono">{r.sku}</td><td>{r.name}</td><td>{r.on_hand}</td><td>{formatMoney(r.value, base)}</td></tr>
+                      <tr key={r.id}><td className="font-mono">{r.sku}</td><td>{r.name}</td><td className="tabular-nums">{formatQuantity(r.on_hand)}</td><td>{formatMoney(r.value, base)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -432,7 +432,7 @@ export default function ReportsPage() {
 
             {tab === 'product-movement' && (
               <table className="data-table">
-                <thead><tr><th>تاريخ</th><th>مخزن</th><th>نوع</th><th>كمية</th><th>ملاحظات</th></tr></thead>
+                <thead><tr><th>تاريخ</th><th>مخزن</th><th>نوع</th><th title={t('common.quantityUnit')}>كمية</th><th>ملاحظات</th></tr></thead>
                 <tbody>
                   {(report.data.rows || []).map((r: {
                     id: number
@@ -446,7 +446,7 @@ export default function ReportsPage() {
                       <td>{String(r.movement_date).slice(0, 10)}</td>
                       <td>{r.warehouse?.name}</td>
                       <td>{r.type}</td>
-                      <td>{r.quantity}</td>
+                      <td className="tabular-nums">{formatQuantity(r.quantity)}</td>
                       <td>{r.notes}</td>
                     </tr>
                   ))}

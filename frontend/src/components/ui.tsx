@@ -153,15 +153,31 @@ export function StatTile({
   )
 }
 
+const NUMBER_LOCALE = 'ar-SY'
+
+const quantityFormatter = new Intl.NumberFormat(NUMBER_LOCALE, {
+  maximumFractionDigits: 3,
+  minimumFractionDigits: 0,
+})
+
+/** Display stock/line quantities without misleading trailing decimals (e.g. 1 not 1.000). */
+export function formatQuantity(value: number | string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '—'
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return String(value)
+  return quantityFormatter.format(n)
+}
+
 export function formatMoney(value: number, currency = 'SYP') {
   try {
-    return new Intl.NumberFormat('ar', {
+    return new Intl.NumberFormat(NUMBER_LOCALE, {
       style: 'currency',
       currency: currency || 'SYP',
+      minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value)
   } catch {
-    return `${Number(value).toLocaleString('ar')} ${currency}`
+    return `${Number(value).toLocaleString(NUMBER_LOCALE)} ${currency}`
   }
 }
 

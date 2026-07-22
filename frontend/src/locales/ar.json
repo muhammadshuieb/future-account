@@ -51,6 +51,7 @@
     "warehouse": "مخزن",
     "product": "صنف",
     "quantity": "كمية",
+    "quantityUnit": "عدد الوحدات (وليس آلاف)",
     "price": "سعر",
     "cost": "تكلفة",
     "batch": "دفعة",
