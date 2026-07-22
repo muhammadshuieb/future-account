@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { LOGO } from '@/lib/brand'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
@@ -788,25 +787,19 @@ function InvoicePrintView({
 
   return (
     <div className="space-y-4 text-sm">
-      <div className="flex items-center justify-between gap-4 border-b border-black/10 pb-4">
-        <div className="flex items-center gap-3">
-          <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
-          <div>
-            <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
-            <p className="text-xs text-black/55">شركة ساينا</p>
-          </div>
-        </div>
-        {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
-      </div>
       <div className="rounded-lg border-2 border-teal/30 bg-teal/5 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-teal">{t('sales.eInvoice')} — future-account-einvoice/1.0</p>
         <p className="mt-1 font-mono text-xs text-black/60">UUID: {structured?.uuid || eInvoice?.e_invoice_uuid || invoice.e_invoice_uuid || '—'}</p>
       </div>
-      <div>
-        {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
-        <p className="mt-2 font-mono">{invoice.invoice_number}</p>
-        <p>{String(invoice.invoice_date).slice(0, 10)}</p>
-        <p>{t('common.customer')}: {invoice.customer?.name}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
+          {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
+          <p className="mt-2 font-mono">{invoice.invoice_number}</p>
+          <p>{String(invoice.invoice_date).slice(0, 10)}</p>
+          <p>{t('common.customer')}: {invoice.customer?.name}</p>
+        </div>
+        {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
       </div>
       <table className="data-table">
         <thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.price')}</th><th>{t('common.batch')}</th><th>{t('common.total')}</th></tr></thead>
