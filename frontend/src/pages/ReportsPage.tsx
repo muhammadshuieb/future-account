@@ -240,7 +240,7 @@ export default function ReportsPage() {
       </div>
 
       <Panel className="print-area" data-print-ready={report.data ? '1' : undefined}>
-        <div className="hidden border-b border-black/10 px-4 py-3 print:block">
+        <div className="print-brand-header hidden border-b border-black/10 px-4 py-3 print:block">
           <div className="mb-2 flex w-full items-start justify-between gap-4">
             {/* First in RTL → visual right: company + report title */}
             <div className="min-w-0 text-start">

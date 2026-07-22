@@ -174,7 +174,7 @@ export default function AppLayout() {
   )
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="app-shell flex h-screen overflow-hidden">
       <aside className="app-sidebar print-hide hidden h-screen w-[260px] shrink-0 flex-col md:flex">
         {nav}
       </aside>

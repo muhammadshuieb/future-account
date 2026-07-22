@@ -93,7 +93,7 @@ function InvoiceBrandHeader({
     : `${t('app.name')} — Syna Co`
 
   return (
-    <header className="flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+    <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
       {/* First in RTL → visual right: company + report title */}
       <div className="min-w-0 text-start">
         <p className="text-lg font-bold">{brandLine}</p>
@@ -207,7 +207,7 @@ export function SalesInvoicePrintView({
         </div>
       )}
 
-      <div className="ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
         <p>
           <span className="text-black/55">المجموع الفرعي: </span>
           <span className="tabular-nums">{invoice.subtotal}</span>
@@ -279,7 +279,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         </tbody>
       </table>
 
-      <div className="ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
         {invoice.subtotal != null && (
           <p>
             <span className="text-black/55">المجموع الفرعي: </span>

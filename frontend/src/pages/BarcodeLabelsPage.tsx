@@ -173,7 +173,7 @@ export default function BarcodeLabelsPage() {
           </div>
         ) : (
           <>
-            <div className="mb-3 hidden w-full items-start justify-between gap-2 border-b border-black/10 pb-2 print:flex">
+            <div className="print-brand-header mb-3 hidden w-full items-start justify-between gap-2 border-b border-black/10 pb-2 print:flex">
               <p className="text-xs font-semibold">شركة ساينا — Syna Co</p>
               <img src={LOGO.mark} alt="" className="brand-logo brand-logo--barcode-mark" />
             </div>

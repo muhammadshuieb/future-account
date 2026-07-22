@@ -449,8 +449,27 @@ textarea {
 }
 
 @media print {
+  /* A4 page box — room at bottom for page numbers where supported */
   @page {
-    margin: 12mm;
+    size: A4;
+    margin: 12mm 12mm 15mm 12mm;
+
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+      font-size: 9pt;
+      color: #555;
+    }
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
   }
 
   body {
@@ -472,6 +491,18 @@ textarea {
     display: none !important;
   }
 
+  /* App shell uses h-screen + overflow clip — release so long reports paginate */
+  .app-shell,
+  .app-shell-main,
+  main {
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+
   main,
   .app-shell-main,
   .print-area,
@@ -479,24 +510,93 @@ textarea {
     margin: 0 !important;
     padding: 0 !important;
     max-width: none !important;
+    width: 100% !important;
     overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: #fff !important;
   }
 
   .print-area,
   .print-document {
     display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .table-wrap {
+    overflow: visible !important;
+  }
+
+  /* Brand header stays on first page only (top of flow); don't split it */
+  .print-brand-header,
+  .print-area > header,
+  .print-document header {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   .brand-logo,
-  .brand-logo--print {
+  .brand-logo--print,
+  .brand-logo--barcode-mark {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* Tables: repeat header on each page; keep rows intact */
+  .print-area table,
+  .print-document table,
+  .data-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .print-area thead,
+  .print-document thead,
+  .data-table thead {
+    display: table-header-group !important;
+  }
+
+  .print-area tfoot,
+  .print-document tfoot,
+  .data-table tfoot {
+    display: table-footer-group !important;
+  }
+
+  .print-area tr,
+  .print-document tr,
+  .data-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-area th,
+  .print-area td,
+  .print-document th,
+  .print-document td,
+  .data-table th,
+  .data-table td {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .data-table th {
     background: #eee !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+  }
+
+  /* Totals / summary blocks stay together */
+  .print-avoid-break,
+  .print-area .border-t,
+  .print-document .border-t {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 
   .barcode-sheet {
@@ -507,6 +607,7 @@ textarea {
 
   .barcode-label {
     break-inside: avoid;
+    page-break-inside: avoid;
     border: 1px solid #ccc;
     padding: 4mm;
     text-align: center;

@@ -71,7 +71,7 @@ export function StatementPrintView({
 
   return (
     <div className="space-y-4 text-sm" dir="rtl">
-      <header className="flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+      <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
         {/* First in RTL → visual right: company + report title */}
         <div className="min-w-0 text-start">
           <p className="text-lg font-bold">شركة ساينا — Syna Co</p>
@@ -151,7 +151,7 @@ export function StatementPrintView({
         </tbody>
       </table>
 
-      <div className="ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
         <p className="text-base font-bold">
           الرصيد الختامي ({currency}):{' '}
           <span className="tabular-nums">{formatMoney(closing, currency)}</span>
