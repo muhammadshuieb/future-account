@@ -10,6 +10,7 @@ import { formatRoleNames } from '@/lib/rbacLabels'
 import { APP_VERSION } from '@/version'
 import { LOGO } from '@/lib/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import HeaderLiveClock from '@/components/HeaderLiveClock'
 import { navGroups, type NavItem } from '@/config/navigation'
 
 function canSeeNavItem(item: NavItem, hasPermission: (p: string) => boolean): boolean {
@@ -219,7 +220,8 @@ export default function AppLayout() {
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <HeaderLiveClock />
               <LanguageSwitcher />
               <div className="relative">
                 <button

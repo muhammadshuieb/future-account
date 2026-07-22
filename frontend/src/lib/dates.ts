@@ -35,3 +35,26 @@ export function formatDateTimeLocal(value: string | Date, timeZone: string = APP
   if (Number.isNaN(d.getTime())) return String(value)
   return d.toLocaleString('ar-SY-u-nu-latn', { timeZone })
 }
+
+const LIVE_CLOCK_LOCALE = 'ar-SY-u-nu-latn'
+
+/** Calendar date for header clock (Latin digits), e.g. 23/07/2026. */
+export function formatLiveDate(date: Date = new Date(), timeZone: string = APP_TIMEZONE): string {
+  return new Intl.DateTimeFormat(LIVE_CLOCK_LOCALE, {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date)
+}
+
+/** Wall-clock time for header (Latin digits, 24h), e.g. 12:55:01. */
+export function formatLiveTime(date: Date = new Date(), timeZone: string = APP_TIMEZONE): string {
+  return new Intl.DateTimeFormat(LIVE_CLOCK_LOCALE, {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date)
+}
