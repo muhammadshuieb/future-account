@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WarehouseTransferLine extends Model
 {
-    protected $fillable = ['warehouse_transfer_id', 'product_id', 'quantity'];
+    protected $fillable = ['warehouse_transfer_id', 'product_id', 'quantity', 'batch_no', 'serial_no'];
 
     protected function casts(): array
     {

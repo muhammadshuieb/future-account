@@ -84,6 +84,8 @@ class InventoryController extends ApiController
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
+            'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
 
         return $this->ok($this->inventory->transfer($data, $data['lines'], $request->user()), 201);
@@ -113,6 +115,8 @@ class InventoryController extends ApiController
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
             'lines.*.counted_qty' => ['required', 'numeric'],
+            'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
+            'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
 
         $count = InventoryCount::query()->create([
@@ -125,16 +129,21 @@ class InventoryController extends ApiController
         ]);
 
         foreach ($data['lines'] as $line) {
-            $system = (float) (StockLevel::query()
+            $systemQuery = StockLevel::query()
                 ->where('warehouse_id', $data['warehouse_id'])
-                ->where('product_id', $line['product_id'])
-                ->value('quantity') ?? 0);
+                ->where('product_id', $line['product_id']);
+            if (! empty($line['batch_no'])) {
+                $systemQuery->where('batch_no', $line['batch_no']);
+            }
+            $system = (float) ($systemQuery->sum('quantity') ?? 0);
             $counted = (float) $line['counted_qty'];
             $count->lines()->create([
                 'product_id' => $line['product_id'],
                 'system_qty' => $system,
                 'counted_qty' => $counted,
                 'difference' => round($counted - $system, 3),
+                'batch_no' => $line['batch_no'] ?? null,
+                'serial_no' => $line['serial_no'] ?? null,
             ]);
         }
 

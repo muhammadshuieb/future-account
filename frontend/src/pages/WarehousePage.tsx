@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
@@ -7,7 +7,35 @@ import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, forma
 
 type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
 
+type ProductRow = { id: number; name: string; track_batch?: boolean; track_serial?: boolean }
+
 type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
+
+type StockInfo = {
+  available_qty: number
+  warehouse_id: number
+  warehouse_name?: string
+  breakdown: StockLocation[]
+  track_batch?: boolean
+}
+
+async function fetchStockInfo(productId: string, warehouseId: string, batchNo?: string): Promise<StockInfo | null> {
+  if (!productId || !warehouseId) return null
+  try {
+    const params: Record<string, string> = { warehouse_id: warehouseId }
+    if (batchNo) params.batch_no = batchNo
+    const res = await api.get(`/products/${productId}/stock`, { params })
+    return res.data.data as StockInfo
+  } catch {
+    return null
+  }
+}
+
+function fifoBatch(info: StockInfo | null): string {
+  if (!info?.track_batch) return ''
+  const row = info.breakdown.find((b) => b.batch_no && b.quantity > 0)
+  return row?.batch_no || ''
+}
 
 const emptyWh = { code: '', name: '', location: '' }
 const emptyCat = { name: '', parent_id: '' }
@@ -38,6 +66,8 @@ const emptyCnt = {
   warehouse_id: '',
   product_id: '',
   counted_qty: '0',
+  batch_no: '',
+  serial_no: '',
 }
 const emptyTr = {
   transfer_date: new Date().toISOString().slice(0, 10),
@@ -45,6 +75,8 @@ const emptyTr = {
   to_warehouse_id: '',
   product_id: '',
   quantity: '1',
+  batch_no: '',
+  serial_no: '',
   status: 'posted',
 }
 
@@ -75,18 +107,40 @@ export default function WarehousePage() {
   const [mvForm, setMvForm] = useState(emptyMv)
   const [cntForm, setCntForm] = useState(emptyCnt)
   const [trForm, setTrForm] = useState(emptyTr)
+  const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
 
   const canAdd = !['stock', 'alerts'].includes(tab)
+  const productList = (products.data || []) as ProductRow[]
+  const trProduct = productList.find((p) => String(p.id) === trForm.product_id)
+  const mvProduct = productList.find((p) => String(p.id) === mvForm.product_id)
+  const cntProduct = productList.find((p) => String(p.id) === cntForm.product_id)
+
+  const refreshStock = useCallback(async (
+    productId: string,
+    warehouseId: string,
+    batchNo?: string,
+    opts?: { autofillBatch?: boolean; onBatch?: (batch: string) => void },
+  ) => {
+    const info = await fetchStockInfo(productId, warehouseId, batchNo)
+    setStockInfo(info)
+    if (opts?.autofillBatch && info?.track_batch && !batchNo) {
+      const batch = fifoBatch(info)
+      if (batch) opts.onBatch?.(batch)
+    }
+    return info
+  }, [])
 
   function closeModal() {
     setModalOpen(false)
     setEditingId(null)
     setViewRow(null)
+    setStockInfo(null)
   }
 
   function openCreate() {
     setEditingId(null)
     setViewRow(null)
+    setStockInfo(null)
     if (tab === 'warehouses') setWhForm(emptyWh)
     if (tab === 'products') setPrForm(emptyPr)
     if (tab === 'categories') setCatForm(emptyCat)
@@ -205,6 +259,8 @@ export default function WarehousePage() {
         warehouse_id: Number(mvForm.warehouse_id),
         product_id: Number(mvForm.product_id),
         quantity: Number(mvForm.quantity),
+        batch_no: mvForm.batch_no || undefined,
+        serial_no: mvForm.serial_no || undefined,
       }),
     onSuccess: () => { msg.setMessage('تم تسجيل الحركة'); closeModal(); void qc.invalidateQueries({ queryKey: ['stock-levels', 'stock-movements', 'stock-alerts'] }) },
     onError: msg.fromErr,
@@ -215,7 +271,12 @@ export default function WarehousePage() {
       api.post('/inventory-counts', {
         warehouse_id: Number(cntForm.warehouse_id),
         count_date: cntForm.count_date,
-        lines: [{ product_id: Number(cntForm.product_id), counted_qty: Number(cntForm.counted_qty) }],
+        lines: [{
+          product_id: Number(cntForm.product_id),
+          counted_qty: Number(cntForm.counted_qty),
+          batch_no: cntForm.batch_no || undefined,
+          serial_no: cntForm.serial_no || undefined,
+        }],
       }),
     onSuccess: () => { msg.setMessage('تم حفظ الجرد'); closeModal(); void qc.invalidateQueries({ queryKey: ['inventory-counts', 'stock-levels'] }) },
     onError: msg.fromErr,
@@ -237,7 +298,12 @@ export default function WarehousePage() {
         from_warehouse_id: Number(trForm.from_warehouse_id),
         to_warehouse_id: Number(trForm.to_warehouse_id),
         status: trForm.status,
-        lines: [{ product_id: Number(trForm.product_id), quantity: Number(trForm.quantity) }],
+        lines: [{
+          product_id: Number(trForm.product_id),
+          quantity: Number(trForm.quantity),
+          batch_no: trForm.batch_no || undefined,
+          serial_no: trForm.serial_no || undefined,
+        }],
       }),
     onSuccess: () => { msg.setMessage('تم التحويل'); closeModal(); void qc.invalidateQueries({ queryKey: ['warehouse-transfers', 'stock-levels'] }) },
     onError: msg.fromErr,
@@ -594,11 +660,80 @@ export default function WarehousePage() {
       <Modal open={modalOpen && tab === 'movements' && !viewRow} onClose={closeModal} title="حركة يدوية" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveMv.isPending} onClick={() => saveMv.mutate()}>تسجيل</Button></>}>
         <div className="space-y-3">
           <Field label="النوع"><select className={inputClass} value={mvForm.type} onChange={(e) => setMvForm({ ...mvForm, type: e.target.value })}><option value="in">وارد</option><option value="out">منصرف</option><option value="adjustment">تسوية</option></select></Field>
-          <Field label="مخزن"><select className={inputClass} value={mvForm.warehouse_id} onChange={(e) => setMvForm({ ...mvForm, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-          <Field label="صنف"><select className={inputClass} value={mvForm.product_id} onChange={(e) => setMvForm({ ...mvForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="كمية"><NumericInput value={mvForm.quantity} onChange={(v) => setMvForm((prev) => ({ ...prev, quantity: v }))} /></Field>
-          <Field label={t('common.batch')}><input className={inputClass} value={mvForm.batch_no} onChange={(e) => setMvForm({ ...mvForm, batch_no: e.target.value })} /></Field>
-          <Field label={t('common.serial')}><input className={inputClass} value={mvForm.serial_no} onChange={(e) => setMvForm({ ...mvForm, serial_no: e.target.value })} /></Field>
+          <Field label="مخزن">
+            <select
+              className={inputClass}
+              value={mvForm.warehouse_id}
+              onChange={(e) => {
+                const warehouse_id = e.target.value
+                setMvForm((prev) => ({ ...prev, warehouse_id }))
+                if (mvForm.product_id && warehouse_id) {
+                  void refreshStock(mvForm.product_id, warehouse_id, mvForm.batch_no || undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setMvForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </Field>
+          <Field label="صنف">
+            <select
+              className={inputClass}
+              value={mvForm.product_id}
+              onChange={(e) => {
+                const product_id = e.target.value
+                setMvForm((prev) => ({ ...prev, product_id, batch_no: '', serial_no: '' }))
+                if (product_id && mvForm.warehouse_id) {
+                  void refreshStock(product_id, mvForm.warehouse_id, undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setMvForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+          <Field label="كمية">
+            <NumericInput value={mvForm.quantity} onChange={(v) => setMvForm((prev) => ({ ...prev, quantity: v }))} />
+            {stockInfo && mvForm.product_id && mvForm.warehouse_id && (
+              <BatchStockHint
+                stockInfo={stockInfo}
+                batchNo={mvForm.batch_no}
+                onSelectBatch={(batch) => {
+                  setMvForm((prev) => ({ ...prev, batch_no: batch }))
+                  void refreshStock(mvForm.product_id, mvForm.warehouse_id, batch)
+                }}
+              />
+            )}
+          </Field>
+          {mvProduct?.track_batch && (
+            <Field label={t('common.batch')}>
+              <input
+                className={inputClass}
+                value={mvForm.batch_no}
+                onChange={(e) => {
+                  const batch_no = e.target.value
+                  setMvForm({ ...mvForm, batch_no })
+                  if (mvForm.product_id && mvForm.warehouse_id) {
+                    void refreshStock(mvForm.product_id, mvForm.warehouse_id, batch_no || undefined)
+                  }
+                }}
+                required
+              />
+            </Field>
+          )}
+          {mvProduct?.track_serial && (
+            <Field label={t('common.serial')}>
+              <input className={inputClass} value={mvForm.serial_no} onChange={(e) => setMvForm({ ...mvForm, serial_no: e.target.value })} required />
+            </Field>
+          )}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mvForm.post_to_gl} onChange={(e) => setMvForm({ ...mvForm, post_to_gl: e.target.checked })} />ترحيل محاسبي</label>
         </div>
       </Modal>
@@ -617,10 +752,83 @@ export default function WarehousePage() {
       <Modal open={modalOpen && tab === 'transfers' && !viewRow} onClose={closeModal} title="تحويل بين مخازن" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveTr.isPending} onClick={() => saveTr.mutate()}>ترحيل التحويل</Button></>}>
         <div className="space-y-3">
           <Field label="التاريخ"><input type="date" className={inputClass} value={trForm.transfer_date} onChange={(e) => setTrForm({ ...trForm, transfer_date: e.target.value })} /></Field>
-          <Field label="من"><select className={inputClass} value={trForm.from_warehouse_id} onChange={(e) => setTrForm({ ...trForm, from_warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
+          <Field label="من">
+            <select
+              className={inputClass}
+              value={trForm.from_warehouse_id}
+              onChange={(e) => {
+                const from_warehouse_id = e.target.value
+                setTrForm((prev) => ({ ...prev, from_warehouse_id }))
+                if (trForm.product_id && from_warehouse_id) {
+                  void refreshStock(trForm.product_id, from_warehouse_id, trForm.batch_no || undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setTrForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </Field>
           <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-          <Field label="صنف"><select className={inputClass} value={trForm.product_id} onChange={(e) => setTrForm({ ...trForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="كمية"><NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} /></Field>
+          <Field label="صنف">
+            <select
+              className={inputClass}
+              value={trForm.product_id}
+              onChange={(e) => {
+                const product_id = e.target.value
+                setTrForm((prev) => ({ ...prev, product_id, batch_no: '', serial_no: '' }))
+                if (product_id && trForm.from_warehouse_id) {
+                  void refreshStock(product_id, trForm.from_warehouse_id, undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setTrForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+          <Field label="كمية">
+            <NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} />
+            {stockInfo && trForm.product_id && trForm.from_warehouse_id && (
+              <BatchStockHint
+                stockInfo={stockInfo}
+                batchNo={trForm.batch_no}
+                onSelectBatch={(batch) => {
+                  setTrForm((prev) => ({ ...prev, batch_no: batch }))
+                  void refreshStock(trForm.product_id, trForm.from_warehouse_id, batch)
+                }}
+              />
+            )}
+          </Field>
+          {trProduct?.track_batch && (
+            <Field label={t('common.batch')}>
+              <input
+                className={inputClass}
+                value={trForm.batch_no}
+                onChange={(e) => {
+                  const batch_no = e.target.value
+                  setTrForm({ ...trForm, batch_no })
+                  if (trForm.product_id && trForm.from_warehouse_id) {
+                    void refreshStock(trForm.product_id, trForm.from_warehouse_id, batch_no || undefined)
+                  }
+                }}
+                required
+              />
+            </Field>
+          )}
+          {trProduct?.track_serial && (
+            <Field label={t('common.serial')}>
+              <input className={inputClass} value={trForm.serial_no} onChange={(e) => setTrForm({ ...trForm, serial_no: e.target.value })} required />
+            </Field>
+          )}
+          {trProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}
+          {trProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}
         </div>
       </Modal>
 
@@ -631,6 +839,18 @@ export default function WarehousePage() {
             <div className="flex justify-between gap-4"><dt className="text-black/50">من</dt><dd>{(viewRow.from_warehouse as { name?: string } | undefined)?.name}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">إلى</dt><dd>{(viewRow.to_warehouse as { name?: string } | undefined)?.name}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">حالة</dt><dd>{String(viewRow.status)}</dd></div>
+            {Array.isArray(viewRow.lines) && (viewRow.lines as { product?: { name?: string }; quantity?: number; batch_no?: string; serial_no?: string }[]).map((line, i) => (
+              <div key={i} className="rounded border border-black/5 p-2 text-xs">
+                <div>{line.product?.name} — {formatQuantity(line.quantity ?? 0)}</div>
+                {(line.batch_no || line.serial_no) && (
+                  <div className="font-mono text-black/50">
+                    {line.batch_no ? `${t('common.batch')}: ${line.batch_no}` : ''}
+                    {line.batch_no && line.serial_no ? ' · ' : ''}
+                    {line.serial_no ? `${t('common.serial')}: ${line.serial_no}` : ''}
+                  </div>
+                )}
+              </div>
+            ))}
           </dl>
         )}
       </Modal>
@@ -638,9 +858,80 @@ export default function WarehousePage() {
       <Modal open={modalOpen && tab === 'counts' && !viewRow} onClose={closeModal} title={t('warehouse.newCount')} footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveCnt.isPending} onClick={() => saveCnt.mutate()}>{t('common.save')}</Button></>}>
         <div className="space-y-3">
           <Field label={t('common.date')}><input type="date" className={inputClass} value={cntForm.count_date} onChange={(e) => setCntForm({ ...cntForm, count_date: e.target.value })} /></Field>
-          <Field label={t('common.warehouse')}><select className={inputClass} value={cntForm.warehouse_id} onChange={(e) => setCntForm({ ...cntForm, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-          <Field label={t('common.product')}><select className={inputClass} value={cntForm.product_id} onChange={(e) => setCntForm({ ...cntForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="الكمية المعدودة"><NumericInput value={cntForm.counted_qty} onChange={(v) => setCntForm((prev) => ({ ...prev, counted_qty: v }))} /></Field>
+          <Field label={t('common.warehouse')}>
+            <select
+              className={inputClass}
+              value={cntForm.warehouse_id}
+              onChange={(e) => {
+                const warehouse_id = e.target.value
+                setCntForm((prev) => ({ ...prev, warehouse_id }))
+                if (cntForm.product_id && warehouse_id) {
+                  void refreshStock(cntForm.product_id, warehouse_id, cntForm.batch_no || undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setCntForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+          </Field>
+          <Field label={t('common.product')}>
+            <select
+              className={inputClass}
+              value={cntForm.product_id}
+              onChange={(e) => {
+                const product_id = e.target.value
+                setCntForm((prev) => ({ ...prev, product_id, batch_no: '', serial_no: '' }))
+                if (product_id && cntForm.warehouse_id) {
+                  void refreshStock(product_id, cntForm.warehouse_id, undefined, {
+                    autofillBatch: true,
+                    onBatch: (batch) => setCntForm((prev) => ({ ...prev, batch_no: batch })),
+                  })
+                } else setStockInfo(null)
+              }}
+              required
+            >
+              <option value="">—</option>
+              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
+          <Field label="الكمية المعدودة">
+            <NumericInput value={cntForm.counted_qty} onChange={(v) => setCntForm((prev) => ({ ...prev, counted_qty: v }))} />
+            {stockInfo && cntForm.product_id && cntForm.warehouse_id && (
+              <BatchStockHint
+                stockInfo={stockInfo}
+                batchNo={cntForm.batch_no}
+                onSelectBatch={(batch) => {
+                  setCntForm((prev) => ({ ...prev, batch_no: batch }))
+                  void refreshStock(cntForm.product_id, cntForm.warehouse_id, batch)
+                }}
+              />
+            )}
+          </Field>
+          {cntProduct?.track_batch && (
+            <Field label={t('common.batch')}>
+              <input
+                className={inputClass}
+                value={cntForm.batch_no}
+                onChange={(e) => {
+                  const batch_no = e.target.value
+                  setCntForm({ ...cntForm, batch_no })
+                  if (cntForm.product_id && cntForm.warehouse_id) {
+                    void refreshStock(cntForm.product_id, cntForm.warehouse_id, batch_no || undefined)
+                  }
+                }}
+                required
+              />
+            </Field>
+          )}
+          {cntProduct?.track_serial && (
+            <Field label={t('common.serial')}>
+              <input className={inputClass} value={cntForm.serial_no} onChange={(e) => setCntForm({ ...cntForm, serial_no: e.target.value })} required />
+            </Field>
+          )}
         </div>
       </Modal>
 
@@ -654,6 +945,56 @@ export default function WarehousePage() {
           </dl>
         )}
       </Modal>
+    </div>
+  )
+}
+
+function BatchStockHint({
+  stockInfo,
+  batchNo,
+  onSelectBatch,
+}: {
+  stockInfo: StockInfo
+  batchNo?: string
+  onSelectBatch?: (batch: string) => void
+}) {
+  const { t } = useTranslation()
+  const warehouseLabel = stockInfo.warehouse_name || t('common.warehouse')
+
+  return (
+    <div className="mt-1 space-y-1 text-xs text-black/55">
+      <p>
+        {batchNo && stockInfo.track_batch
+          ? t('sales.stockRemainingBatch', {
+              qty: formatQuantity(stockInfo.available_qty),
+              warehouse: warehouseLabel,
+              batch: batchNo,
+            })
+          : t('sales.stockRemainingIn', {
+              qty: formatQuantity(stockInfo.available_qty),
+              warehouse: warehouseLabel,
+            })}
+      </p>
+      {stockInfo.breakdown.length > 0 && (
+        <ul className="space-y-0.5">
+          {stockInfo.breakdown.map((row) => (
+            <li key={`${row.warehouse_id}-${row.batch_no}`} className="flex flex-wrap items-center gap-1">
+              <span>
+                {row.batch_no ? `${t('common.batch')} ${row.batch_no}: ` : ''}
+                {formatQuantity(row.quantity)}
+              </span>
+              {stockInfo.track_batch && row.batch_no && onSelectBatch && batchNo !== row.batch_no && (
+                <button type="button" className="text-teal underline" onClick={() => onSelectBatch(row.batch_no)}>
+                  {t('sales.useBatch')}
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {stockInfo.breakdown.length === 0 && (
+        <p className="text-amber">{t('sales.noStockInWarehouse')}</p>
+      )}
     </div>
   )
 }

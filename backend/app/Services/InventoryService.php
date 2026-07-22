@@ -246,6 +246,8 @@ class InventoryService
                 $transfer->lines()->create([
                     'product_id' => $line['product_id'],
                     'quantity' => $line['quantity'],
+                    'batch_no' => $line['batch_no'] ?? null,
+                    'serial_no' => $line['serial_no'] ?? null,
                 ]);
             }
 
@@ -267,32 +269,62 @@ class InventoryService
             $transfer->load('lines');
 
             foreach ($transfer->lines as $line) {
+                $product = \App\Models\Product::query()->findOrFail($line->product_id);
+                $qty = (float) $line->quantity;
+                $this->validateBatchSerial($product, [
+                    'batch_no' => $line->batch_no,
+                    'serial_no' => $line->serial_no,
+                ], true);
+
+                $batchNo = $line->batch_no;
+                if ($product->track_batch) {
+                    $batchNo = $this->resolveOutboundBatch(
+                        $transfer->from_warehouse_id,
+                        $product,
+                        $qty,
+                        $line->batch_no
+                    );
+                    if ($batchNo === null || $batchNo === '') {
+                        throw ValidationException::withMessages([
+                            'batch_no' => ["الصنف {$product->name} يتطلب رقم دفعة."],
+                        ]);
+                    }
+                    $this->assertSufficientStock(
+                        $transfer->from_warehouse_id,
+                        $line->product_id,
+                        $qty,
+                        $batchNo,
+                        $product
+                    );
+                    if ($batchNo !== $line->batch_no) {
+                        $line->update(['batch_no' => $batchNo]);
+                    }
+                }
+
+                $meta = [
+                    'movement_date' => $transfer->transfer_date->toDateString(),
+                    'reference_type' => $transfer::class,
+                    'reference_id' => $transfer->id,
+                    'batch_no' => $batchNo,
+                    'serial_no' => $line->serial_no,
+                ];
+
                 $this->adjustStock(
                     $transfer->from_warehouse_id,
                     $line->product_id,
-                    -((float) $line->quantity),
+                    -$qty,
                     'transfer',
                     $user,
-                    [
-                        'movement_date' => $transfer->transfer_date->toDateString(),
-                        'reference_type' => $transfer::class,
-                        'reference_id' => $transfer->id,
-                        'notes' => 'تحويل صادر '.$transfer->transfer_number,
-                    ]
+                    array_merge($meta, ['notes' => 'تحويل صادر '.$transfer->transfer_number])
                 );
 
                 $this->adjustStock(
                     $transfer->to_warehouse_id,
                     $line->product_id,
-                    (float) $line->quantity,
+                    $qty,
                     'transfer',
                     $user,
-                    [
-                        'movement_date' => $transfer->transfer_date->toDateString(),
-                        'reference_type' => $transfer::class,
-                        'reference_id' => $transfer->id,
-                        'notes' => 'تحويل وارد '.$transfer->transfer_number,
-                    ]
+                    array_merge($meta, ['notes' => 'تحويل وارد '.$transfer->transfer_number])
                 );
             }
 
@@ -329,6 +361,8 @@ class InventoryService
                         'reference_id' => $count->id,
                         'notes' => 'تسوية جرد '.$count->count_number,
                         'post_to_gl' => false,
+                        'batch_no' => $line->batch_no,
+                        'serial_no' => $line->serial_no,
                     ]
                 );
             }
