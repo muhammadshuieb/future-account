@@ -1,4 +1,5 @@
 import { LOGO } from '@/lib/brand'
+import { todayYmd } from '@/lib/dates'
 import { formatMoney } from '@/components/ui'
 
 export type StatementRow = {
@@ -80,7 +81,7 @@ export function StatementPrintView({
         </div>
         <div className="text-start">
           <p className="text-xs font-semibold text-teal">{documentLabel}</p>
-          <p className="mt-1 text-xs text-black/55">تاريخ الطباعة: {new Date().toISOString().slice(0, 10)}</p>
+          <p className="mt-1 text-xs text-black/55">تاريخ الطباعة: {todayYmd()}</p>
         </div>
       </header>
 

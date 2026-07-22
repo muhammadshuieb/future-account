@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { todayYmd } from '@/lib/dates'
 import type { Account, JournalEntry } from '@/types'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { Button, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
@@ -17,7 +18,7 @@ const emptyLine = (): LineDraft => ({ account_id: '', debit: '', credit: '', mem
 export default function JournalEntriesPage() {
   const queryClient = useQueryClient()
   const [description, setDescription] = useState('')
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10))
+  const [entryDate, setEntryDate] = useState(todayYmd())
   const [reference, setReference] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()])
   const [error, setError] = useState('')
@@ -52,7 +53,7 @@ export default function JournalEntriesPage() {
   function resetForm() {
     setDescription('')
     setReference('')
-    setEntryDate(new Date().toISOString().slice(0, 10))
+    setEntryDate(todayYmd())
     setLines([emptyLine(), emptyLine()])
     setEditingId(null)
     setViewOnly(false)

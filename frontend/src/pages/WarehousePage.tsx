@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
+import { todayYmd } from '@/lib/dates'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
@@ -62,7 +63,7 @@ const emptyMv = {
   post_to_gl: false,
 }
 const emptyCnt = {
-  count_date: new Date().toISOString().slice(0, 10),
+  count_date: todayYmd(),
   warehouse_id: '',
   product_id: '',
   counted_qty: '0',
@@ -70,7 +71,7 @@ const emptyCnt = {
   serial_no: '',
 }
 const emptyTr = {
-  transfer_date: new Date().toISOString().slice(0, 10),
+  transfer_date: todayYmd(),
   from_warehouse_id: '',
   to_warehouse_id: '',
   product_id: '',

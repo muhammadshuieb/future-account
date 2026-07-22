@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
@@ -10,19 +11,11 @@ type PartnerRow = { id: number; code: string; name: string; phone?: string; cred
 
 const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' }
 
-function yearStart() {
-  return new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
-
 export default function PartnersPage() {
   const [tab, setTab] = useState('customers')
   const [statementId, setStatementId] = useState<number | null>(null)
-  const [from, setFrom] = useState(yearStart)
-  const [to, setTo] = useState(today)
+  const [from, setFrom] = useState(yearStartYmd)
+  const [to, setTo] = useState(todayYmd)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm)

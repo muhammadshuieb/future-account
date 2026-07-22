@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { LOGO } from '@/lib/brand'
 import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
@@ -42,8 +43,8 @@ const reportTitleFallback: Record<ReportKey, string> = {
 export default function ReportsPage() {
   const { t } = useTranslation()
   const [tab, setTab] = useState<ReportKey>('trial-balance')
-  const [from, setFrom] = useState(new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10))
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10))
+  const [from, setFrom] = useState(yearStartYmd)
+  const [to, setTo] = useState(todayYmd)
   const [branchId, setBranchId] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [supplierId, setSupplierId] = useState('')

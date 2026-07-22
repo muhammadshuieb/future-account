@@ -6,17 +6,21 @@
 services:
   postgres:
     environment:
+      TZ: ${TZ:-Asia/Damascus}
+      PGTZ: Asia/Damascus
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
 
   backend:
     env_file:
       - .env.prod
     environment:
+      TZ: ${TZ:-Asia/Damascus}
       APP_ENV: production
       APP_DEBUG: "false"
       SKIP_DB_SEED: "1"
       APP_KEY: "${APP_KEY:?Set APP_KEY in .env.prod - run: php artisan key:generate --show}"
       APP_URL: ${APP_URL:-http://localhost:8000}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Damascus}
       DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.prod}
       SANCTUM_STATEFUL_DOMAINS: ${SANCTUM_STATEFUL_DOMAINS:-localhost,127.0.0.1}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}

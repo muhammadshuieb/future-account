@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
+import { formatDateTimeLocal, todayYmd } from '@/lib/dates'
 import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
 import type { Setting } from '@/types'
 import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
@@ -133,7 +134,7 @@ export default function SettingsPage() {
     from_currency: 'USD',
     to_currency: 'SYP',
     rate: '',
-    rate_date: new Date().toISOString().slice(0, 10),
+    rate_date: todayYmd(),
     notes: '',
   })
 
@@ -510,7 +511,7 @@ export default function SettingsPage() {
                 <li key={b.filename} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
                   <div>
                     <p className="font-mono text-xs sm:text-sm">{b.filename}</p>
-                    <p className="text-xs text-black/45">{b.size_human} · {new Date(b.created_at).toLocaleString()}</p>
+                    <p className="text-xs text-black/45">{b.size_human} · {formatDateTimeLocal(b.created_at)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void downloadBackup(b.filename)}>{t('settings.download')}</Button>

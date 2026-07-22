@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
@@ -53,11 +54,11 @@ export default function PurchasesPage() {
 
   const base = { supplier_id: '', warehouse_id: '', product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '1' }
 
-  const [req, setReq] = useState({ request_date: new Date().toISOString().slice(0, 10), required_date: '', ...base })
-  const [po, setPo] = useState({ order_date: new Date().toISOString().slice(0, 10), ...base })
-  const [inv, setInv] = useState({ invoice_date: new Date().toISOString().slice(0, 10), status: 'posted', ...base })
+  const [req, setReq] = useState({ request_date: todayYmd(), required_date: '', ...base })
+  const [po, setPo] = useState({ order_date: todayYmd(), ...base })
+  const [inv, setInv] = useState({ invoice_date: todayYmd(), status: 'posted', ...base })
   const [ret, setRet] = useState({
-    return_date: new Date().toISOString().slice(0, 10),
+    return_date: todayYmd(),
     supplier_id: '',
     warehouse_id: '',
     purchase_invoice_id: '',
@@ -71,7 +72,7 @@ export default function PurchasesPage() {
     status: 'posted',
   })
   const [pay, setPay] = useState({
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: todayYmd(),
     supplier_id: '',
     purchase_invoice_id: '',
     cash_box_id: '',

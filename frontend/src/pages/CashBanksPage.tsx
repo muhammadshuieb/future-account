@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { todayYmd } from '@/lib/dates'
 import {
   Button,
   EmptyState,
@@ -30,7 +31,7 @@ type Reconciliation = {
 const emptyBox = { code: '', name: '', opening_balance: '0' }
 const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
 const emptyTr = {
-  transfer_date: new Date().toISOString().slice(0, 10),
+  transfer_date: todayYmd(),
   from_type: 'cash_box',
   from_id: '',
   to_type: 'bank',
@@ -40,7 +41,7 @@ const emptyTr = {
 }
 const emptyRec = {
   bank_id: '',
-  statement_date: new Date().toISOString().slice(0, 10),
+  statement_date: todayYmd(),
   statement_balance: '',
 }
 

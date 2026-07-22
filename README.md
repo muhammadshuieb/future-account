@@ -4,6 +4,8 @@
 
 Syna Co — Arabic accounting/ERP with multi-currency (SYP / TRY / USD), barcodes, backups, and printable reports.
 
+**التوقيت | Timezone:** النظام يعمل بتوقيت سوريا `Asia/Damascus` (`APP_TIMEZONE` / `TZ`). تواريخ الفواتير والقيود ولوحة التحكم والنسخ الاحتياطي المجدول تعتمد هذا التوقيت.
+
 ---
 
 ## التشغيل السريع | Quick start
@@ -175,6 +177,7 @@ cd /opt/future-account
 ```bash
 cp .env.prod.example .env.prod
 # عدّل: APP_KEY, POSTGRES_PASSWORD, APP_URL, FRONTEND_URL, SANCTUM_STATEFUL_DOMAINS
+# APP_TIMEZONE=Asia/Damascus و TZ=Asia/Damascus (افتراضي في .env.prod.example)
 # توليد APP_KEY:
 docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm backend php artisan key:generate --show
 ```

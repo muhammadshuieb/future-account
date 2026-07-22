@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
@@ -75,11 +76,11 @@ export default function SalesPage() {
 
   const emptyLine = { customer_id: '', warehouse_id: '', product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '1' }
 
-  const [quote, setQuote] = useState({ quote_date: new Date().toISOString().slice(0, 10), valid_until: '', ...emptyLine })
-  const [order, setOrder] = useState({ order_date: new Date().toISOString().slice(0, 10), ...emptyLine })
-  const [inv, setInv] = useState({ invoice_date: new Date().toISOString().slice(0, 10), status: 'posted', ...emptyLine })
+  const [quote, setQuote] = useState({ quote_date: todayYmd(), valid_until: '', ...emptyLine })
+  const [order, setOrder] = useState({ order_date: todayYmd(), ...emptyLine })
+  const [inv, setInv] = useState({ invoice_date: todayYmd(), status: 'posted', ...emptyLine })
   const [ret, setRet] = useState({
-    return_date: new Date().toISOString().slice(0, 10),
+    return_date: todayYmd(),
     customer_id: '',
     warehouse_id: '',
     sales_invoice_id: '',
@@ -93,7 +94,7 @@ export default function SalesPage() {
     status: 'posted',
   })
   const [rc, setRc] = useState({
-    receipt_date: new Date().toISOString().slice(0, 10),
+    receipt_date: todayYmd(),
     customer_id: '',
     sales_invoice_id: '',
     cash_box_id: '',

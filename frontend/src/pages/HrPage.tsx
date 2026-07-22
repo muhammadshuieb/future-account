@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import { monthYm, todayYmd } from '@/lib/dates'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 const emptyEmp = { employee_number: '', name: '', job_title: '', basic_salary: '0' }
-const emptyAtt = { employee_id: '', attendance_date: new Date().toISOString().slice(0, 10), status: 'present', check_in: '09:00', check_out: '17:00' }
-const emptyLeave = { employee_id: '', from_date: new Date().toISOString().slice(0, 10), to_date: new Date().toISOString().slice(0, 10), leave_type: 'annual', reason: '' }
-const emptySal = { employee_id: '', period: new Date().toISOString().slice(0, 7), allowances: '0', deductions: '0', status: 'posted' }
+const emptyAtt = { employee_id: '', attendance_date: todayYmd(), status: 'present', check_in: '09:00', check_out: '17:00' }
+const emptyLeave = { employee_id: '', from_date: todayYmd(), to_date: todayYmd(), leave_type: 'annual', reason: '' }
+const emptySal = { employee_id: '', period: monthYm(), allowances: '0', deductions: '0', status: 'posted' }
 
 export default function HrPage() {
   const [tab, setTab] = useState('employees')
