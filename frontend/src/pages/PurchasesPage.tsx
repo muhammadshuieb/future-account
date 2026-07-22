@@ -11,12 +11,12 @@ import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, forma
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
 
-function purchaseLine(productId: string, qty: string, cost: string, batch: string, serial: string) {
+function purchaseLine(productId: string, qty: string, cost: string, batch: string, serial: string, taxRate: number) {
   return {
     product_id: Number(productId),
     quantity: Number(qty),
     unit_cost: cost ? Number(cost) : undefined,
-    tax_rate: 15,
+    tax_rate: taxRate,
     batch_no: batch || undefined,
     serial_no: serial || undefined,
   }
@@ -41,6 +41,8 @@ export default function PurchasesPage() {
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
+  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
+  const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
   const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'payments' })
   const currencies = useQuery({
     queryKey: ['currencies'],
@@ -133,7 +135,7 @@ export default function PurchasesPage() {
       warehouse_id: Number(req.warehouse_id) || undefined,
       currency: req.currency,
       exchange_rate: req.exchange_rate ? Number(req.exchange_rate) : undefined,
-      lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no)],
+      lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم حفظ طلب الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,
@@ -146,7 +148,7 @@ export default function PurchasesPage() {
       warehouse_id: Number(po.warehouse_id) || undefined,
       currency: po.currency,
       exchange_rate: po.exchange_rate ? Number(po.exchange_rate) : undefined,
-      lines: [purchaseLine(po.product_id, po.quantity, po.unit_cost, po.batch_no, po.serial_no)],
+      lines: [purchaseLine(po.product_id, po.quantity, po.unit_cost, po.batch_no, po.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم حفظ أمر الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,
@@ -160,7 +162,7 @@ export default function PurchasesPage() {
       currency: inv.currency,
       exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
       status: inv.status,
-      lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no)],
+      lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم ترحيل فاتورة المشتريات'); invalidate(); closeModal() },
     onError: msg.fromErr,
@@ -195,7 +197,7 @@ export default function PurchasesPage() {
       warehouse_id: Number(req.warehouse_id) || undefined,
       currency: req.currency,
       exchange_rate: req.exchange_rate ? Number(req.exchange_rate) : undefined,
-      lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no)],
+      lines: [purchaseLine(req.product_id, req.quantity, req.unit_cost, req.batch_no, req.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم تحديث طلب الشراء'); invalidate(); closeModal() },
     onError: msg.fromErr,

@@ -37,6 +37,7 @@ class BackupCommandTest extends TestCase
                 'google_drive' => ['ok' => false, 'skipped' => true],
                 'telegram' => ['ok' => false, 'skipped' => true],
             ]);
+        $dist->shouldReceive('googleDriveConfigured')->andReturn(false);
 
         $this->app->instance(BackupService::class, $backup);
         $this->app->instance(BackupDistributionService::class, $dist);

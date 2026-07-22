@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { setUserLanguage } from '@/i18n'
 
 const langs = [
   { code: 'ar', label: 'العربية' },
@@ -12,8 +13,8 @@ export default function LanguageSwitcher() {
   return (
     <select
       className="rounded-lg border border-[var(--color-line)] bg-white px-2 py-1.5 text-xs text-ink/80"
-      value={i18n.language}
-      onChange={(e) => void i18n.changeLanguage(e.target.value)}
+      value={i18n.language?.slice(0, 2) || 'ar'}
+      onChange={(e) => setUserLanguage(e.target.value)}
       aria-label="Language"
     >
       {langs.map((l) => (

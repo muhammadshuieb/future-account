@@ -21,12 +21,12 @@ type StockInfo = {
   track_batch?: boolean
 }
 
-function linePayload(productId: string, qty: string, price: string, batch: string, serial: string) {
+function linePayload(productId: string, qty: string, price: string, batch: string, serial: string, taxRate: number) {
   return {
     product_id: Number(productId),
     quantity: Number(qty),
     unit_price: price ? Number(price) : undefined,
-    tax_rate: 15,
+    tax_rate: taxRate,
     batch_no: batch || undefined,
     serial_no: serial || undefined,
   }
@@ -63,6 +63,8 @@ export default function SalesPage() {
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
+  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
+  const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
   const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'receipts' })
   const currencies = useQuery({
     queryKey: ['currencies'],
@@ -206,7 +208,7 @@ export default function SalesPage() {
       warehouse_id: Number(quote.warehouse_id) || undefined,
       currency: quote.currency,
       exchange_rate: quote.exchange_rate ? Number(quote.exchange_rate) : undefined,
-      lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no)],
+      lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم حفظ عرض السعر'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
@@ -219,7 +221,7 @@ export default function SalesPage() {
       warehouse_id: Number(order.warehouse_id) || undefined,
       currency: order.currency,
       exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
-      lines: [linePayload(order.product_id, order.quantity, order.unit_price, order.batch_no, order.serial_no)],
+      lines: [linePayload(order.product_id, order.quantity, order.unit_price, order.batch_no, order.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم حفظ أمر البيع'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
@@ -233,7 +235,7 @@ export default function SalesPage() {
       currency: inv.currency,
       exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
       status: inv.status,
-      lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no)],
+      lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم إنشاء/ترحيل فاتورة المبيعات'); invalidateSales(); closeModal() },
     onError: msg.fromErr,
@@ -268,7 +270,7 @@ export default function SalesPage() {
       warehouse_id: Number(quote.warehouse_id) || undefined,
       currency: quote.currency,
       exchange_rate: quote.exchange_rate ? Number(quote.exchange_rate) : undefined,
-      lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no)],
+      lines: [linePayload(quote.product_id, quote.quantity, quote.unit_price, quote.batch_no, quote.serial_no, defaultTaxRate)],
     }),
     onSuccess: () => { msg.setMessage('تم تحديث عرض السعر'); invalidateSales(); closeModal() },
     onError: msg.fromErr,

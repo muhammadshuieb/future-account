@@ -432,7 +432,7 @@ git push origin main
 - **Audit log UI** — Admin audit trail page
 - **Companies & branches** — Management screens under Admin
 - **Credit limit** — Enforced on sales invoice posting
-- **Auto-backup** — Laravel `syna:backup` scheduled daily at 02:00 (requires scheduler cron)
+- **Auto-backup** — Laravel `syna:backup` twice daily at configurable times (requires scheduler cron)
 
 ### v1.1.0 (2026-07-20)
 - Sales quotes & orders — CRUD + Quote → Order → Invoice conversion

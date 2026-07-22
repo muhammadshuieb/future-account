@@ -1,6 +1,9 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from '@/context/AuthContext'
+import { applyDefaultLocale } from '@/i18n'
+import api from '@/lib/api'
 import AppLayout from '@/components/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
@@ -26,10 +29,28 @@ const queryClient = new QueryClient({
   },
 })
 
+function BootstrapLocale() {
+  useEffect(() => {
+    if (localStorage.getItem('fa_lang')) return
+    void api
+      .get('/public/bootstrap')
+      .then((res) => {
+        const locale = res.data?.data?.default_locale as string | undefined
+        if (locale) applyDefaultLocale(locale)
+      })
+      .catch(() => {
+        /* keep fallback ar */
+      })
+  }, [])
+
+  return null
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        <BootstrapLocale />
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />

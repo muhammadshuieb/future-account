@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Setting;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,7 +15,22 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        $schedule->command('syna:backup')->dailyAt('02:00')->name('syna-auto-backup');
+        // Runs every minute; executes only when clock matches backup_time_1 / backup_time_2 settings.
+        $schedule->command('syna:backup')
+            ->everyMinute()
+            ->when(function (): bool {
+                $now = now()->format('H:i');
+                [$t1, $t2] = Setting::backupTimes();
+
+                return $now === $t1 || $now === $t2;
+            })
+            ->name('syna-auto-backup')
+            ->withoutOverlapping();
+
+        $schedule->command('syna:check-backup-health')
+            ->dailyAt('08:00')
+            ->name('syna-backup-health')
+            ->withoutOverlapping();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([

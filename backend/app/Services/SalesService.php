@@ -394,7 +394,8 @@ class SalesService
 
     protected function normalizeSalesLines(array $lines): array
     {
-        $taxRateDefault = (float) (Setting::query()->where('key', 'tax_rate')->value('value') ?? 15);
+        $taxEnabled = Setting::taxEnabled();
+        $taxRateDefault = Setting::defaultTaxRate();
         $subtotal = 0;
         $tax = 0;
         $normalized = [];
@@ -404,7 +405,7 @@ class SalesService
             $this->inventory->validateBatchSerial($product, $line, forOutbound: true);
             $qty = (float) $line['quantity'];
             $price = (float) ($line['unit_price'] ?? $product->sale_price);
-            $rate = (float) ($line['tax_rate'] ?? $taxRateDefault);
+            $rate = $taxEnabled ? (float) ($line['tax_rate'] ?? $taxRateDefault) : 0.0;
             $lineSub = round($qty * $price, 2);
             $lineTax = round($lineSub * $rate / 100, 2);
             $subtotal += $lineSub;

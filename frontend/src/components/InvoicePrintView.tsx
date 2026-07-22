@@ -198,10 +198,10 @@ export function SalesInvoicePrintView({
         </tbody>
       </table>
 
-      {(structured?.tax_breakdown || []).length > 0 && (
+      {(structured?.tax_breakdown || []).filter((tb) => tb.tax > 0).length > 0 && (
         <div className="rounded border border-black/10 p-3">
           <p className="mb-2 text-xs font-semibold">تفصيل الضريبة</p>
-          {(structured?.tax_breakdown || []).map((tb, i) => (
+          {(structured?.tax_breakdown || []).filter((tb) => tb.tax > 0).map((tb, i) => (
             <p key={i} className="text-xs">
               {tb.rate}% — خاضع {tb.taxable}، ضريبة {tb.tax}
             </p>
@@ -214,10 +214,12 @@ export function SalesInvoicePrintView({
           <span className="text-black/55">المجموع الفرعي: </span>
           <span className="tabular-nums">{invoice.subtotal}</span>
         </p>
-        <p>
-          <span className="text-black/55">الضريبة: </span>
-          <span className="tabular-nums">{invoice.tax_amount}</span>
-        </p>
+        {Number(invoice.tax_amount) > 0 && (
+          <p>
+            <span className="text-black/55">الضريبة: </span>
+            <span className="tabular-nums">{invoice.tax_amount}</span>
+          </p>
+        )}
         <p className="text-base font-bold">
           {t('common.total')} ({invoice.currency || 'SYP'}):{' '}
           <span className="tabular-nums">{invoice.total}</span>
@@ -286,7 +288,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
             <span className="tabular-nums">{invoice.subtotal}</span>
           </p>
         )}
-        {invoice.tax_amount != null && (
+        {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (
           <p>
             <span className="text-black/55">الضريبة: </span>
             <span className="tabular-nums">{invoice.tax_amount}</span>

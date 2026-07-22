@@ -5,7 +5,7 @@ import ar from '@/locales/ar.json'
 import en from '@/locales/en.json'
 import tr from '@/locales/tr.json'
 
-const saved = localStorage.getItem('fa_lang') || 'ar'
+const saved = localStorage.getItem('fa_lang')
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -13,18 +13,35 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
     tr: { translation: tr },
   },
-  lng: saved,
+  lng: saved || 'ar',
   fallbackLng: 'ar',
   interpolation: { escapeValue: false },
 })
 
-i18n.on('languageChanged', (lng) => {
-  localStorage.setItem('fa_lang', lng)
+function applyDocumentLang(lng: string) {
   document.documentElement.lang = lng
   document.documentElement.dir = lng === 'ar' ? 'rtl' : 'ltr'
+}
+
+i18n.on('languageChanged', (lng) => {
+  applyDocumentLang(lng)
 })
 
-document.documentElement.lang = saved
-document.documentElement.dir = saved === 'ar' ? 'rtl' : 'ltr'
+applyDocumentLang(saved || 'ar')
+
+/** Persist an explicit user language choice. */
+export function setUserLanguage(lng: string) {
+  localStorage.setItem('fa_lang', lng)
+  void i18n.changeLanguage(lng)
+}
+
+/**
+ * Apply company default_locale only when the user has not chosen a language.
+ */
+export function applyDefaultLocale(locale: string) {
+  if (localStorage.getItem('fa_lang')) return
+  const next = ['ar', 'en', 'tr'].includes(locale) ? locale : 'ar'
+  void i18n.changeLanguage(next)
+}
 
 export default i18n

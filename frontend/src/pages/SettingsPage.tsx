@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
@@ -29,6 +29,19 @@ type BackupRow = {
   filename: string
   size_human: string
   created_at: string
+}
+
+const HIDDEN_GENERAL_KEYS = new Set([
+  'tax_enabled',
+  'tax_rate',
+  'default_locale',
+  'locale',
+  'backup_time_1',
+  'backup_time_2',
+])
+
+function isTruthy(value: string | undefined): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').toLowerCase())
 }
 
 export default function SettingsPage() {
@@ -78,17 +91,7 @@ export default function SettingsPage() {
 
   const usersAdmin = useQuery({
     queryKey: ['admin-users'],
-    queryFn: async () => (await api.get('/users')).data.data as {
-      id: number
-      name: string
-      first_name?: string | null
-      last_name?: string | null
-      username: string
-      mobile?: string | null
-      email?: string | null
-      is_active: boolean
-      roles: string[]
-    }[],
+    queryFn: async () => (await api.get('/users')).data.data as { id: number; name: string; email: string; is_active: boolean; roles: string[] }[],
     enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
     retry: false,
   })
@@ -100,15 +103,7 @@ export default function SettingsPage() {
     retry: false,
   })
 
-  const emptyUserForm = {
-    first_name: '',
-    last_name: '',
-    username: '',
-    mobile: '',
-    password: '',
-    roles: ['accountant'] as string[],
-  }
-  const [userForm, setUserForm] = useState(emptyUserForm)
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', roles: ['accountant'] as string[] })
   const [userModal, setUserModal] = useState<'create' | 'edit' | null>(null)
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
 
@@ -125,18 +120,35 @@ export default function SettingsPage() {
     settings.forEach((s) => {
       map[s.key] = s.value ?? ''
     })
+    if (!map.default_locale && map.locale) map.default_locale = map.locale
+    if (map.tax_enabled === undefined) map.tax_enabled = '1'
+    if (!map.backup_time_1) map.backup_time_1 = '02:00'
+    if (!map.backup_time_2) map.backup_time_2 = '14:00'
     setValues(map)
   }, [settings])
 
+  const generalSettings = useMemo(
+    () => settings.filter((s) => !HIDDEN_GENERAL_KEYS.has(s.key)),
+    [settings],
+  )
+
+  const taxEnabled = isTruthy(values.tax_enabled)
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const payload = { ...values }
+      if (!payload.default_locale) payload.default_locale = 'ar'
+      payload.locale = payload.default_locale
+      payload.tax_enabled = isTruthy(payload.tax_enabled) ? '1' : '0'
       return api.put('/settings', {
-        settings: Object.entries(values).map(([key, value]) => ({ key, value })),
+        settings: Object.entries(payload).map(([key, value]) => ({ key, value })),
       })
     },
     onSuccess: () => {
-      msg.setMessage('تم حفظ الإعدادات.')
-      void queryClient.invalidateQueries({ queryKey: ['settings', 'dashboard', 'currencies'] })
+      msg.setMessage(t('settings.saved'))
+      void queryClient.invalidateQueries({ queryKey: ['settings'] })
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      void queryClient.invalidateQueries({ queryKey: ['currencies'] })
     },
     onError: msg.fromErr,
   })
@@ -148,7 +160,7 @@ export default function SettingsPage() {
         rate: Number(rateForm.rate),
       }),
     onSuccess: () => {
-      msg.setMessage('تم حفظ سعر الصرف')
+      msg.setMessage(t('settings.rateSaved'))
       void queryClient.invalidateQueries({ queryKey: ['exchange-rates'] })
     },
     onError: msg.fromErr,
@@ -157,22 +169,23 @@ export default function SettingsPage() {
   const createBackup = useMutation({
     mutationFn: () => api.post('/backups', { label: 'manual' }),
     onSuccess: () => {
-      msg.setMessage('تم إنشاء النسخة الاحتياطية')
+      msg.setMessage(t('settings.backupCreated'))
       void queryClient.invalidateQueries({ queryKey: ['backups'] })
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
     onError: msg.fromErr,
   })
 
   const restoreBackup = useMutation({
     mutationFn: (filename: string) => api.post('/backups/restore', { filename, confirm: true }),
-    onSuccess: () => msg.setMessage('تمت الاستعادة — أعد تحميل الصفحة إن لزم'),
+    onSuccess: () => msg.setMessage(t('settings.backupRestored')),
     onError: msg.fromErr,
   })
 
   const deleteBackup = useMutation({
     mutationFn: (filename: string) => api.delete(`/backups/${encodeURIComponent(filename)}`),
     onSuccess: () => {
-      msg.setMessage('تم الحذف')
+      msg.setMessage(t('settings.backupDeleted'))
       void queryClient.invalidateQueries({ queryKey: ['backups'] })
     },
     onError: msg.fromErr,
@@ -185,8 +198,8 @@ export default function SettingsPage() {
       return api.put(`/users/${editingUserId}`, password ? { ...payload, password } : payload)
     },
     onSuccess: () => {
-      msg.setMessage(editingUserId ? 'تم تحديث المستخدم' : 'تم إنشاء المستخدم')
-      setUserForm(emptyUserForm)
+      msg.setMessage(editingUserId ? t('settings.userUpdated') : t('settings.userCreated'))
+      setUserForm({ name: '', email: '', password: '', roles: ['accountant'] })
       setEditingUserId(null)
       setUserModal(null)
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -197,7 +210,7 @@ export default function SettingsPage() {
   const updateRolePerms = useMutation({
     mutationFn: ({ id, permissions }: { id: number; permissions: string[] }) => api.put(`/roles/${id}`, { permissions }),
     onSuccess: () => {
-      msg.setMessage('تم تحديث الصلاحيات')
+      msg.setMessage(t('settings.permsUpdated'))
       void queryClient.invalidateQueries({ queryKey: ['admin-roles'] })
     },
     onError: msg.fromErr,
@@ -218,17 +231,25 @@ export default function SettingsPage() {
     saveMutation.mutate()
   }
 
+  function setValue(key: string, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }))
+  }
+
   if (isLoading) return <LoadingBlock />
 
   return (
     <div className="space-y-6">
-      <PageHeader title="الإعدادات" subtitle="الشركة، العملات، والنسخ الاحتياطي" actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm); setUserModal('create') }}>{t('common.add')}</Button> : undefined} />
+      <PageHeader
+        title={t('nav.settings')}
+        subtitle={t('settings.subtitle')}
+        actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm({ name: '', email: '', password: '', roles: ['accountant'] }); setUserModal('create') }}>{t('common.add')}</Button> : undefined}
+      />
       <Tabs
         tabs={[
-          { id: 'general', label: 'عام' },
-          { id: 'currencies', label: 'العملات وأسعار الصرف' },
-          { id: 'backup', label: 'النسخ الاحتياطي' },
-          { id: 'barcode', label: 'قارئ الباركود' },
+          { id: 'general', label: t('settings.tabGeneral') },
+          { id: 'currencies', label: t('settings.tabCurrencies') },
+          { id: 'backup', label: t('settings.tabBackup') },
+          { id: 'barcode', label: t('settings.barcodeScanner') },
           ...((user?.permissions.includes('users.manage') || user?.roles.includes('admin')) ? [{ id: 'users', label: t('settings.users') }] : []),
         ]}
         active={tab}
@@ -240,13 +261,14 @@ export default function SettingsPage() {
       {tab === 'general' && (
         <form onSubmit={onSubmit} className="mx-auto max-w-2xl space-y-4">
           <Panel className="space-y-4 p-6">
-            {settings.map((setting) => (
+            <h2 className="text-sm font-semibold text-black/70">{t('settings.companySection')}</h2>
+            {generalSettings.map((setting) => (
               <Field key={setting.key} label={setting.label || setting.key}>
                 {setting.key === 'currency' ? (
                   <select
                     className={inputClass}
                     value={values[setting.key] ?? 'SYP'}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [setting.key]: e.target.value }))}
+                    onChange={(e) => setValue(setting.key, e.target.value)}
                   >
                     {(currencies.data?.currencies || [
                       { code: 'SYP', name: 'الليرة السورية' },
@@ -256,17 +278,62 @@ export default function SettingsPage() {
                       <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
                     ))}
                   </select>
+                ) : setting.type === 'boolean' || ['multi_currency', 'multi_language'].includes(setting.key) ? (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isTruthy(values[setting.key])}
+                      onChange={(e) => setValue(setting.key, e.target.checked ? '1' : '0')}
+                    />
+                    <span>{isTruthy(values[setting.key]) ? t('common.enabled') : t('common.disabled')}</span>
+                  </label>
                 ) : (
                   <input
                     value={values[setting.key] ?? ''}
-                    onChange={(e) => setValues((prev) => ({ ...prev, [setting.key]: e.target.value }))}
+                    onChange={(e) => setValue(setting.key, e.target.value)}
                     className={inputClass}
                   />
                 )}
               </Field>
             ))}
+
+            <div className="border-t border-[var(--color-line)] pt-4 space-y-4">
+              <h2 className="text-sm font-semibold text-black/70">{t('settings.taxAndLocale')}</h2>
+              <Field label={t('settings.taxEnabled')}>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={taxEnabled}
+                    onChange={(e) => setValue('tax_enabled', e.target.checked ? '1' : '0')}
+                  />
+                  <span>{taxEnabled ? t('common.enabled') : t('common.disabled')}</span>
+                </label>
+                <p className="mt-1 text-xs text-black/45">{t('settings.taxEnabledHint')}</p>
+              </Field>
+              {taxEnabled && (
+                <Field label={t('settings.taxRate')}>
+                  <NumericInput
+                    value={values.tax_rate ?? '15'}
+                    onChange={(v) => setValue('tax_rate', v)}
+                  />
+                </Field>
+              )}
+              <Field label={t('settings.defaultLocale')}>
+                <select
+                  className={inputClass}
+                  value={values.default_locale || values.locale || 'ar'}
+                  onChange={(e) => setValue('default_locale', e.target.value)}
+                >
+                  <option value="ar">العربية</option>
+                  <option value="en">English</option>
+                  <option value="tr">Türkçe</option>
+                </select>
+                <p className="mt-1 text-xs text-black/45">{t('settings.defaultLocaleHint')}</p>
+              </Field>
+            </div>
+
             <Button type="submit" variant="primary" disabled={saveMutation.isPending}>
-              حفظ الإعدادات
+              {t('settings.save')}
             </Button>
           </Panel>
         </form>
@@ -276,8 +343,8 @@ export default function SettingsPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Panel>
             <div className="border-b border-[var(--color-line)] px-4 py-3">
-              <h2 className="font-semibold">العملات المدعومة</h2>
-              <p className="text-xs text-black/45">الأساسية: {currencies.data?.base_currency || 'SYP'}</p>
+              <h2 className="font-semibold">{t('settings.supportedCurrencies')}</h2>
+              <p className="text-xs text-black/45">{t('settings.baseCurrency')}: {currencies.data?.base_currency || 'SYP'}</p>
             </div>
             <ul className="divide-y divide-[var(--color-line)]">
               {(currencies.data?.currencies || []).map((c) => (
@@ -286,40 +353,40 @@ export default function SettingsPage() {
                     <p className="font-semibold">{c.code} <span className="font-normal text-black/50">{c.symbol}</span></p>
                     <p className="text-xs text-black/45">{c.name} · {c.name_en}</p>
                   </div>
-                  <span className="text-xs text-teal">{c.is_active ? 'نشطة' : 'موقوفة'}</span>
+                  <span className="text-xs text-teal">{c.is_active ? t('common.active') : t('common.inactive')}</span>
                 </li>
               ))}
             </ul>
           </Panel>
 
           <Panel className="space-y-4 p-4">
-            <h2 className="font-semibold">إدخال سعر صرف</h2>
-            <p className="text-xs text-black/45">المعنى: 1 من العملة المصدر = السعر × عملة الهدف</p>
+            <h2 className="font-semibold">{t('settings.enterRate')}</h2>
+            <p className="text-xs text-black/45">{t('settings.rateMeaning')}</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="من">
+              <Field label={t('settings.from')}>
                 <select className={inputClass} value={rateForm.from_currency} onChange={(e) => setRateForm({ ...rateForm, from_currency: e.target.value })}>
                   {['SYP', 'TRY', 'USD'].map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
-              <Field label="إلى">
+              <Field label={t('settings.to')}>
                 <select className={inputClass} value={rateForm.to_currency} onChange={(e) => setRateForm({ ...rateForm, to_currency: e.target.value })}>
                   {['SYP', 'TRY', 'USD'].map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
-              <Field label="السعر">
+              <Field label={t('settings.rate')}>
                 <NumericInput value={rateForm.rate} onChange={(v) => setRateForm((prev) => ({ ...prev, rate: v }))} />
               </Field>
-              <Field label="التاريخ">
+              <Field label={t('common.date')}>
                 <input type="date" className={inputClass} value={rateForm.rate_date} onChange={(e) => setRateForm({ ...rateForm, rate_date: e.target.value })} />
               </Field>
             </div>
             <Button variant="primary" onClick={() => saveRate.mutate()} disabled={!rateForm.rate || saveRate.isPending}>
-              حفظ السعر
+              {t('settings.saveRate')}
             </Button>
 
             <div className="table-wrap pt-2">
               <table className="data-table">
-                <thead><tr><th>تاريخ</th><th>من</th><th>إلى</th><th>سعر</th></tr></thead>
+                <thead><tr><th>{t('common.date')}</th><th>{t('settings.from')}</th><th>{t('settings.to')}</th><th>{t('settings.rate')}</th></tr></thead>
                 <tbody>
                   {(rates.data || []).slice(0, 30).map((r) => (
                     <tr key={r.id}>
@@ -338,76 +405,106 @@ export default function SettingsPage() {
 
       {tab === 'backup' && (
         <div className="space-y-4">
+          <Panel className="space-y-4 p-5">
+            <h2 className="font-semibold">{t('settings.autoBackupSchedule')}</h2>
+            <p className="text-xs text-black/50">{t('settings.autoBackupNote')}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('settings.backupTime1')}>
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={values.backup_time_1 || '02:00'}
+                  onChange={(e) => setValue('backup_time_1', e.target.value)}
+                />
+              </Field>
+              <Field label={t('settings.backupTime2')}>
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={values.backup_time_2 || '14:00'}
+                  onChange={(e) => setValue('backup_time_2', e.target.value)}
+                />
+              </Field>
+            </div>
+            <Button type="button" variant="primary" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              {t('settings.saveSchedule')}
+            </Button>
+          </Panel>
+
           <Panel className="space-y-3 p-5">
-            <h2 className="font-semibold">وجهات النسخ الاحتياطي</h2>
-            <p className="text-xs text-black/50">تُضبط عبر متغيرات البيئة على الخادم (.env.prod) — لا تُخزَّن الأسرار في قاعدة البيانات.</p>
+            <h2 className="font-semibold">{t('settings.backupDestinations')}</h2>
+            <p className="text-xs text-black/50">{t('settings.backupDestHint')}</p>
+            {!backupStatus.data?.google_drive.configured && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {t('settings.driveNotConnected')}
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
                 <p className="font-medium">Google Drive</p>
-                <p className={`mt-1 text-xs ${backupStatus.data?.google_drive.configured ? 'text-success' : 'text-black/45'}`}>
-                  {backupStatus.data?.google_drive.configured ? '● مُفعّل' : '○ غير مُعد — GOOGLE_DRIVE_CREDENTIALS_JSON + GOOGLE_DRIVE_FOLDER_ID'}
+                <p className={`mt-1 text-xs ${backupStatus.data?.google_drive.configured ? 'text-success' : 'text-danger'}`}>
+                  {backupStatus.data?.google_drive.configured ? t('settings.driveActive') : t('settings.driveInactive')}
                 </p>
               </div>
               <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
                 <p className="font-medium">Telegram</p>
                 <p className={`mt-1 text-xs ${backupStatus.data?.telegram.configured ? 'text-success' : 'text-black/45'}`}>
-                  {backupStatus.data?.telegram.configured ? '● مُفعّل' : '○ غير مُعد — TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID'}
+                  {backupStatus.data?.telegram.configured ? t('settings.telegramActive') : t('settings.telegramInactive')}
                 </p>
               </div>
             </div>
           </Panel>
 
-        <Panel className="space-y-4 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">نسخ قاعدة البيانات الاحتياطي</h2>
-              <p className="text-xs text-black/50">PostgreSQL عبر Docker — للمدير فقط. الاستعادة تستبدل البيانات الحالية.</p>
-              <p className="mt-1 text-xs text-teal-dark">{t('settings.autoBackupNote')}</p>
+          <Panel className="space-y-4 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">{t('settings.dbBackup')}</h2>
+                <p className="text-xs text-black/50">{t('settings.dbBackupHint')}</p>
+              </div>
+              <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
+                {t('settings.createBackupNow')}
+              </Button>
             </div>
-            <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
-              إنشاء نسخة الآن
-            </Button>
-          </div>
 
-          {backups.isError && (
-            <p className="text-sm text-danger">تعذر تحميل القائمة — تأكد أن حسابك بصلاحية مدير.</p>
-          )}
-          {backups.isLoading && <LoadingBlock />}
-          {!backups.isLoading && !(backups.data || []).length && !backups.isError && (
-            <EmptyState title="لا توجد نسخ بعد" description="أنشئ أول نسخة احتياطية من الزر أعلاه." />
-          )}
-          <ul className="divide-y divide-[var(--color-line)]">
-            {(backups.data || []).map((b) => (
-              <li key={b.filename} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-                <div>
-                  <p className="font-mono text-xs sm:text-sm">{b.filename}</p>
-                  <p className="text-xs text-black/45">{b.size_human} · {new Date(b.created_at).toLocaleString('ar')}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="secondary" onClick={() => void downloadBackup(b.filename)}>تنزيل</Button>
-                  <Button
-                    variant="danger"
-                    onClick={() => {
-                      if (window.confirm('استعادة هذه النسخة ستستبدل قاعدة البيانات الحالية. هل أنت متأكد؟')) {
-                        restoreBackup.mutate(b.filename)
-                      }
-                    }}
-                  >
-                    استعادة
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      if (window.confirm('حذف الملف؟')) deleteBackup.mutate(b.filename)
-                    }}
-                  >
-                    حذف
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+            {backups.isError && (
+              <p className="text-sm text-danger">{t('settings.backupListError')}</p>
+            )}
+            {backups.isLoading && <LoadingBlock />}
+            {!backups.isLoading && !(backups.data || []).length && !backups.isError && (
+              <EmptyState title={t('settings.noBackups')} description={t('settings.noBackupsHint')} />
+            )}
+            <ul className="divide-y divide-[var(--color-line)]">
+              {(backups.data || []).map((b) => (
+                <li key={b.filename} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                  <div>
+                    <p className="font-mono text-xs sm:text-sm">{b.filename}</p>
+                    <p className="text-xs text-black/45">{b.size_human} · {new Date(b.created_at).toLocaleString()}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => void downloadBackup(b.filename)}>{t('settings.download')}</Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        if (window.confirm(t('settings.restoreConfirm'))) {
+                          restoreBackup.mutate(b.filename)
+                        }
+                      }}
+                    >
+                      {t('settings.restore')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        if (window.confirm(t('settings.deleteConfirm'))) deleteBackup.mutate(b.filename)
+                      }}
+                    >
+                      {t('common.delete')}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Panel>
         </div>
       )}
 
@@ -433,31 +530,10 @@ export default function SettingsPage() {
         <Panel>
             <div className="border-b border-[var(--color-line)] px-5 py-3"><h2 className="font-semibold">{t('settings.users')}</h2></div>
             <table className="data-table text-sm">
-              <thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>رقم الجوال</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>{t('settings.name')}</th><th>{t('settings.email')}</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(usersAdmin.data || []).map((u) => (
-                  <tr
-                    key={u.id}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      setEditingUserId(u.id)
-                      setUserForm({
-                        first_name: u.first_name || '',
-                        last_name: u.last_name || '',
-                        username: u.username || '',
-                        mobile: u.mobile || '',
-                        password: '',
-                        roles: u.roles.length ? u.roles : ['accountant'],
-                      })
-                      setUserModal('edit')
-                    }}
-                  >
-                    <td>{u.name}</td>
-                    <td>{u.username}</td>
-                    <td>{u.mobile || '—'}</td>
-                    <td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td>
-                    <td>{u.is_active ? 'نشط' : 'معطّل'}</td>
-                  </tr>
+                  <tr key={u.id} className="cursor-pointer" onClick={() => { setEditingUserId(u.id); setUserForm({ name: u.name, email: u.email, password: '', roles: u.roles.length ? u.roles : ['accountant'] }); setUserModal('edit') }}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td><td>{u.is_active ? t('common.active') : t('common.inactive')}</td></tr>
                 ))}
               </tbody>
             </table>
@@ -498,13 +574,11 @@ export default function SettingsPage() {
             </div>
         </Panel>
       )}
-      <Modal open={userModal !== null} onClose={() => { setUserModal(null); setEditingUserId(null) }} title={userModal === 'edit' ? t('common.edit') : 'مستخدم جديد'} footer={<><Button variant="secondary" onClick={() => { setUserModal(null); setEditingUserId(null) }}>{t('common.cancel')}</Button><Button type="submit" form="user-form" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button></>}>
+      <Modal open={userModal !== null} onClose={() => { setUserModal(null); setEditingUserId(null) }} title={userModal === 'edit' ? t('common.edit') : t('settings.newUser')} footer={<><Button variant="secondary" onClick={() => { setUserModal(null); setEditingUserId(null) }}>{t('common.cancel')}</Button><Button type="submit" form="user-form" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button></>}>
         <form id="user-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
-          <Field label="الاسم الأول"><input className={inputClass} value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} required /></Field>
-          <Field label="الكنية"><input className={inputClass} value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} required /></Field>
-          <Field label="رقم الجوال"><input type="tel" className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required /></Field>
-          <Field label="اسم المستخدم"><input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} required autoComplete="off" /></Field>
-          <Field label="كلمة المرور" hint={userModal === 'edit' ? 'اتركها فارغة للإبقاء على كلمة المرور الحالية' : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
+          <Field label={t('settings.name')}><input className={inputClass} value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required /></Field>
+          <Field label={t('settings.email')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></Field>
+          <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
           <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
         </form>
       </Modal>

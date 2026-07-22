@@ -48,6 +48,28 @@ class BackupController extends ApiController
         $meta = $this->backups->create($data['label'] ?? null);
         $meta['distribution'] = $this->distribution->distribute($meta['path'], $meta['filename']);
 
+        if (! $this->distribution->googleDriveConfigured()) {
+            app(\App\Services\AppNotificationService::class)->notifyAdminsOnceDaily(
+                'backup_drive_missing',
+                'Google Drive غير مربوط',
+                'النسخ الاحتياطي يعمل محلياً فقط. اربط Google Drive من إعدادات الخادم لتلافي فقدان النسخ.',
+                ['google_drive' => false],
+            );
+        }
+
+        $failed = collect($meta['distribution'])
+            ->filter(fn ($r) => ! ($r['skipped'] ?? false) && ! ($r['ok'] ?? false));
+
+        if ($failed->isNotEmpty()) {
+            $errors = $failed->map(fn ($r, $dest) => $dest.': '.($r['error'] ?? 'unknown'))->implode(' | ');
+            app(\App\Services\AppNotificationService::class)->notifyAdmins(
+                'backup_failed',
+                'فشل رفع النسخة الاحتياطية',
+                'تم إنشاء النسخة محلياً لكن فشل الرفع: '.$errors,
+                ['filename' => $meta['filename'], 'distribution' => $meta['distribution']],
+            );
+        }
+
         return $this->ok($meta, 201);
     }
 
