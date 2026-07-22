@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
@@ -58,6 +58,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useQueryTab(SETTINGS_TABS, 'general')
   const [values, setValues] = useState<Record<string, string>>({})
   const msg = useFormMessage()
+  const backupFileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ['settings'],
@@ -212,6 +213,23 @@ export default function SettingsPage() {
   const restoreBackup = useMutation({
     mutationFn: (filename: string) => api.post('/backups/restore', { filename, confirm: true }),
     onSuccess: () => msg.setMessage(t('settings.backupRestored')),
+    onError: msg.fromErr,
+  })
+
+  const restoreBackupFromFile = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('confirm', '1')
+      return api.post('/backups/restore-upload', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 600_000,
+      })
+    },
+    onSuccess: () => {
+      msg.setMessage(t('settings.backupRestored'))
+      void queryClient.invalidateQueries({ queryKey: ['backups'] })
+    },
     onError: msg.fromErr,
   })
 
@@ -505,9 +523,31 @@ export default function SettingsPage() {
                 <h2 className="font-semibold">{t('settings.dbBackup')}</h2>
                 <p className="text-xs text-black/50">{t('settings.dbBackupHint')}</p>
               </div>
-              <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
-                {t('settings.createBackupNow')}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
+                  {t('settings.createBackupNow')}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={restoreBackupFromFile.isPending}
+                  onClick={() => backupFileInputRef.current?.click()}
+                >
+                  {restoreBackupFromFile.isPending ? t('settings.restoringFromFile') : t('settings.restoreFromFile')}
+                </Button>
+                <input
+                  ref={backupFileInputRef}
+                  type="file"
+                  accept=".sql,.dump,.backup,.gz,application/gzip,application/sql"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (!file) return
+                    if (!window.confirm(t('settings.restoreFromFileConfirm'))) return
+                    restoreBackupFromFile.mutate(file)
+                  }}
+                />
+              </div>
             </div>
 
             {backups.isError && (

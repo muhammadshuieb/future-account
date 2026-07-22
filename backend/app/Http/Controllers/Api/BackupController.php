@@ -6,6 +6,8 @@ use App\Services\BackupDistributionService;
 use App\Services\BackupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BackupController extends ApiController
@@ -91,9 +93,62 @@ class BackupController extends ApiController
             'confirm' => ['required', 'accepted'],
         ]);
 
-        $this->backups->restore($data['filename']);
+        try {
+            $this->backups->restore($data['filename']);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         return $this->ok(['message' => 'تمت استعادة النسخة الاحتياطية. قد تحتاج لإعادة تسجيل الدخول.']);
+    }
+
+    public function restoreUpload(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $request->validate([
+            'file' => ['required', 'file', 'max:'.BackupService::MAX_UPLOAD_KB],
+            'confirm' => ['required', 'accepted'],
+        ], [
+            'file.required' => 'يرجى اختيار ملف النسخة الاحتياطية.',
+            'file.file' => 'الملف المرفوع غير صالح.',
+            'file.max' => 'حجم الملف أكبر من الحد المسموح (512 ميجابايت).',
+            'confirm.accepted' => 'يجب تأكيد عملية الاستعادة.',
+        ]);
+
+        $file = $request->file('file');
+        $original = (string) $file->getClientOriginalName();
+
+        if (! $this->backups->isAllowedUploadName($original)) {
+            return response()->json([
+                'message' => 'امتداد الملف غير مدعوم. المسموح: .sql و .dump و .backup و .gz',
+            ], 422);
+        }
+
+        $ext = strtolower((string) $file->getClientOriginalExtension()) ?: 'dump';
+        if (! in_array($ext, BackupService::ALLOWED_EXTENSIONS, true)) {
+            return response()->json([
+                'message' => 'امتداد الملف غير مدعوم. المسموح: .sql و .dump و .backup و .gz',
+            ], 422);
+        }
+
+        $storedName = 'upload_'.uniqid('', true).'.'.$ext;
+        $storedPath = $this->backups->uploadDirectory().DIRECTORY_SEPARATOR.$storedName;
+
+        try {
+            $file->move($this->backups->uploadDirectory(), $storedName);
+            $this->backups->restoreFromPath($storedPath);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        } finally {
+            if (File::exists($storedPath)) {
+                File::delete($storedPath);
+            }
+        }
+
+        return $this->ok([
+            'message' => 'تمت استعادة النسخة الاحتياطية من الملف المرفوع. قد تحتاج لإعادة تسجيل الدخول.',
+        ]);
     }
 
     public function destroy(string $filename): JsonResponse

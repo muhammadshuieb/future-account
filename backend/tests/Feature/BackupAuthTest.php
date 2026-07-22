@@ -40,4 +40,38 @@ class BackupAuthTest extends TestCase
 
         $this->getJson('/api/backups')->assertOk()->assertJsonStructure(['data']);
     }
+
+    public function test_guest_cannot_restore_upload(): void
+    {
+        $this->post('/api/backups/restore-upload', [
+            'confirm' => '1',
+        ])->assertUnauthorized();
+    }
+
+    public function test_non_admin_cannot_restore_upload(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('sales');
+        Sanctum::actingAs($user);
+
+        $this->post('/api/backups/restore-upload', [
+            'confirm' => '1',
+        ])->assertForbidden();
+    }
+
+    public function test_admin_restore_upload_rejects_bad_extension(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('admin');
+        Sanctum::actingAs($user);
+
+        $file = \Illuminate\Http\UploadedFile::fake()->create('malware.exe', 10);
+
+        $this->post('/api/backups/restore-upload', [
+            'file' => $file,
+            'confirm' => '1',
+        ], [
+            'Accept' => 'application/json',
+        ])->assertStatus(422);
+    }
 }

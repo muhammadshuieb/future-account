@@ -80,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('backups', [BackupController::class, 'store']);
     Route::get('backups/{filename}/download', [BackupController::class, 'download'])->where('filename', '.*');
     Route::post('backups/restore', [BackupController::class, 'restore']);
+    Route::post('backups/restore-upload', [BackupController::class, 'restoreUpload']);
     Route::delete('backups/{filename}', [BackupController::class, 'destroy'])->where('filename', '.*');
 
     // Barcodes / labels
