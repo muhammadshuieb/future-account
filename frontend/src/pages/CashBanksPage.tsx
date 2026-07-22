@@ -1,7 +1,31 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import {
+  Button,
+  EmptyState,
+  Field,
+  LoadingBlock,
+  Modal,
+  Msg,
+  NumericInput,
+  PageHeader,
+  Panel,
+  Tabs,
+  inputClass,
+  useFormMessage,
+} from '@/components/ui'
+
+type CashBox = { id: number; code: string; name: string; opening_balance: number }
+type Bank = { id: number; code: string; name: string; account_number?: string; opening_balance?: number }
+type Transfer = { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }
+type Reconciliation = {
+  id: number
+  statement_balance: number
+  book_balance: number
+  difference: number
+  bank?: { name: string }
+}
 
 const emptyBox = { code: '', name: '', opening_balance: '0' }
 const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
@@ -20,6 +44,10 @@ const emptyRec = {
   statement_balance: '',
 }
 
+function listOrEmpty<T>(data: T[] | undefined): T[] {
+  return Array.isArray(data) ? data : []
+}
+
 export default function CashBanksPage() {
   const [tab, setTab] = useState('boxes')
   const qc = useQueryClient()
@@ -28,15 +56,42 @@ export default function CashBanksPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
 
-  const boxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data })
-  const banks = useQuery({ queryKey: ['banks'], queryFn: async () => (await api.get('/banks')).data.data })
-  const transfers = useQuery({ queryKey: ['cash-transfers'], queryFn: async () => (await api.get('/cash-transfers')).data.data, enabled: tab === 'transfers' })
-  const reconciliations = useQuery({ queryKey: ['bank-reconciliations'], queryFn: async () => (await api.get('/bank-reconciliations')).data.data, enabled: tab === 'reconcile' })
-
   const [boxForm, setBoxForm] = useState(emptyBox)
   const [bankForm, setBankForm] = useState(emptyBank)
   const [trForm, setTrForm] = useState(emptyTr)
   const [recForm, setRecForm] = useState(emptyRec)
+
+  const boxes = useQuery({
+    queryKey: ['cash-boxes'],
+    queryFn: async () => (await api.get('/cash-boxes')).data.data as CashBox[],
+  })
+  const banks = useQuery({
+    queryKey: ['banks'],
+    queryFn: async () => (await api.get('/banks')).data.data as Bank[],
+  })
+  const transfers = useQuery({
+    queryKey: ['cash-transfers'],
+    queryFn: async () => (await api.get('/cash-transfers')).data.data as Transfer[],
+    enabled: tab === 'transfers',
+  })
+  const reconciliations = useQuery({
+    queryKey: ['bank-reconciliations'],
+    queryFn: async () => (await api.get('/bank-reconciliations')).data.data as Reconciliation[],
+    enabled: tab === 'reconcile',
+  })
+
+  const boxRows = listOrEmpty(boxes.data)
+  const bankRows = listOrEmpty(banks.data)
+  const transferRows = listOrEmpty(transfers.data)
+  const reconcileRows = listOrEmpty(reconciliations.data)
+  const fromList = trForm.from_type === 'cash_box' ? boxRows : bankRows
+  const toList = trForm.to_type === 'cash_box' ? boxRows : bankRows
+
+  const activeQuery =
+    tab === 'boxes' ? boxes
+      : tab === 'banks' ? banks
+        : tab === 'transfers' ? transfers
+          : reconciliations
 
   function closeModal() {
     setModalOpen(false)
@@ -89,6 +144,13 @@ export default function CashBanksPage() {
         : tab === 'transfers' ? 'تحويل'
           : 'تسوية بنكية'
 
+  const emptyCopy: Record<string, { title: string; description: string }> = {
+    boxes: { title: 'لا توجد صناديق', description: 'أضف صندوقاً نقدياً للبدء.' },
+    banks: { title: 'لا توجد حسابات بنكية', description: 'أضف حساباً بنكياً للبدء.' },
+    transfers: { title: 'لا توجد تحويلات', description: 'أنشئ تحويلاً بين صندوق وبنك.' },
+    reconcile: { title: 'لا توجد تسويات', description: 'أنشئ تسوية كشف حساب بنكي.' },
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -108,114 +170,144 @@ export default function CashBanksPage() {
       />
       <Msg message={msg.message} error={msg.error} />
 
+      {activeQuery.isError && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">
+          تعذر تحميل البيانات — تحقق من صلاحية «الصناديق والبنوك» أو أعد المحاولة.
+        </p>
+      )}
+
       {tab === 'boxes' && (
         <Panel>
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">افتتاحي</th></tr>
-            </thead>
-            <tbody>
-              {(boxes.data || []).map((b: { id: number; code: string; name: string; opening_balance: number }) => (
-                <tr
-                  key={b.id}
-                  className="row-clickable border-t border-black/5"
-                  onClick={() => {
-                    setEditingId(b.id)
-                    setBoxForm({ code: b.code, name: b.name, opening_balance: String(b.opening_balance) })
-                    setModalOpen(true)
-                  }}
-                  tabIndex={0}
-                >
-                  <td className="px-4 py-3 font-mono">{b.code}</td>
-                  <td className="px-4 py-3">{b.name}</td>
-                  <td className="px-4 py-3">{b.opening_balance}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {boxes.isLoading && <LoadingBlock />}
+          {!boxes.isLoading && !boxes.isError && boxRows.length === 0 && (
+            <EmptyState title={emptyCopy.boxes.title} description={emptyCopy.boxes.description} />
+          )}
+          {!boxes.isLoading && boxRows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-mist text-right text-black/60">
+                <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">افتتاحي</th></tr>
+              </thead>
+              <tbody>
+                {boxRows.map((b) => (
+                  <tr
+                    key={b.id}
+                    className="row-clickable border-t border-black/5"
+                    onClick={() => {
+                      setEditingId(b.id)
+                      setBoxForm({ code: b.code, name: b.name, opening_balance: String(b.opening_balance) })
+                      setModalOpen(true)
+                    }}
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3 font-mono">{b.code}</td>
+                    <td className="px-4 py-3">{b.name}</td>
+                    <td className="px-4 py-3">{b.opening_balance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
       )}
 
       {tab === 'banks' && (
         <Panel>
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">رقم الحساب</th></tr>
-            </thead>
-            <tbody>
-              {(banks.data || []).map((b: { id: number; code: string; name: string; account_number?: string; opening_balance?: number }) => (
-                <tr
-                  key={b.id}
-                  className="row-clickable border-t border-black/5"
-                  onClick={() => {
-                    setEditingId(b.id)
-                    setBankForm({
-                      code: b.code,
-                      name: b.name,
-                      account_number: b.account_number || '',
-                      opening_balance: String(b.opening_balance ?? 0),
-                    })
-                    setModalOpen(true)
-                  }}
-                  tabIndex={0}
-                >
-                  <td className="px-4 py-3 font-mono">{b.code}</td>
-                  <td className="px-4 py-3">{b.name}</td>
-                  <td className="px-4 py-3">{b.account_number || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {banks.isLoading && <LoadingBlock />}
+          {!banks.isLoading && !banks.isError && bankRows.length === 0 && (
+            <EmptyState title={emptyCopy.banks.title} description={emptyCopy.banks.description} />
+          )}
+          {!banks.isLoading && bankRows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-mist text-right text-black/60">
+                <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">رقم الحساب</th></tr>
+              </thead>
+              <tbody>
+                {bankRows.map((b) => (
+                  <tr
+                    key={b.id}
+                    className="row-clickable border-t border-black/5"
+                    onClick={() => {
+                      setEditingId(b.id)
+                      setBankForm({
+                        code: b.code,
+                        name: b.name,
+                        account_number: b.account_number || '',
+                        opening_balance: String(b.opening_balance ?? 0),
+                      })
+                      setModalOpen(true)
+                    }}
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3 font-mono">{b.code}</td>
+                    <td className="px-4 py-3">{b.name}</td>
+                    <td className="px-4 py-3">{b.account_number || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
       )}
 
       {tab === 'transfers' && (
         <Panel>
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">من → إلى</th><th className="px-4 py-3">مبلغ</th><th className="px-4 py-3">حالة</th></tr>
-            </thead>
-            <tbody>
-              {(transfers.data || []).map((t: { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }) => (
-                <tr
-                  key={t.id}
-                  className="row-clickable border-t border-black/5"
-                  onClick={() => { setViewRow(t as unknown as Record<string, unknown>); setModalOpen(true) }}
-                  tabIndex={0}
-                >
-                  <td className="px-4 py-3 font-mono text-xs">{t.transfer_number}</td>
-                  <td className="px-4 py-3">{t.from_type} → {t.to_type}</td>
-                  <td className="px-4 py-3">{t.amount}</td>
-                  <td className="px-4 py-3">{t.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {transfers.isLoading && <LoadingBlock />}
+          {!transfers.isLoading && !transfers.isError && transferRows.length === 0 && (
+            <EmptyState title={emptyCopy.transfers.title} description={emptyCopy.transfers.description} />
+          )}
+          {!transfers.isLoading && transferRows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-mist text-right text-black/60">
+                <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">من → إلى</th><th className="px-4 py-3">مبلغ</th><th className="px-4 py-3">حالة</th></tr>
+              </thead>
+              <tbody>
+                {transferRows.map((t) => (
+                  <tr
+                    key={t.id}
+                    className="row-clickable border-t border-black/5"
+                    onClick={() => { setViewRow(t as unknown as Record<string, unknown>); setModalOpen(true) }}
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3 font-mono text-xs">{t.transfer_number}</td>
+                    <td className="px-4 py-3">{t.from_type} → {t.to_type}</td>
+                    <td className="px-4 py-3">{t.amount}</td>
+                    <td className="px-4 py-3">{t.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
       )}
 
       {tab === 'reconcile' && (
         <Panel>
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">بنك</th><th className="px-4 py-3">كشف</th><th className="px-4 py-3">دفاتر</th><th className="px-4 py-3">فرق</th></tr>
-            </thead>
-            <tbody>
-              {(reconciliations.data || []).map((r: { id: number; statement_balance: number; book_balance: number; difference: number; bank?: { name: string } }) => (
-                <tr
-                  key={r.id}
-                  className="row-clickable border-t border-black/5"
-                  onClick={() => { setViewRow(r as unknown as Record<string, unknown>); setModalOpen(true) }}
-                  tabIndex={0}
-                >
-                  <td className="px-4 py-3">{r.bank?.name}</td>
-                  <td className="px-4 py-3">{r.statement_balance}</td>
-                  <td className="px-4 py-3">{r.book_balance}</td>
-                  <td className="px-4 py-3">{r.difference}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {reconciliations.isLoading && <LoadingBlock />}
+          {!reconciliations.isLoading && !reconciliations.isError && reconcileRows.length === 0 && (
+            <EmptyState title={emptyCopy.reconcile.title} description={emptyCopy.reconcile.description} />
+          )}
+          {!reconciliations.isLoading && reconcileRows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-mist text-right text-black/60">
+                <tr><th className="px-4 py-3">بنك</th><th className="px-4 py-3">كشف</th><th className="px-4 py-3">دفاتر</th><th className="px-4 py-3">فرق</th></tr>
+              </thead>
+              <tbody>
+                {reconcileRows.map((r) => (
+                  <tr
+                    key={r.id}
+                    className="row-clickable border-t border-black/5"
+                    onClick={() => { setViewRow(r as unknown as Record<string, unknown>); setModalOpen(true) }}
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3">{r.bank?.name}</td>
+                    <td className="px-4 py-3">{r.statement_balance}</td>
+                    <td className="px-4 py-3">{r.book_balance}</td>
+                    <td className="px-4 py-3">{r.difference}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Panel>
       )}
 
@@ -268,10 +360,30 @@ export default function CashBanksPage() {
         }
       >
         <div className="space-y-3">
-          <Field label="من نوع"><select className={inputClass} value={trForm.from_type} onChange={(e) => setTrForm({ ...trForm, from_type: e.target.value })}><option value="cash_box">صندوق</option><option value="bank">بنك</option></select></Field>
-          <Field label="من معرف"><select className={inputClass} value={trForm.from_id} onChange={(e) => setTrForm({ ...trForm, from_id: e.target.value })} required><option value="">—</option>{(trForm.from_type === 'cash_box' ? boxes.data : banks.data || []).map((x: { id: number; name: string }) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-          <Field label="إلى نوع"><select className={inputClass} value={trForm.to_type} onChange={(e) => setTrForm({ ...trForm, to_type: e.target.value })}><option value="cash_box">صندوق</option><option value="bank">بنك</option></select></Field>
-          <Field label="إلى معرف"><select className={inputClass} value={trForm.to_id} onChange={(e) => setTrForm({ ...trForm, to_id: e.target.value })} required><option value="">—</option>{(trForm.to_type === 'cash_box' ? boxes.data : banks.data || []).map((x: { id: number; name: string }) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
+          <Field label="من نوع">
+            <select className={inputClass} value={trForm.from_type} onChange={(e) => setTrForm({ ...trForm, from_type: e.target.value, from_id: '' })}>
+              <option value="cash_box">صندوق</option>
+              <option value="bank">بنك</option>
+            </select>
+          </Field>
+          <Field label="من معرف">
+            <select className={inputClass} value={trForm.from_id} onChange={(e) => setTrForm({ ...trForm, from_id: e.target.value })} required>
+              <option value="">—</option>
+              {fromList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </Field>
+          <Field label="إلى نوع">
+            <select className={inputClass} value={trForm.to_type} onChange={(e) => setTrForm({ ...trForm, to_type: e.target.value, to_id: '' })}>
+              <option value="cash_box">صندوق</option>
+              <option value="bank">بنك</option>
+            </select>
+          </Field>
+          <Field label="إلى معرف">
+            <select className={inputClass} value={trForm.to_id} onChange={(e) => setTrForm({ ...trForm, to_id: e.target.value })} required>
+              <option value="">—</option>
+              {toList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </Field>
           <Field label="المبلغ"><NumericInput value={trForm.amount} onChange={(v) => setTrForm((prev) => ({ ...prev, amount: v }))} required /></Field>
         </div>
       </Modal>
@@ -304,7 +416,12 @@ export default function CashBanksPage() {
         }
       >
         <div className="space-y-3">
-          <Field label="بنك"><select className={inputClass} value={recForm.bank_id} onChange={(e) => setRecForm({ ...recForm, bank_id: e.target.value })} required><option value="">—</option>{(banks.data || []).map((b: { id: number; name: string }) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
+          <Field label="بنك">
+            <select className={inputClass} value={recForm.bank_id} onChange={(e) => setRecForm({ ...recForm, bank_id: e.target.value })} required>
+              <option value="">—</option>
+              {bankRows.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </Field>
           <Field label="تاريخ الكشف"><input type="date" className={inputClass} value={recForm.statement_date} onChange={(e) => setRecForm({ ...recForm, statement_date: e.target.value })} /></Field>
           <Field label="رصيد الكشف"><NumericInput value={recForm.statement_balance} onChange={(v) => setRecForm((prev) => ({ ...prev, statement_balance: v }))} required /></Field>
         </div>
