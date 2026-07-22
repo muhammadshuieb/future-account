@@ -7,7 +7,7 @@ import { LOGO } from '@/lib/brand'
 export default function LoginPage() {
   const { t } = useTranslation()
   const { user, loading, login } = useAuth()
-  const [email, setEmail] = useState('admin@future-account.test')
+  const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('password')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -21,13 +21,13 @@ export default function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      await login(email, password)
+      await login(username, password)
     } catch (err: unknown) {
       const axiosErr = err as {
         response?: { data?: { message?: string; errors?: Record<string, string[]> } }
       }
       setError(
-        axiosErr.response?.data?.errors?.email?.[0] ||
+        axiosErr.response?.data?.errors?.username?.[0] ||
           axiosErr.response?.data?.message ||
           'تعذر تسجيل الدخول',
       )
@@ -55,11 +55,12 @@ export default function LoginPage() {
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
           <div>
-            <label className="mb-1.5 block text-sm font-medium">البريد الإلكتروني</label>
+            <label className="mb-1.5 block text-sm font-medium">اسم المستخدم</label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-lg border border-black/10 bg-paper px-3 py-2.5 outline-none ring-teal focus:ring-2"
               required
             />
@@ -68,6 +69,7 @@ export default function LoginPage() {
             <label className="mb-1.5 block text-sm font-medium">كلمة المرور</label>
             <input
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-black/10 bg-paper px-3 py-2.5 outline-none ring-teal focus:ring-2"

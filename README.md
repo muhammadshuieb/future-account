@@ -23,7 +23,7 @@ docker compose up --build -d
 
 عند كل تشغيل للـ backend: انتظار Postgres → `migrate` → `db:seed` → ضمان حساب الأدمن التجريبي.
 
-**حساب تجريبي:** `admin@future-account.test` / `password`
+**حساب تجريبي:** `admin` / `password`
 
 إذا ظهر «بيانات الدخول غير صحيحة» بعد استعادة نسخة احتياطية فارغة:
 

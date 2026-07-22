@@ -211,6 +211,6 @@
   },
   "login": {
     "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP",
-    "demoHint": "Demo: admin@future-account.test / password"
+    "demoHint": "Demo: admin / password"
   }
 }

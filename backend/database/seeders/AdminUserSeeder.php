@@ -12,6 +12,8 @@ use Illuminate\Database\Seeder;
  */
 class AdminUserSeeder extends Seeder
 {
+    public const DEMO_USERNAME = 'admin';
+
     public const DEMO_EMAIL = 'admin@future-account.test';
 
     public const DEMO_PASSWORD = 'password';
@@ -19,9 +21,13 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $admin = User::query()->updateOrCreate(
-            ['email' => self::DEMO_EMAIL],
+            ['username' => self::DEMO_USERNAME],
             [
                 'name' => 'مدير النظام',
+                'first_name' => 'مدير',
+                'last_name' => 'النظام',
+                'mobile' => '0900000000',
+                'email' => self::DEMO_EMAIL,
                 // Plain text: User model casts password to hashed.
                 'password' => self::DEMO_PASSWORD,
                 'is_active' => true,
@@ -38,8 +44,12 @@ class AdminUserSeeder extends Seeder
             ['key' => 'currency', 'value' => 'SYP', 'group' => 'finance', 'label' => 'العملة الأساسية'],
             ['key' => 'multi_currency', 'value' => '1', 'group' => 'finance', 'type' => 'boolean', 'label' => 'تفعيل تعدد العملات'],
             ['key' => 'fiscal_year_start', 'value' => '01-01', 'group' => 'finance', 'label' => 'بداية السنة المالية'],
+            ['key' => 'tax_enabled', 'value' => '1', 'group' => 'finance', 'type' => 'boolean', 'label' => 'تفعيل الضريبة'],
             ['key' => 'tax_rate', 'value' => '15', 'group' => 'finance', 'type' => 'number', 'label' => 'نسبة الضريبة %'],
+            ['key' => 'default_locale', 'value' => 'ar', 'group' => 'general', 'label' => 'اللغة الافتراضية'],
             ['key' => 'locale', 'value' => 'ar', 'group' => 'general', 'label' => 'اللغة'],
+            ['key' => 'backup_time_1', 'value' => '02:00', 'group' => 'backup', 'type' => 'time', 'label' => 'وقت النسخة الأولى'],
+            ['key' => 'backup_time_2', 'value' => '14:00', 'group' => 'backup', 'type' => 'time', 'label' => 'وقت النسخة الثانية'],
         ];
 
         foreach ($settings as $setting) {

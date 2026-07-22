@@ -212,6 +212,6 @@
   },
   "login": {
     "subtitle": "Syna Co — نظام ERP للمحاسبة وإدارة الأعمال",
-    "demoHint": "حساب تجريبي: admin@future-account.test / password"
+    "demoHint": "حساب تجريبي: admin / password"
   }
 }

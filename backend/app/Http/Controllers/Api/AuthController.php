@@ -15,22 +15,22 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'username' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ]);
 
         /** @var User|null $user */
-        $user = User::query()->where('email', $credentials['email'])->first();
+        $user = User::query()->where('username', $credentials['username'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['بيانات الدخول غير صحيحة.'],
+                'username' => ['بيانات الدخول غير صحيحة.'],
             ]);
         }
 
         if (isset($user->is_active) && ! $user->is_active) {
             throw ValidationException::withMessages([
-                'email' => ['هذا الحساب معطل.'],
+                'username' => ['هذا الحساب معطل.'],
             ]);
         }
 
@@ -45,14 +45,24 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username'],
+            'mobile' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
         ]);
 
+        $name = User::composeDisplayName($data['first_name'], $data['last_name']);
+        $email = $data['email'] ?? ($data['username'].'@users.local');
+
         $user = User::query()->create([
-            'name' => $data['name'],
-            'email' => $data['email'],
+            'name' => $name,
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'username' => $data['username'],
+            'mobile' => $data['mobile'] ?? null,
+            'email' => $email,
             'password' => $data['password'],
             'is_active' => true,
         ]);
@@ -91,6 +101,10 @@ class AuthController extends Controller
         return [
             'id' => $user->id,
             'name' => $user->name,
+            'username' => $user->username,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'mobile' => $user->mobile,
             'email' => $user->email,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),

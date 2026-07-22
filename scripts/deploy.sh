@@ -76,7 +76,7 @@ if [[ "${DEPLOY_SMOKE_LOGIN:-0}" == "1" ]]; then
     -X POST "http://127.0.0.1:${BACKEND_PORT}/api/auth/login" \
     -H 'Content-Type: application/json' \
     -H 'Accept: application/json' \
-    -d '{"email":"admin@future-account.test","password":"password"}' || true)"
+    -d '{"username":"admin","password":"password"}' || true)"
   if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "422" ]]; then
     log "API login endpoint reachable (HTTP $HTTP_CODE)."
   else

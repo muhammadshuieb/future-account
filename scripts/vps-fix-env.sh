@@ -31,5 +31,5 @@ fi
 
 curl -sf "http://127.0.0.1:8000/up" && echo " Backend OK"
 curl -sf "http://127.0.0.1:8080/" >/dev/null && echo "Frontend OK"
-HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:8000/api/login" -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"email":"admin@future-account.test","password":"password"}')
+HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:8000/api/auth/login" -H 'Content-Type: application/json' -H 'Accept: application/json' -d '{"username":"admin","password":"password"}')
 echo "Login HTTP: ${HTTP_CODE}"

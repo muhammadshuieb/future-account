@@ -78,7 +78,17 @@ export default function SettingsPage() {
 
   const usersAdmin = useQuery({
     queryKey: ['admin-users'],
-    queryFn: async () => (await api.get('/users')).data.data as { id: number; name: string; email: string; is_active: boolean; roles: string[] }[],
+    queryFn: async () => (await api.get('/users')).data.data as {
+      id: number
+      name: string
+      first_name?: string | null
+      last_name?: string | null
+      username: string
+      mobile?: string | null
+      email?: string | null
+      is_active: boolean
+      roles: string[]
+    }[],
     enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
     retry: false,
   })
@@ -90,7 +100,15 @@ export default function SettingsPage() {
     retry: false,
   })
 
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', roles: ['accountant'] as string[] })
+  const emptyUserForm = {
+    first_name: '',
+    last_name: '',
+    username: '',
+    mobile: '',
+    password: '',
+    roles: ['accountant'] as string[],
+  }
+  const [userForm, setUserForm] = useState(emptyUserForm)
   const [userModal, setUserModal] = useState<'create' | 'edit' | null>(null)
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
 
@@ -168,7 +186,7 @@ export default function SettingsPage() {
     },
     onSuccess: () => {
       msg.setMessage(editingUserId ? 'تم تحديث المستخدم' : 'تم إنشاء المستخدم')
-      setUserForm({ name: '', email: '', password: '', roles: ['accountant'] })
+      setUserForm(emptyUserForm)
       setEditingUserId(null)
       setUserModal(null)
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -204,7 +222,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="الإعدادات" subtitle="الشركة، العملات، والنسخ الاحتياطي" actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm({ name: '', email: '', password: '', roles: ['accountant'] }); setUserModal('create') }}>{t('common.add')}</Button> : undefined} />
+      <PageHeader title="الإعدادات" subtitle="الشركة، العملات، والنسخ الاحتياطي" actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm); setUserModal('create') }}>{t('common.add')}</Button> : undefined} />
       <Tabs
         tabs={[
           { id: 'general', label: 'عام' },
@@ -415,10 +433,31 @@ export default function SettingsPage() {
         <Panel>
             <div className="border-b border-[var(--color-line)] px-5 py-3"><h2 className="font-semibold">{t('settings.users')}</h2></div>
             <table className="data-table text-sm">
-              <thead><tr><th>الاسم</th><th>البريد</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>الاسم</th><th>اسم المستخدم</th><th>رقم الجوال</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
               <tbody>
                 {(usersAdmin.data || []).map((u) => (
-                  <tr key={u.id} className="cursor-pointer" onClick={() => { setEditingUserId(u.id); setUserForm({ name: u.name, email: u.email, password: '', roles: u.roles.length ? u.roles : ['accountant'] }); setUserModal('edit') }}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td><td>{u.is_active ? 'نشط' : 'معطّل'}</td></tr>
+                  <tr
+                    key={u.id}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setEditingUserId(u.id)
+                      setUserForm({
+                        first_name: u.first_name || '',
+                        last_name: u.last_name || '',
+                        username: u.username || '',
+                        mobile: u.mobile || '',
+                        password: '',
+                        roles: u.roles.length ? u.roles : ['accountant'],
+                      })
+                      setUserModal('edit')
+                    }}
+                  >
+                    <td>{u.name}</td>
+                    <td>{u.username}</td>
+                    <td>{u.mobile || '—'}</td>
+                    <td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td>
+                    <td>{u.is_active ? 'نشط' : 'معطّل'}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -461,8 +500,10 @@ export default function SettingsPage() {
       )}
       <Modal open={userModal !== null} onClose={() => { setUserModal(null); setEditingUserId(null) }} title={userModal === 'edit' ? t('common.edit') : 'مستخدم جديد'} footer={<><Button variant="secondary" onClick={() => { setUserModal(null); setEditingUserId(null) }}>{t('common.cancel')}</Button><Button type="submit" form="user-form" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button></>}>
         <form id="user-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
-          <Field label="الاسم"><input className={inputClass} value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required /></Field>
-          <Field label="البريد"><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></Field>
+          <Field label="الاسم الأول"><input className={inputClass} value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} required /></Field>
+          <Field label="الكنية"><input className={inputClass} value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} required /></Field>
+          <Field label="رقم الجوال"><input type="tel" className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required /></Field>
+          <Field label="اسم المستخدم"><input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} required autoComplete="off" /></Field>
           <Field label="كلمة المرور" hint={userModal === 'edit' ? 'اتركها فارغة للإبقاء على كلمة المرور الحالية' : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
           <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
         </form>
