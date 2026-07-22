@@ -71,18 +71,16 @@ export function StatementPrintView({
 
   return (
     <div className="space-y-4 text-sm" dir="rtl">
-      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
-        <div className="flex items-center gap-3">
-          <BrandLogo />
-          <div>
-            <p className="text-lg font-bold">شركة ساينا — Syna Co</p>
-            <p className="text-xs text-black/55">SYNAMOR TECHNOLOGY</p>
-          </div>
-        </div>
-        <div className="text-start">
-          <p className="text-xs font-semibold text-teal">{documentLabel}</p>
+      <header className="flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+        {/* First in RTL → visual right: company + report title */}
+        <div className="min-w-0 text-start">
+          <p className="text-lg font-bold">شركة ساينا — Syna Co</p>
+          <p className="text-xs text-black/55">SYNAMOR TECHNOLOGY</p>
+          <p className="mt-1 text-xs font-semibold text-teal">{documentLabel}</p>
           <p className="mt-1 text-xs text-black/55">تاريخ الطباعة: {todayYmd()}</p>
         </div>
+        {/* Second in RTL → visual left: logo */}
+        <BrandLogo />
       </header>
 
       <div className="grid gap-2 sm:grid-cols-2">

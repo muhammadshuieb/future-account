@@ -213,19 +213,21 @@ export default function ReportsPage() {
 
       <Panel className="print-area">
         <div className="hidden border-b border-black/10 px-4 py-3 print:block">
-          <div className="mb-2 flex items-center gap-3">
-            <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
-            <div>
+          <div className="mb-2 flex w-full items-start justify-between gap-4">
+            {/* First in RTL → visual right: company + report title */}
+            <div className="min-w-0 text-start">
               <p className="text-lg font-bold">{t('app.name')} — Syna Co</p>
               <p className="text-sm font-semibold">
                 {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
               </p>
+              <p className="mt-1 text-xs text-black/60">
+                العملة الأساسية: {base}
+                {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
+              </p>
             </div>
+            {/* Second in RTL → visual left: logo */}
+            <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
           </div>
-          <p className="text-xs text-black/60">
-            العملة الأساسية: {base}
-            {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
-          </p>
         </div>
 
         {!reportUrl && <EmptyState title="اختر عنصراً لعرض التقرير" />}

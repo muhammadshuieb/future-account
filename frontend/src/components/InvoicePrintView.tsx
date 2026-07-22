@@ -71,7 +71,7 @@ function BrandLogo() {
   )
 }
 
-/** Shared invoice print/view header: logo + شركة ساينا / Syna Co */
+/** Shared invoice print/view header: logo left, company + title right (RTL). */
 function InvoiceBrandHeader({
   documentLabel,
   invoiceNumber,
@@ -93,22 +93,20 @@ function InvoiceBrandHeader({
     : `${t('app.name')} — Syna Co`
 
   return (
-    <header className="flex flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
-      <div className="flex items-center gap-3">
-        <BrandLogo />
-        <div>
-          <p className="text-lg font-bold">{brandLine}</p>
-          {taxNumber && (
-            <p className="text-xs text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
-          )}
-          {extra}
-        </div>
-      </div>
-      <div className="text-start">
-        <p className="text-xs font-semibold text-teal">{documentLabel}</p>
+    <header className="flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+      {/* First in RTL → visual right: company + report title */}
+      <div className="min-w-0 text-start">
+        <p className="text-lg font-bold">{brandLine}</p>
+        {taxNumber && (
+          <p className="text-xs text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
+        )}
+        <p className="mt-1 text-xs font-semibold text-teal">{documentLabel}</p>
         <p className="font-mono text-base font-bold">{invoiceNumber}</p>
         <p>{String(invoiceDate).slice(0, 10)}</p>
+        {extra}
       </div>
+      {/* Second in RTL → visual left: logo */}
+      <BrandLogo />
     </header>
   )
 }
