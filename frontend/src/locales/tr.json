@@ -336,6 +336,7 @@
     "imagePng": "Görsel (PNG)",
     "confirm": "Gönder",
     "sending": "Hazırlanıyor…",
+    "preparing": "Dosya hazırlanıyor…",
     "invalidPhone": "Geçerli bir cep numarası girin",
     "failed": "Dosya hazırlanamadı",
     "manualHint": "Dosya iner ve WhatsApp açılır. Sohbet açıldıktan sonra İndirilenler’den ekleyin.",

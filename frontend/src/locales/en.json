@@ -337,6 +337,7 @@
     "imagePng": "Image (PNG)",
     "confirm": "Send",
     "sending": "Preparing…",
+    "preparing": "Preparing the file…",
     "invalidPhone": "Enter a valid mobile number",
     "failed": "Could not prepare the file for sending",
     "manualHint": "The file will download and WhatsApp will open. Attach the file from Downloads after the chat opens.",

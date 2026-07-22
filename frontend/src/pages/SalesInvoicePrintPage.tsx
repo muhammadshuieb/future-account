@@ -65,7 +65,7 @@ export default function SalesInvoicePrintPage() {
         </Button>
         <p className="text-xs text-black/45">نافذة طباعة الفاتورة — بدون قائمة التطبيق</p>
       </div>
-      <div className="print-area mx-auto max-w-3xl">
+      <div className="print-area mx-auto max-w-3xl" data-print-ready="1">
         <SalesInvoicePrintView invoice={invoice.data} eInvoice={qr.data} />
       </div>
     </div>

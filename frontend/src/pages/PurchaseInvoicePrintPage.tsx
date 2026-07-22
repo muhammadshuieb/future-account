@@ -59,7 +59,7 @@ export default function PurchaseInvoicePrintPage() {
         </Button>
         <p className="text-xs text-black/45">نافذة طباعة فاتورة المشتريات — بدون قائمة التطبيق</p>
       </div>
-      <div className="print-area mx-auto max-w-3xl">
+      <div className="print-area mx-auto max-w-3xl" data-print-ready="1">
         <PurchaseInvoicePrintView invoice={invoice.data} />
       </div>
     </div>

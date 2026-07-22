@@ -136,16 +136,6 @@ export default function ReportsPage() {
     return ''
   })()
 
-  const whatsappPrintPath = (() => {
-    if (tab === 'customer-statement' && customerId) {
-      return `/print/customers/${customerId}/statement?${new URLSearchParams({ from, to }).toString()}`
-    }
-    if (tab === 'supplier-statement' && supplierId) {
-      return `/print/suppliers/${supplierId}/statement?${new URLSearchParams({ from, to }).toString()}`
-    }
-    return undefined
-  })()
-
   const whatsappDisabled =
     (tab === 'customer-statement' && !customerId) ||
     (tab === 'supplier-statement' && !supplierId) ||
@@ -173,7 +163,6 @@ export default function ReportsPage() {
               className="print-hide"
               disabled={whatsappDisabled}
               defaultPhone={statementPhone}
-              printPath={whatsappPrintPath}
               captureSelector=".print-area"
               fileName={`report-${tab}`}
               documentLabel={tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
@@ -250,7 +239,7 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <Panel className="print-area">
+      <Panel className="print-area" data-print-ready={report.data ? '1' : undefined}>
         <div className="hidden border-b border-black/10 px-4 py-3 print:block">
           <div className="mb-2 flex w-full items-start justify-between gap-4">
             {/* First in RTL → visual right: company + report title */}

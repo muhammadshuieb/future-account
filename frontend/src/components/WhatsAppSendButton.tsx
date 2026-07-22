@@ -92,10 +92,21 @@ export default function WhatsAppSendButton({
     }
 
     setBusy(true)
+    setHint(t('whatsapp.preparing'))
     try {
-      const captured = printPath
-        ? await captureFromPrintPopup(printPath, { format, fileName })
-        : await captureSelectorInDocument(document, captureSelector, { format, fileName })
+      // Prefer same-page capture when print content is already rendered.
+      // Otherwise load printPath in a hidden iframe (no flickering popup).
+      const localEl = document.querySelector<HTMLElement>(captureSelector)
+      const hasLocalPrint =
+        !!localEl &&
+        (localEl.getAttribute('data-print-ready') === '1' ||
+          localEl.innerText.replace(/\s+/g, ' ').trim().length > 20)
+
+      const captured = hasLocalPrint
+        ? await captureSelectorInDocument(document, captureSelector, { format, fileName })
+        : printPath
+          ? await captureFromPrintPopup(printPath, { format, fileName })
+          : await captureSelectorInDocument(document, captureSelector, { format, fileName })
 
       downloadBlob(captured.blob, captured.fileName)
 
@@ -118,6 +129,7 @@ export default function WhatsAppSendButton({
           : t('whatsapp.sentManual'),
       )
     } catch (e) {
+      setHint('')
       setError(e instanceof Error ? e.message : t('whatsapp.failed'))
     } finally {
       setBusy(false)
@@ -160,7 +172,7 @@ export default function WhatsAppSendButton({
               {t('common.cancel')}
             </Button>
             <Button variant="primary" disabled={busy || !phone.trim()} onClick={() => void handleSend()}>
-              {busy ? t('whatsapp.sending') : t('whatsapp.confirm')}
+              {busy ? t('whatsapp.preparing') : t('whatsapp.confirm')}
             </Button>
           </>
         }

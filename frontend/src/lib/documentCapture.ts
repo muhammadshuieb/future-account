@@ -94,54 +94,96 @@ export async function captureSelectorInDocument(
   return withHiddenPrintChrome(doc, () => captureElement(el, opts))
 }
 
-/** Open a same-origin print path, wait for `.print-area`, capture, then close the popup. */
+function isPrintContentReady(doc: Document, selector: string): boolean {
+  const el = doc.querySelector<HTMLElement>(selector)
+  if (!el) return false
+  if (el.getAttribute('data-print-ready') === '1') return true
+  const text = el.innerText.replace(/\s+/g, ' ').trim()
+  if (text.length < 20) return false
+  // Loading screens replace the whole page (no .print-area); if we have content, we're ready.
+  return true
+}
+
+function assertNotLoginPage(win: Window) {
+  try {
+    const path = win.location.pathname || ''
+    if (path.includes('/login')) {
+      throw new Error('انتهت الجلسة — سجّل الدخول ثم أعد المحاولة')
+    }
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('الجلسة')) throw e
+  }
+}
+
+/**
+ * Load a same-origin print route in a hidden iframe, wait for `.print-area`, capture, then remove.
+ * Avoids the visible flickering popup that previously timed out.
+ */
 export async function captureFromPrintPopup(
   path: string,
   opts: { format: CaptureFormat; fileName: string; selector?: string; timeoutMs?: number },
 ): Promise<CapturedFile> {
   const selector = opts.selector || '.print-area'
-  const timeoutMs = opts.timeoutMs ?? 25_000
-  const width = 920
-  const height = 1100
-  const left = Math.max(0, Math.round((window.screen.availWidth - width) / 2))
-  const top = Math.max(0, Math.round((window.screen.availHeight - height) / 2))
-  const features = [
-    'popup=yes',
-    `width=${width}`,
-    `height=${height}`,
-    `left=${left}`,
-    `top=${top}`,
-    'scrollbars=yes',
-    'resizable=yes',
-  ].join(',')
+  const timeoutMs = opts.timeoutMs ?? 45_000
+  const absoluteUrl = new URL(path, window.location.origin).href
 
-  const win = window.open(path, 'fa-whatsapp-capture', features)
-  if (!win) {
-    throw new Error('تم حظر النافذة المنبثقة — اسمح بالنوافذ المنبثقة ثم أعد المحاولة')
-  }
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', 'syna-document-capture')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.setAttribute('tabindex', '-1')
+  // Keep real dimensions in the layout tree so html2canvas can paint; hide visually.
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    left: '0',
+    top: '0',
+    width: '920px',
+    height: '1400px',
+    opacity: '0',
+    pointerEvents: 'none',
+    border: '0',
+    zIndex: '-1',
+  })
 
-  const started = Date.now()
+  document.body.appendChild(iframe)
+
   try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => reject(new Error('انتهت مهلة تحميل مستند الطباعة')), timeoutMs)
+      iframe.onload = () => {
+        window.clearTimeout(timer)
+        resolve()
+      }
+      iframe.onerror = () => {
+        window.clearTimeout(timer)
+        reject(new Error('فشل تحميل مستند الطباعة'))
+      }
+      iframe.src = absoluteUrl
+    })
+
+    const started = Date.now()
     while (Date.now() - started < timeoutMs) {
-      try {
-        const doc = win.document
-        const el = doc.querySelector<HTMLElement>(selector)
-        const ready = el && el.innerText.trim().length > 20 && !doc.body.innerText.includes('جاري التحميل')
-        if (ready) {
-          await sleep(400)
+      const win = iframe.contentWindow
+      const doc = iframe.contentDocument
+      if (!win || !doc) {
+        await sleep(200)
+        continue
+      }
+
+      assertNotLoginPage(win)
+
+      if (isPrintContentReady(doc, selector)) {
+        // Allow fonts / late images a brief settle before capture.
+        await sleep(500)
+        if (isPrintContentReady(doc, selector)) {
           return await captureSelectorInDocument(doc, selector, opts)
         }
-      } catch {
-        // cross-origin or not ready
       }
+
       await sleep(250)
     }
+
     throw new Error('انتهت مهلة تحميل مستند الطباعة')
   } finally {
-    try {
-      win.close()
-    } catch {
-      /* ignore */
-    }
+    iframe.remove()
   }
 }

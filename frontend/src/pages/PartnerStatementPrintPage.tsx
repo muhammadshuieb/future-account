@@ -85,7 +85,7 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
         </Button>
         <p className="text-xs text-black/45">نافذة طباعة كشف الحساب — بدون قائمة التطبيق</p>
       </div>
-      <div className="print-area mx-auto max-w-3xl">
+      <div className="print-area mx-auto max-w-3xl" data-print-ready="1">
         <StatementPrintView
           data={statement.data}
           kind={isCustomer ? 'customer' : 'supplier'}
