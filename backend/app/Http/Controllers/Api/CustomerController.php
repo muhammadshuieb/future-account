@@ -79,10 +79,18 @@ class CustomerController extends ApiController
         return response()->json(['message' => 'تم الحذف.']);
     }
 
-    public function statement(Customer $customer): JsonResponse
+    public function statement(Request $request, Customer $customer): JsonResponse
     {
         $this->authorizePermission('customers.view');
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
 
-        return $this->ok($this->sales->customerStatement($customer));
+        return $this->ok($this->sales->customerStatement(
+            $customer,
+            $data['from'] ?? null,
+            $data['to'] ?? null,
+        ));
     }
 }

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { LOGO } from '@/lib/brand'
+import { openPrintPopup } from '@/lib/printPopup'
+import { statementTypeLabel } from '@/components/StatementPrintView'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
@@ -107,6 +109,16 @@ export default function ReportsPage() {
   })
 
   function printReport() {
+    if (tab === 'customer-statement' && customerId) {
+      const qs = new URLSearchParams({ from, to }).toString()
+      openPrintPopup(`/print/customers/${customerId}/statement?${qs}`)
+      return
+    }
+    if (tab === 'supplier-statement' && supplierId) {
+      const qs = new URLSearchParams({ from, to }).toString()
+      openPrintPopup(`/print/suppliers/${supplierId}/statement?${qs}`)
+      return
+    }
     window.print()
   }
 
@@ -116,7 +128,15 @@ export default function ReportsPage() {
         title="التقارير"
         subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة"
         actions={
-          <Button variant="secondary" className="print-hide" onClick={printReport}>
+          <Button
+            variant="secondary"
+            className="print-hide"
+            onClick={printReport}
+            disabled={
+              (tab === 'customer-statement' && !customerId) ||
+              (tab === 'supplier-statement' && !supplierId)
+            }
+          >
             <Printer size={16} /> طباعة / PDF
           </Button>
         }
@@ -410,10 +430,13 @@ export default function ReportsPage() {
 
             {(tab === 'customer-statement' || tab === 'supplier-statement') && (
               <div>
-                <p className="mb-3 font-semibold">
+                <p className="mb-2 font-semibold">
                   {report.data.customer?.name || report.data.supplier?.name}
-                  {' — '}الرصيد: {formatMoney(report.data.balance || 0, base)}
                 </p>
+                <div className="mb-3 grid gap-2 sm:grid-cols-2">
+                  <p>الرصيد الافتتاحي: <strong>{formatMoney(report.data.opening_balance || 0, base)}</strong></p>
+                  <p>الرصيد الختامي: <strong>{formatMoney((report.data.closing_balance ?? report.data.balance) || 0, base)}</strong></p>
+                </div>
                 <table className="data-table">
                   <thead><tr><th>تاريخ</th><th>نوع</th><th>رقم</th><th>مدين</th><th>دائن</th><th>رصيد</th></tr></thead>
                   <tbody>
@@ -427,11 +450,11 @@ export default function ReportsPage() {
                     }, i: number) => (
                       <tr key={i}>
                         <td>{r.date}</td>
-                        <td>{r.type}</td>
+                        <td>{statementTypeLabel(r.type)}</td>
                         <td className="font-mono">{r.number}</td>
-                        <td className="tabular-nums">{r.debit}</td>
-                        <td className="tabular-nums">{r.credit}</td>
-                        <td className="tabular-nums">{r.balance}</td>
+                        <td className="tabular-nums">{formatMoney(r.debit || 0, base)}</td>
+                        <td className="tabular-nums">{formatMoney(r.credit || 0, base)}</td>
+                        <td className="tabular-nums">{formatMoney(r.balance || 0, base)}</td>
                       </tr>
                     ))}
                   </tbody>

@@ -659,39 +659,74 @@ class PurchaseService
         }
     }
 
-    public function supplierStatement(Supplier $supplier): array
+    public function supplierStatement(Supplier $supplier, ?string $from = null, ?string $to = null): array
     {
-        $invoices = $supplier->invoices()->where('status', 'posted')->orderBy('invoice_date')->get();
-        $payments = $supplier->payments()->where('status', 'posted')->orderBy('payment_date')->get();
-        $rows = [];
-        $balance = 0;
+        $events = [];
 
-        foreach ($invoices as $inv) {
-            $balance += (float) $inv->total;
-            $rows[] = [
+        foreach ($supplier->invoices()->where('status', 'posted')->get() as $inv) {
+            $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
-                'debit' => 0,
+                'debit' => 0.0,
                 'credit' => (float) $inv->total,
-                'balance' => $balance,
             ];
         }
 
-        foreach ($payments as $pay) {
-            $balance -= (float) $pay->amount;
-            $rows[] = [
+        foreach ($supplier->payments()->where('status', 'posted')->get() as $pay) {
+            $events[] = [
                 'date' => $pay->payment_date->toDateString(),
                 'type' => 'payment',
                 'number' => $pay->payment_number,
                 'debit' => (float) $pay->amount,
-                'credit' => 0,
-                'balance' => $balance,
+                'credit' => 0.0,
             ];
         }
 
-        usort($rows, fn ($a, $b) => strcmp($a['date'], $b['date']));
+        usort($events, fn ($a, $b) => strcmp($a['date'], $b['date']) ?: strcmp($a['number'], $b['number']));
 
-        return ['supplier' => $supplier, 'rows' => $rows, 'balance' => $balance];
+        $openingBalance = 0.0;
+        $balance = 0.0;
+        $rows = [];
+
+        foreach ($events as $event) {
+            // Supplier liability: invoices increase credit balance; payments reduce it.
+            $balance += $event['credit'] - $event['debit'];
+
+            if ($from && $event['date'] < $from) {
+                $openingBalance = $balance;
+
+                continue;
+            }
+
+            if ($to && $event['date'] > $to) {
+                continue;
+            }
+
+            $rows[] = [
+                'date' => $event['date'],
+                'type' => $event['type'],
+                'number' => $event['number'],
+                'debit' => $event['debit'],
+                'credit' => $event['credit'],
+                'balance' => round($balance, 2),
+            ];
+        }
+
+        if (! $from) {
+            $openingBalance = 0.0;
+        }
+
+        $closingBalance = $rows === [] ? $openingBalance : (float) $rows[array_key_last($rows)]['balance'];
+
+        return [
+            'supplier' => $supplier,
+            'from' => $from,
+            'to' => $to,
+            'opening_balance' => round($openingBalance, 2),
+            'closing_balance' => round($closingBalance, 2),
+            'rows' => $rows,
+            'balance' => round($closingBalance, 2),
+        ];
     }
 }

@@ -1,15 +1,28 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { openPrintPopup } from '@/lib/printPopup'
+import { statementTypeLabel } from '@/components/StatementPrintView'
+import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean }
 
 const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' }
 
+function yearStart() {
+  return new Date(new Date().getFullYear(), 0, 1).toISOString().slice(0, 10)
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 export default function PartnersPage() {
   const [tab, setTab] = useState('customers')
   const [statementId, setStatementId] = useState<number | null>(null)
+  const [from, setFrom] = useState(yearStart)
+  const [to, setTo] = useState(today)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -18,9 +31,16 @@ export default function PartnersPage() {
 
   const customers = useQuery({ queryKey: ['customers'], queryFn: async () => (await api.get('/customers')).data.data as PartnerRow[] })
   const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: async () => (await api.get('/suppliers')).data.data as PartnerRow[] })
+  const currencies = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string },
+  })
+  const base = currencies.data?.base_currency || 'SYP'
+
   const statement = useQuery({
-    queryKey: ['statement', tab, statementId],
-    queryFn: async () => (await api.get(`/${tab}/${statementId}/statement`)).data.data,
+    queryKey: ['statement', tab, statementId, from, to],
+    queryFn: async () =>
+      (await api.get(`/${tab}/${statementId}/statement`, { params: { from, to } })).data.data,
     enabled: !!statementId,
   })
 
@@ -48,6 +68,14 @@ export default function PartnersPage() {
   function closeModal() {
     setModalOpen(false)
     setEditingId(null)
+  }
+
+  function printStatement(id: number) {
+    const qs = new URLSearchParams()
+    if (from) qs.set('from', from)
+    if (to) qs.set('to', to)
+    const q = qs.toString()
+    openPrintPopup(`/print/${tab}/${id}/statement${q ? `?${q}` : ''}`)
   }
 
   const save = useMutation({
@@ -106,16 +134,28 @@ export default function PartnersPage() {
                 <td className="px-4 py-3">{r.name}</td>
                 <td className="px-4 py-3">{r.phone || '—'}</td>
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    className="text-teal"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setStatementId(r.id)
-                    }}
-                  >
-                    كشف حساب
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      className="text-teal"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setStatementId(r.id)
+                      }}
+                    >
+                      كشف حساب
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 text-teal"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        printStatement(r.id)
+                      }}
+                    >
+                      <Printer size={14} /> طباعة
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -123,33 +163,59 @@ export default function PartnersPage() {
         </table>
       </Panel>
 
-      {statementId && statement.data && (
+      {statementId && (
         <Panel>
-          <div className="border-b border-black/5 px-4 py-3 font-semibold">كشف حساب — الرصيد: {statement.data.balance}</div>
-          <table className="w-full text-sm">
-            <thead className="bg-mist text-right text-black/60">
-              <tr>
-                <th className="px-4 py-3">تاريخ</th>
-                <th className="px-4 py-3">نوع</th>
-                <th className="px-4 py-3">رقم</th>
-                <th className="px-4 py-3">مدين</th>
-                <th className="px-4 py-3">دائن</th>
-                <th className="px-4 py-3">رصيد</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(statement.data.rows || []).map((r: { date: string; type: string; number: string; debit: number; credit: number; balance: number }, idx: number) => (
-                <tr key={idx} className="border-t border-black/5">
-                  <td className="px-4 py-3">{r.date}</td>
-                  <td className="px-4 py-3">{r.type}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{r.number}</td>
-                  <td className="px-4 py-3">{r.debit}</td>
-                  <td className="px-4 py-3">{r.credit}</td>
-                  <td className="px-4 py-3">{r.balance}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
+            <div className="font-semibold">
+              كشف حساب — الرصيد الختامي:{' '}
+              {statement.data ? formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base) : '…'}
+            </div>
+            <Button variant="secondary" className="print-hide" onClick={() => printStatement(statementId)}>
+              <Printer size={16} /> طباعة
+            </Button>
+          </div>
+          <div className="print-hide flex flex-wrap gap-3 border-b border-black/5 px-4 py-3">
+            <Field label="من">
+              <input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} />
+            </Field>
+            <Field label="إلى">
+              <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
+            </Field>
+          </div>
+          {statement.isLoading && <p className="p-4 text-sm text-black/55">جاري التحميل...</p>}
+          {statement.error && <p className="p-4 text-sm text-danger">تعذر تحميل كشف الحساب</p>}
+          {statement.data && (
+            <>
+              <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-2">
+                <p>الرصيد الافتتاحي: <strong className="tabular-nums">{formatMoney(Number(statement.data.opening_balance) || 0, base)}</strong></p>
+                <p>الرصيد الختامي: <strong className="tabular-nums">{formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base)}</strong></p>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-mist text-right text-black/60">
+                  <tr>
+                    <th className="px-4 py-3">تاريخ</th>
+                    <th className="px-4 py-3">نوع</th>
+                    <th className="px-4 py-3">رقم</th>
+                    <th className="px-4 py-3">مدين</th>
+                    <th className="px-4 py-3">دائن</th>
+                    <th className="px-4 py-3">رصيد</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(statement.data.rows || []).map((r: { date: string; type: string; number: string; debit: number; credit: number; balance: number }, idx: number) => (
+                    <tr key={idx} className="border-t border-black/5">
+                      <td className="px-4 py-3">{r.date}</td>
+                      <td className="px-4 py-3">{statementTypeLabel(r.type)}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{r.number}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.debit) || 0, base)}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.credit) || 0, base)}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.balance) || 0, base)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </Panel>
       )}
 

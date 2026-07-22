@@ -79,10 +79,18 @@ class SupplierController extends ApiController
         return response()->json(['message' => 'تم الحذف.']);
     }
 
-    public function statement(Supplier $supplier): JsonResponse
+    public function statement(Request $request, Supplier $supplier): JsonResponse
     {
         $this->authorizePermission('suppliers.view');
+        $data = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
 
-        return $this->ok($this->purchases->supplierStatement($supplier));
+        return $this->ok($this->purchases->supplierStatement(
+            $supplier,
+            $data['from'] ?? null,
+            $data['to'] ?? null,
+        ));
     }
 }

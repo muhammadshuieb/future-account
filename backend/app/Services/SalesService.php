@@ -628,41 +628,74 @@ class SalesService
         return $full.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
     }
 
-    public function customerStatement(Customer $customer): array
+    public function customerStatement(Customer $customer, ?string $from = null, ?string $to = null): array
     {
-        $invoices = $customer->invoices()->where('status', 'posted')->orderBy('invoice_date')->get();
-        $receipts = $customer->receipts()->where('status', 'posted')->orderBy('receipt_date')->get();
+        $events = [];
 
-        $rows = [];
-        $balance = 0;
-
-        foreach ($invoices as $inv) {
-            $balance += (float) $inv->total;
-            $rows[] = [
+        foreach ($customer->invoices()->where('status', 'posted')->get() as $inv) {
+            $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
                 'debit' => (float) $inv->total,
-                'credit' => 0,
-                'balance' => $balance,
+                'credit' => 0.0,
             ];
         }
 
-        foreach ($receipts as $rc) {
-            $balance -= (float) $rc->amount;
-            $rows[] = [
+        foreach ($customer->receipts()->where('status', 'posted')->get() as $rc) {
+            $events[] = [
                 'date' => $rc->receipt_date->toDateString(),
                 'type' => 'receipt',
                 'number' => $rc->receipt_number,
-                'debit' => 0,
+                'debit' => 0.0,
                 'credit' => (float) $rc->amount,
-                'balance' => $balance,
             ];
         }
 
-        usort($rows, fn ($a, $b) => strcmp($a['date'], $b['date']));
+        usort($events, fn ($a, $b) => strcmp($a['date'], $b['date']) ?: strcmp($a['number'], $b['number']));
 
-        return ['customer' => $customer, 'rows' => $rows, 'balance' => $balance];
+        $openingBalance = 0.0;
+        $balance = 0.0;
+        $rows = [];
+
+        foreach ($events as $event) {
+            $balance += $event['debit'] - $event['credit'];
+
+            if ($from && $event['date'] < $from) {
+                $openingBalance = $balance;
+
+                continue;
+            }
+
+            if ($to && $event['date'] > $to) {
+                continue;
+            }
+
+            $rows[] = [
+                'date' => $event['date'],
+                'type' => $event['type'],
+                'number' => $event['number'],
+                'debit' => $event['debit'],
+                'credit' => $event['credit'],
+                'balance' => round($balance, 2),
+            ];
+        }
+
+        if (! $from) {
+            $openingBalance = 0.0;
+        }
+
+        $closingBalance = $rows === [] ? $openingBalance : (float) $rows[array_key_last($rows)]['balance'];
+
+        return [
+            'customer' => $customer,
+            'from' => $from,
+            'to' => $to,
+            'opening_balance' => round($openingBalance, 2),
+            'closing_balance' => round($closingBalance, 2),
+            'rows' => $rows,
+            'balance' => round($closingBalance, 2),
+        ];
     }
 
     public function deleteQuote(SalesQuote $quote): void

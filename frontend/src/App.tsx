@@ -24,6 +24,7 @@ const AuditLogPage = lazy(() => import('@/pages/AuditLogPage'))
 const CompaniesPage = lazy(() => import('@/pages/CompaniesPage'))
 const SalesInvoicePrintPage = lazy(() => import('@/pages/SalesInvoicePrintPage'))
 const PurchaseInvoicePrintPage = lazy(() => import('@/pages/PurchaseInvoicePrintPage'))
+const PartnerStatementPrintPage = lazy(() => import('@/pages/PartnerStatementPrintPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,6 +72,8 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/print/sales-invoices/:id" element={<SalesInvoicePrintPage />} />
               <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />
+              <Route path="/print/customers/:id/statement" element={<PartnerStatementPrintPage kind="customers" />} />
+              <Route path="/print/suppliers/:id/statement" element={<PartnerStatementPrintPage kind="suppliers" />} />
               <Route element={<AppLayout />}>
                 <Route index element={<DashboardPage />} />
                 <Route path="accounts" element={<AccountsPage />} />
