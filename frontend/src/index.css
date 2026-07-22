@@ -441,21 +441,30 @@ textarea {
 
   .no-print,
   aside,
+  .app-sidebar,
   .app-topbar,
-  .print-hide {
+  .print-hide,
+  .modal-root {
+    display: none !important;
+  }
+
+  /* Dedicated print popup routes: only the invoice document */
+  body:has(.print-document) .print-hide {
     display: none !important;
   }
 
   main,
   .app-shell-main,
-  .print-area {
+  .print-area,
+  .print-document {
     margin: 0 !important;
     padding: 0 !important;
     max-width: none !important;
     overflow: visible !important;
   }
 
-  .print-area {
+  .print-area,
+  .print-document {
     display: block !important;
   }
 

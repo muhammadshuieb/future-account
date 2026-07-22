@@ -17,6 +17,8 @@ import ReportsPage from '@/pages/ReportsPage'
 import BarcodeLabelsPage from '@/pages/BarcodeLabelsPage'
 import AuditLogPage from '@/pages/AuditLogPage'
 import CompaniesPage from '@/pages/CompaniesPage'
+import SalesInvoicePrintPage from '@/pages/SalesInvoicePrintPage'
+import PurchaseInvoicePrintPage from '@/pages/PurchaseInvoicePrintPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +33,8 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/print/sales-invoices/:id" element={<SalesInvoicePrintPage />} />
+            <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />
             <Route element={<AppLayout />}>
               <Route index element={<DashboardPage />} />
               <Route path="accounts" element={<AccountsPage />} />

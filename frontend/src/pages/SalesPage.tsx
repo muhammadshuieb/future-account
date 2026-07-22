@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { openPrintPopup } from '@/lib/printPopup'
+import { documentStatusLabel } from '@/lib/statusLabels'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
@@ -89,7 +90,6 @@ export default function SalesPage() {
     method: 'cash',
     status: 'posted',
   })
-  const [printId, setPrintId] = useState<number | null>(null)
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
 
@@ -168,7 +168,6 @@ export default function SalesPage() {
     deleteDoc.mutate({ path: salesDeletePath(rowTab, id) })
   }
   const openCreate = () => {
-    setPrintId(null)
     setSelectedId(null)
     setSelectedRow(null)
     setStockInfo(null)
@@ -180,7 +179,12 @@ export default function SalesPage() {
     }
     setModal('create')
   }
-  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setPrintId(null); setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
+  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
+    setSelectedId(row.id)
+    setSelectedRow(row)
+    setModal(editable ? 'edit' : 'view')
+  }
+  const printInvoice = (id: number) => openPrintPopup(`/print/sales-invoices/${id}`)
 
   const saveQuote = useMutation({
     mutationFn: () => api.post('/sales-quotes', {
@@ -269,22 +273,6 @@ export default function SalesPage() {
     }),
     onSuccess: () => { msg.setMessage('تم تسجيل سند القبض'); void qc.invalidateQueries({ queryKey: ['receipts', 'sales-invoices'] }); closeModal() },
     onError: msg.fromErr,
-  })
-
-  const invoiceDetail = useQuery({
-    queryKey: ['sales-invoice', printId],
-    enabled: !!printId,
-    queryFn: async () => (await api.get(`/sales-invoices/${printId}`)).data.data,
-  })
-
-  const invoiceQr = useQuery({
-    queryKey: ['sales-invoice-qr', printId],
-    enabled: !!printId,
-    queryFn: async () => (await api.get(`/sales-invoices/${printId}/qr`)).data.data as {
-      qr_payload: string
-      e_invoice?: Record<string, unknown>
-      e_invoice_uuid?: string
-    },
   })
 
   const detailPath = tab === 'quotes' ? 'sales-quotes' : tab === 'orders' ? 'sales-orders' : tab === 'invoices' ? 'sales-invoices' : tab === 'returns' ? 'sales-returns' : 'receipts'
@@ -454,7 +442,7 @@ export default function SalesPage() {
       <div className="space-y-3 text-sm">
         <div className="grid gap-3 sm:grid-cols-2">
           <p><b>رقم:</b> {String(data.quote_number || data.order_number || data.invoice_number || data.return_number || data.receipt_number || '—')}</p>
-          <p><b>{t('common.status')}:</b> {String(data.status || '—')}</p>
+          <p><b>{t('common.status')}:</b> {documentStatusLabel(String(data.status || ''))}</p>
           <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
           <p><b>{t('common.warehouse')}:</b> {warehouseName || '—'}</p>
           <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')}</p>
@@ -512,7 +500,7 @@ export default function SalesPage() {
                     <td className="font-mono text-xs">{q.quote_number}</td>
                     <td>{q.customer?.name}</td>
                     <td>{q.total}</td>
-                    <td>{q.status}</td>
+                    <td>{documentStatusLabel(q.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       {q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertQuote.mutate(q.id) }}>{t('sales.convertToOrder')}</button>}
                       {canDeleteSales('quotes', q.status)
@@ -538,7 +526,7 @@ export default function SalesPage() {
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.customer?.name}</td>
                     <td>{o.total}</td>
-                    <td>{o.status}</td>
+                    <td>{documentStatusLabel(o.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}
                       {canDeleteSales('orders', o.status)
@@ -565,9 +553,9 @@ export default function SalesPage() {
                     <td>{i.customer?.name}</td>
                     <td>{i.currency || 'SYP'}</td>
                     <td className="tabular-nums">{i.total}</td>
-                    <td>{i.status}</td>
+                    <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
-                      <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); setPrintId(i.id) }}>{t('common.print')}</button>
+                      <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       {canDeleteSales('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -577,16 +565,6 @@ export default function SalesPage() {
               </tbody>
             </table>
             </div>
-        </Panel>
-      )}
-
-      {printId && invoiceDetail.data && (
-        <Panel className="print-area mt-4 p-6">
-          <div className="print-hide mb-3 flex gap-2">
-            <Button variant="secondary" onClick={() => window.print()}><Printer size={16} /> {t('common.print')}</Button>
-            <Button variant="ghost" onClick={() => setPrintId(null)}>{t('common.close')}</Button>
-          </div>
-          <InvoicePrintView invoice={invoiceDetail.data} eInvoice={invoiceQr.data} />
         </Panel>
       )}
 
@@ -601,7 +579,7 @@ export default function SalesPage() {
                     <td className="font-mono text-xs">{r.return_number}</td>
                     <td>{r.customer?.name}</td>
                     <td>{r.total}</td>
-                    <td>{r.status}</td>
+                    <td>{documentStatusLabel(r.status)}</td>
                     <td>
                       {canDeleteSales('returns', r.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('returns', r.id, r.status) }}>{t('common.delete')}</button>
@@ -626,7 +604,7 @@ export default function SalesPage() {
                     <td className="font-mono text-xs">{r.receipt_number}</td>
                     <td>{r.customer?.name}</td>
                     <td>{r.amount}</td>
-                    <td>{r.status}</td>
+                    <td>{documentStatusLabel(r.status)}</td>
                     <td>
                       {canDeleteSales('receipts', r.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('receipts', r.id, r.status) }}>{t('common.delete')}</button>
@@ -640,6 +618,9 @@ export default function SalesPage() {
         </Panel>
       )}
       <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <>
+          {tab === 'invoices' && selectedId && (
+            <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+          )}
           {selectedId && selectedRow && canDeleteSales(tab, String(selectedRow.status || '')) && (
             <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
           )}
@@ -753,82 +734,3 @@ function LineStockHint({
   )
 }
 
-function InvoicePrintView({
-  invoice,
-  eInvoice,
-}: {
-  invoice: {
-    invoice_number: string
-    invoice_date: string
-    e_invoice_uuid?: string
-    total: number
-    tax_amount: number
-    subtotal: number
-    currency?: string
-    customer?: { name: string; tax_number?: string }
-    lines?: { product?: { name: string; sku?: string }; quantity: number; unit_price: number; line_total: number; batch_no?: string; serial_no?: string }[]
-  }
-  eInvoice?: { qr_payload?: string; e_invoice?: Record<string, unknown>; e_invoice_uuid?: string }
-}) {
-  const { t } = useTranslation()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const payload = eInvoice?.qr_payload
-  const structured = eInvoice?.e_invoice as {
-    uuid?: string
-    seller?: { name?: string; tax_number?: string }
-    tax_breakdown?: { rate: number; taxable: number; tax: number }[]
-  } | undefined
-
-  useEffect(() => {
-    if (canvasRef.current && payload) {
-      void QRCode.toCanvas(canvasRef.current, payload, { width: 140, margin: 1 })
-    }
-  }, [payload])
-
-  return (
-    <div className="space-y-4 text-sm">
-      <div className="rounded-lg border-2 border-teal/30 bg-teal/5 p-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-teal">{t('sales.eInvoice')} — future-account-einvoice/1.0</p>
-        <p className="mt-1 font-mono text-xs text-black/60">UUID: {structured?.uuid || eInvoice?.e_invoice_uuid || invoice.e_invoice_uuid || '—'}</p>
-      </div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
-          {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
-          <p className="mt-2 font-mono">{invoice.invoice_number}</p>
-          <p>{String(invoice.invoice_date).slice(0, 10)}</p>
-          <p>{t('common.customer')}: {invoice.customer?.name}</p>
-        </div>
-        {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
-      </div>
-      <table className="data-table">
-        <thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.price')}</th><th>{t('common.batch')}</th><th>{t('common.total')}</th></tr></thead>
-        <tbody>
-          {(invoice.lines || []).map((l, i) => (
-            <tr key={i}>
-              <td>{l.product?.name}</td>
-              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
-              <td>{l.unit_price}</td>
-              <td className="font-mono text-xs">{l.batch_no || l.serial_no || '—'}</td>
-              <td>{l.line_total}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {(structured?.tax_breakdown || []).length > 0 && (
-        <div className="rounded border border-black/10 p-3">
-          <p className="mb-2 text-xs font-semibold">Tax Breakdown</p>
-          {(structured?.tax_breakdown || []).map((tb, i) => (
-            <p key={i} className="text-xs">{tb.rate}% — taxable {tb.taxable}, tax {tb.tax}</p>
-          ))}
-        </div>
-      )}
-      <div className="space-y-1 text-left" dir="ltr">
-        <p>Subtotal: {invoice.subtotal}</p>
-        <p>Tax: {invoice.tax_amount}</p>
-        <p className="font-bold">Total ({invoice.currency || 'SYP'}): {invoice.total}</p>
-      </div>
-      <p className="text-[10px] text-black/45">Phase 2: government API submission requires country-specific credentials (ZATCA/GIB).</p>
-    </div>
-  )
-}

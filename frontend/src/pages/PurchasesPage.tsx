@@ -1,7 +1,10 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { openPrintPopup } from '@/lib/printPopup'
+import { documentStatusLabel } from '@/lib/statusLabels'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
@@ -107,6 +110,7 @@ export default function PurchasesPage() {
     setModal('create')
   }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
+  const printInvoice = (id: number) => openPrintPopup(`/print/purchase-invoices/${id}`)
 
   const saveReq = useMutation({
     mutationFn: () => api.post('/purchase-requests', {
@@ -247,7 +251,7 @@ export default function PurchasesPage() {
     </>
   )
 
-  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {data.status || '—'}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
+  const summary = (data: Record<string, any>) => <div className="space-y-3 text-sm"><div className="grid gap-3 sm:grid-cols-2"><p><b>رقم:</b> {data.request_number || data.order_number || data.invoice_number || data.return_number || data.payment_number || '—'}</p><p><b>{t('common.status')}:</b> {documentStatusLabel(data.status)}</p><p><b>{t('common.supplier')}:</b> {data.supplier?.name || '—'}</p><p><b>{t('common.total')}:</b> {data.total || data.amount || '—'}</p></div>{(data.items || data.lines)?.length > 0 && <div className="table-wrap"><table className="data-table"><thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.total')}</th></tr></thead><tbody>{(data.items || data.lines).map((line: any, index: number) => <tr key={index}><td>{line.product?.name}</td><td className="tabular-nums">{formatQuantity(line.quantity)}</td><td>{line.line_total}</td></tr>)}</tbody></table></div>}</div>
 
   const tabs = [
     { id: 'requests', label: t('purchases.requests') },
@@ -273,7 +277,7 @@ export default function PurchasesPage() {
                     <td className="font-mono text-xs">{r.request_number}</td>
                     <td>{r.supplier?.name || '—'}</td>
                     <td>{r.total}</td>
-                    <td>{r.status}</td>
+                    <td>{documentStatusLabel(r.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       {r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertReq.mutate(r.id) }}>{t('purchases.convertToOrder')}</button>}
                       {canDeletePurchase('requests', r.status)
@@ -297,7 +301,7 @@ export default function PurchasesPage() {
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.supplier?.name}</td>
                     <td>{o.total}</td>
-                    <td>{o.status}</td>
+                    <td>{documentStatusLabel(o.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertPo.mutate(o.id) }}>{t('purchases.convertToInvoice')}</button>}
                       {canDeletePurchase('orders', o.status)
@@ -321,8 +325,9 @@ export default function PurchasesPage() {
                     <td className="font-mono text-xs">{i.invoice_number}</td>
                     <td>{i.supplier?.name}</td>
                     <td>{i.total}</td>
-                    <td>{i.status}</td>
-                    <td>
+                    <td>{documentStatusLabel(i.status)}</td>
+                    <td className="space-x-2 space-x-reverse">
+                      <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -344,7 +349,7 @@ export default function PurchasesPage() {
                     <td className="font-mono text-xs">{r.return_number}</td>
                     <td>{r.supplier?.name}</td>
                     <td>{r.total}</td>
-                    <td>{r.status}</td>
+                    <td>{documentStatusLabel(r.status)}</td>
                     <td>
                       {canDeletePurchase('returns', r.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('returns', r.id, r.status) }}>{t('common.delete')}</button>
@@ -367,7 +372,7 @@ export default function PurchasesPage() {
                     <td className="font-mono text-xs">{p.payment_number}</td>
                     <td>{p.supplier?.name}</td>
                     <td>{p.amount}</td>
-                    <td>{p.status}</td>
+                    <td>{documentStatusLabel(p.status)}</td>
                     <td>
                       {canDeletePurchase('payments', p.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('payments', p.id, p.status) }}>{t('common.delete')}</button>
@@ -380,6 +385,9 @@ export default function PurchasesPage() {
         </Panel>
       )}
       <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
+          {tab === 'invoices' && selectedId && (
+            <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+          )}
           {selectedId && selectedRow && canDeletePurchase(tab, String(selectedRow.status || '')) && (
             <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
           )}
