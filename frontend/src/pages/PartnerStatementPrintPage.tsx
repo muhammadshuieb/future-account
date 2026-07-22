@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -15,7 +15,6 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
   const [searchParams] = useSearchParams()
   const { t } = useTranslation()
   const { user, loading: authLoading } = useAuth()
-  const autoPrinted = useRef(false)
   const partnerId = Number(id)
   const from = searchParams.get('from') || undefined
   const to = searchParams.get('to') || undefined
@@ -49,13 +48,6 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
       document.title = `${documentLabel} — ${partnerName} — Syna Co`
     }
   }, [partnerName, documentLabel])
-
-  useEffect(() => {
-    if (!statement.data || autoPrinted.current) return
-    autoPrinted.current = true
-    const timer = window.setTimeout(() => window.print(), 450)
-    return () => window.clearTimeout(timer)
-  }, [statement.data])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>

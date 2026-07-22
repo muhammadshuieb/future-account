@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -12,7 +12,6 @@ export default function PurchaseInvoicePrintPage() {
   const { id } = useParams<{ id: string }>()
   const { t } = useTranslation()
   const { user, loading: authLoading } = useAuth()
-  const autoPrinted = useRef(false)
   const invoiceId = Number(id)
 
   const invoice = useQuery({
@@ -26,13 +25,6 @@ export default function PurchaseInvoicePrintPage() {
       document.title = `${invoice.data.invoice_number} — Syna Co`
     }
   }, [invoice.data?.invoice_number])
-
-  useEffect(() => {
-    if (!invoice.data || autoPrinted.current) return
-    autoPrinted.current = true
-    const timer = window.setTimeout(() => window.print(), 450)
-    return () => window.clearTimeout(timer)
-  }, [invoice.data])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>
