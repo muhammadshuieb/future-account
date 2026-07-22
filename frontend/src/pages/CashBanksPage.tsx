@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 const emptyBox = { code: '', name: '', opening_balance: '0' }
 const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
@@ -233,7 +233,7 @@ export default function CashBanksPage() {
         <div className="space-y-3">
           <Field label="رمز"><input className={inputClass} value={boxForm.code} onChange={(e) => setBoxForm({ ...boxForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={boxForm.name} onChange={(e) => setBoxForm({ ...boxForm, name: e.target.value })} required /></Field>
-          <Field label="رصيد افتتاحي"><input className={inputClass} value={boxForm.opening_balance} onChange={(e) => setBoxForm({ ...boxForm, opening_balance: e.target.value })} /></Field>
+          <Field label="رصيد افتتاحي"><NumericInput value={boxForm.opening_balance} onChange={(v) => setBoxForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
         </div>
       </Modal>
 
@@ -252,7 +252,7 @@ export default function CashBanksPage() {
           <Field label="رمز"><input className={inputClass} value={bankForm.code} onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={bankForm.name} onChange={(e) => setBankForm({ ...bankForm, name: e.target.value })} required /></Field>
           <Field label="رقم الحساب"><input className={inputClass} value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} /></Field>
-          <Field label="رصيد افتتاحي"><input className={inputClass} value={bankForm.opening_balance} onChange={(e) => setBankForm({ ...bankForm, opening_balance: e.target.value })} /></Field>
+          <Field label="رصيد افتتاحي"><NumericInput value={bankForm.opening_balance} onChange={(v) => setBankForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
         </div>
       </Modal>
 
@@ -272,7 +272,7 @@ export default function CashBanksPage() {
           <Field label="من معرف"><select className={inputClass} value={trForm.from_id} onChange={(e) => setTrForm({ ...trForm, from_id: e.target.value })} required><option value="">—</option>{(trForm.from_type === 'cash_box' ? boxes.data : banks.data || []).map((x: { id: number; name: string }) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
           <Field label="إلى نوع"><select className={inputClass} value={trForm.to_type} onChange={(e) => setTrForm({ ...trForm, to_type: e.target.value })}><option value="cash_box">صندوق</option><option value="bank">بنك</option></select></Field>
           <Field label="إلى معرف"><select className={inputClass} value={trForm.to_id} onChange={(e) => setTrForm({ ...trForm, to_id: e.target.value })} required><option value="">—</option>{(trForm.to_type === 'cash_box' ? boxes.data : banks.data || []).map((x: { id: number; name: string }) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></Field>
-          <Field label="المبلغ"><input className={inputClass} value={trForm.amount} onChange={(e) => setTrForm({ ...trForm, amount: e.target.value })} required /></Field>
+          <Field label="المبلغ"><NumericInput value={trForm.amount} onChange={(v) => setTrForm((prev) => ({ ...prev, amount: v }))} required /></Field>
         </div>
       </Modal>
 
@@ -306,7 +306,7 @@ export default function CashBanksPage() {
         <div className="space-y-3">
           <Field label="بنك"><select className={inputClass} value={recForm.bank_id} onChange={(e) => setRecForm({ ...recForm, bank_id: e.target.value })} required><option value="">—</option>{(banks.data || []).map((b: { id: number; name: string }) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>
           <Field label="تاريخ الكشف"><input type="date" className={inputClass} value={recForm.statement_date} onChange={(e) => setRecForm({ ...recForm, statement_date: e.target.value })} /></Field>
-          <Field label="رصيد الكشف"><input className={inputClass} value={recForm.statement_balance} onChange={(e) => setRecForm({ ...recForm, statement_balance: e.target.value })} required /></Field>
+          <Field label="رصيد الكشف"><NumericInput value={recForm.statement_balance} onChange={(v) => setRecForm((prev) => ({ ...prev, statement_balance: v }))} required /></Field>
         </div>
       </Modal>
 

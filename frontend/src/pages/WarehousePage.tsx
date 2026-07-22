@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
 
@@ -523,9 +523,9 @@ export default function WarehousePage() {
           <Field label="فئة"><select className={inputClass} value={prForm.category_id} onChange={(e) => setPrForm({ ...prForm, category_id: e.target.value })}><option value="">—</option>{(categories.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
           <div className="form-grid-3">
-            <Field label="تكلفة"><input className={inputClass} value={prForm.cost_price} onChange={(e) => setPrForm({ ...prForm, cost_price: e.target.value })} /></Field>
-            <Field label="بيع"><input className={inputClass} value={prForm.sale_price} onChange={(e) => setPrForm({ ...prForm, sale_price: e.target.value })} /></Field>
-            <Field label="حد الطلب"><input className={inputClass} value={prForm.reorder_level} onChange={(e) => setPrForm({ ...prForm, reorder_level: e.target.value })} /></Field>
+            <Field label="تكلفة"><NumericInput value={prForm.cost_price} onChange={(v) => setPrForm((prev) => ({ ...prev, cost_price: v }))} /></Field>
+            <Field label="بيع"><NumericInput value={prForm.sale_price} onChange={(v) => setPrForm((prev) => ({ ...prev, sale_price: v }))} /></Field>
+            <Field label="حد الطلب"><NumericInput value={prForm.reorder_level} onChange={(v) => setPrForm((prev) => ({ ...prev, reorder_level: v }))} /></Field>
           </div>
           <div className="flex flex-wrap gap-4 text-sm">
             <label className="flex items-center gap-2"><input type="checkbox" checked={prForm.track_batch} onChange={(e) => setPrForm({ ...prForm, track_batch: e.target.checked })} />{t('warehouse.trackBatch')}</label>
@@ -553,7 +553,7 @@ export default function WarehousePage() {
           <Field label="النوع"><select className={inputClass} value={mvForm.type} onChange={(e) => setMvForm({ ...mvForm, type: e.target.value })}><option value="in">وارد</option><option value="out">منصرف</option><option value="adjustment">تسوية</option></select></Field>
           <Field label="مخزن"><select className={inputClass} value={mvForm.warehouse_id} onChange={(e) => setMvForm({ ...mvForm, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
           <Field label="صنف"><select className={inputClass} value={mvForm.product_id} onChange={(e) => setMvForm({ ...mvForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="كمية"><input className={inputClass} value={mvForm.quantity} onChange={(e) => setMvForm({ ...mvForm, quantity: e.target.value })} /></Field>
+          <Field label="كمية"><NumericInput value={mvForm.quantity} onChange={(v) => setMvForm((prev) => ({ ...prev, quantity: v }))} /></Field>
           <Field label={t('common.batch')}><input className={inputClass} value={mvForm.batch_no} onChange={(e) => setMvForm({ ...mvForm, batch_no: e.target.value })} /></Field>
           <Field label={t('common.serial')}><input className={inputClass} value={mvForm.serial_no} onChange={(e) => setMvForm({ ...mvForm, serial_no: e.target.value })} /></Field>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={mvForm.post_to_gl} onChange={(e) => setMvForm({ ...mvForm, post_to_gl: e.target.checked })} />ترحيل محاسبي</label>
@@ -577,7 +577,7 @@ export default function WarehousePage() {
           <Field label="من"><select className={inputClass} value={trForm.from_warehouse_id} onChange={(e) => setTrForm({ ...trForm, from_warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
           <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
           <Field label="صنف"><select className={inputClass} value={trForm.product_id} onChange={(e) => setTrForm({ ...trForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="كمية"><input className={inputClass} value={trForm.quantity} onChange={(e) => setTrForm({ ...trForm, quantity: e.target.value })} /></Field>
+          <Field label="كمية"><NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} /></Field>
         </div>
       </Modal>
 
@@ -597,7 +597,7 @@ export default function WarehousePage() {
           <Field label={t('common.date')}><input type="date" className={inputClass} value={cntForm.count_date} onChange={(e) => setCntForm({ ...cntForm, count_date: e.target.value })} /></Field>
           <Field label={t('common.warehouse')}><select className={inputClass} value={cntForm.warehouse_id} onChange={(e) => setCntForm({ ...cntForm, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
           <Field label={t('common.product')}><select className={inputClass} value={cntForm.product_id} onChange={(e) => setCntForm({ ...cntForm, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p: { id: number; name: string }) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
-          <Field label="الكمية المعدودة"><input className={inputClass} value={cntForm.counted_qty} onChange={(e) => setCntForm({ ...cntForm, counted_qty: e.target.value })} /></Field>
+          <Field label="الكمية المعدودة"><NumericInput value={cntForm.counted_qty} onChange={(v) => setCntForm((prev) => ({ ...prev, counted_qty: v }))} /></Field>
         </div>
       </Modal>
 

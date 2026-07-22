@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { Account, JournalEntry } from '@/types'
-import { Button, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
+import { Button, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
 
 type LineDraft = {
   account_id: string
@@ -296,23 +296,17 @@ export default function JournalEntriesPage() {
                         </select>
                       </td>
                       <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <NumericInput
                           value={line.debit}
-                          onChange={(e) => updateLine(index, { debit: e.target.value, credit: e.target.value ? '' : line.credit })}
+                          onChange={(v) => updateLine(index, { debit: v, credit: v ? '' : line.credit })}
                           className={inputClass}
                           disabled={viewOnly}
                         />
                       </td>
                       <td className="px-2 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <NumericInput
                           value={line.credit}
-                          onChange={(e) => updateLine(index, { credit: e.target.value, debit: e.target.value ? '' : line.debit })}
+                          onChange={(v) => updateLine(index, { credit: v, debit: v ? '' : line.debit })}
                           className={inputClass}
                           disabled={viewOnly}
                         />

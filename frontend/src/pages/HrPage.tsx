@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 const emptyEmp = { employee_number: '', name: '', job_title: '', basic_salary: '0' }
 const emptyAtt = { employee_id: '', attendance_date: new Date().toISOString().slice(0, 10), status: 'present', check_in: '09:00', check_out: '17:00' }
@@ -223,7 +223,7 @@ export default function HrPage() {
           <Field label="الرقم الوظيفي"><input className={inputClass} value={emp.employee_number} onChange={(e) => setEmp({ ...emp, employee_number: e.target.value })} required /></Field>
           <Field label="الاسم"><input className={inputClass} value={emp.name} onChange={(e) => setEmp({ ...emp, name: e.target.value })} required /></Field>
           <Field label="المسمى"><input className={inputClass} value={emp.job_title} onChange={(e) => setEmp({ ...emp, job_title: e.target.value })} /></Field>
-          <Field label="الراتب الأساسي"><input className={inputClass} value={emp.basic_salary} onChange={(e) => setEmp({ ...emp, basic_salary: e.target.value })} /></Field>
+          <Field label="الراتب الأساسي"><NumericInput value={emp.basic_salary} onChange={(v) => setEmp((prev) => ({ ...prev, basic_salary: v }))} /></Field>
         </div>
       </Modal>
 
@@ -293,8 +293,8 @@ export default function HrPage() {
         <div className="space-y-3">
           <Field label="موظف"><select className={inputClass} value={sal.employee_id} onChange={(e) => setSal({ ...sal, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
           <Field label="الفترة (YYYY-MM)"><input className={inputClass} value={sal.period} onChange={(e) => setSal({ ...sal, period: e.target.value })} /></Field>
-          <Field label="بدلات"><input className={inputClass} value={sal.allowances} onChange={(e) => setSal({ ...sal, allowances: e.target.value })} /></Field>
-          <Field label="خصومات"><input className={inputClass} value={sal.deductions} onChange={(e) => setSal({ ...sal, deductions: e.target.value })} /></Field>
+          <Field label="بدلات"><NumericInput value={sal.allowances} onChange={(v) => setSal((prev) => ({ ...prev, allowances: v }))} /></Field>
+          <Field label="خصومات"><NumericInput value={sal.deductions} onChange={(v) => setSal((prev) => ({ ...prev, deductions: v }))} /></Field>
         </div>
       </Modal>
 

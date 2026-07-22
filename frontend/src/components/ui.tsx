@@ -1,4 +1,6 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
+
+const DECIMAL_INPUT_RE = /^-?\d*\.?\d*$/
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
@@ -60,6 +62,32 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 
 export const inputClass =
   'w-full rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-teal/40 focus:ring-2 focus:ring-teal/20'
+
+/** Text input that keeps partial decimals (e.g. "12.") while typing. */
+export function NumericInput({
+  value,
+  onChange,
+  className = inputClass,
+  ...props
+}: {
+  value: string
+  onChange: (value: string) => void
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'type'>) {
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      className={className}
+      value={value}
+      onChange={(e) => {
+        const next = e.target.value.replace(/,/g, '')
+        if (next === '' || DECIMAL_INPUT_RE.test(next)) onChange(next)
+      }}
+      {...props}
+    />
+  )
+}
 
 export function Button({
   variant = 'primary',
@@ -168,21 +196,27 @@ export function Modal({
 }) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
     panelRef.current?.focus()
     return () => {
       document.body.style.overflow = prev
-      window.removeEventListener('keydown', onKey)
     }
-  }, [open, onClose])
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
 
   if (!open) return null
 

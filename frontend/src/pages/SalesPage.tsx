@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -252,8 +252,8 @@ export default function SalesPage() {
         </select>
       </Field>
       <div className="form-grid-2">
-        <Field label={t('common.quantity')}><input className={inputClass} value={state.quantity} onChange={(e) => setState({ ...state, quantity: e.target.value })} /></Field>
-        <Field label={t('common.price')}><input className={inputClass} value={state.unit_price} onChange={(e) => setState({ ...state, unit_price: e.target.value })} /></Field>
+        <Field label={t('common.quantity')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
+        <Field label={t('common.price')}><NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} /></Field>
       </div>
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
         <Field label={t('common.batch')}><input className={inputClass} value={state.batch_no} onChange={(e) => setState({ ...state, batch_no: e.target.value })} required /></Field>
@@ -399,7 +399,7 @@ export default function SalesPage() {
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder)}{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'))}</>}
             {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv)}{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'))}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}</>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => setRet({ ...ret, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>{productFields(ret, setRet)}</>}
-            {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label="فاتورة"><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => setRc({ ...rc, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><input className={inputClass} value={rc.amount} onChange={(e) => setRc({ ...rc, amount: e.target.value })} required /></Field></>}
+            {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label="فاتورة"><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => setRc({ ...rc, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><NumericInput value={rc.amount} onChange={(v) => setRc((prev) => ({ ...prev, amount: v }))} required /></Field></>}
           </form>
         )}
       </Modal>

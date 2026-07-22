@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
 import type { Setting } from '@/types'
-import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type CurrencyRow = {
   id: number
@@ -289,7 +289,7 @@ export default function SettingsPage() {
                 </select>
               </Field>
               <Field label="السعر">
-                <input className={inputClass} value={rateForm.rate} onChange={(e) => setRateForm({ ...rateForm, rate: e.target.value })} />
+                <NumericInput value={rateForm.rate} onChange={(v) => setRateForm((prev) => ({ ...prev, rate: v }))} />
               </Field>
               <Field label="التاريخ">
                 <input type="date" className={inputClass} value={rateForm.rate_date} onChange={(e) => setRateForm({ ...rateForm, rate_date: e.target.value })} />

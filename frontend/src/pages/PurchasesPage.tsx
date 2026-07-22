@@ -2,7 +2,7 @@ import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -161,8 +161,8 @@ export default function PurchasesPage() {
     <>
       <Field label={t('common.product')}><select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label={t('common.quantity')}><input className={inputClass} value={state.quantity} onChange={(e) => setState({ ...state, quantity: e.target.value })} /></Field>
-        <Field label={t('common.cost')}><input className={inputClass} value={state.unit_cost} onChange={(e) => setState({ ...state, unit_cost: e.target.value })} /></Field>
+        <Field label={t('common.quantity')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
+        <Field label={t('common.cost')}><NumericInput value={state.unit_cost} onChange={(v) => setState((prev) => ({ ...prev, unit_cost: v }))} /></Field>
       </div>
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
         <Field label={t('common.batch')}><input className={inputClass} value={state.batch_no} onChange={(e) => setState({ ...state, batch_no: e.target.value })} required /></Field>
@@ -305,7 +305,7 @@ export default function PurchasesPage() {
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}{productFields(po, setPo)}</>}
           {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}{productFields(inv, setInv)}</>}
           {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => setRet({ ...ret, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>{productFields(ret, setRet)}</>}
-          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label="فاتورة"><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => setPay({ ...pay, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><input className={inputClass} value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} required /></Field></>}
+          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label="فاتورة"><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => setPay({ ...pay, purchase_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><NumericInput value={pay.amount} onChange={(v) => setPay((prev) => ({ ...prev, amount: v }))} required /></Field></>}
         </form>}
       </Modal>
     </div>
