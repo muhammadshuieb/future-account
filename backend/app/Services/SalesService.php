@@ -126,10 +126,17 @@ class SalesService
                     $line->product
                 );
 
+                $resolvedBatch = $this->inventory->resolveOutboundBatch(
+                    (int) $invoice->warehouse_id,
+                    $line->product,
+                    (float) $line->quantity,
+                    $line->batch_no
+                );
+
                 $cost = round((float) $line->quantity * (float) $line->cost_price, 2);
                 $cogsTotal += $cost;
 
-                $this->inventory->adjustStock(
+                $movement = $this->inventory->adjustStock(
                     $invoice->warehouse_id,
                     $line->product_id,
                     -((float) $line->quantity),
@@ -138,13 +145,18 @@ class SalesService
                     [
                         'movement_date' => $invoice->invoice_date->toDateString(),
                         'unit_cost' => $line->cost_price,
-                        'batch_no' => $line->batch_no,
+                        'batch_no' => $resolvedBatch ?? $line->batch_no,
                         'serial_no' => $line->serial_no,
                         'reference_type' => $invoice::class,
                         'reference_id' => $invoice->id,
                         'notes' => 'صرف مبيعات '.$invoice->invoice_number,
                     ]
                 );
+
+                $actualBatch = $movement->batch_no ?? $resolvedBatch;
+                if ($line->product->track_batch && $actualBatch && $actualBatch !== $line->batch_no) {
+                    $line->update(['batch_no' => $actualBatch]);
+                }
             }
 
             if ($cogsTotal > 0) {
@@ -343,7 +355,7 @@ class SalesService
 
         foreach ($lines as $line) {
             $product = Product::query()->findOrFail($line['product_id']);
-            $this->inventory->validateBatchSerial($product, $line);
+            $this->inventory->validateBatchSerial($product, $line, forOutbound: true);
             $qty = (float) $line['quantity'];
             $price = (float) ($line['unit_price'] ?? $product->sale_price);
             $rate = (float) ($line['tax_rate'] ?? $taxRateDefault);
@@ -503,19 +515,34 @@ class SalesService
         }
 
         return DB::transaction(function () use ($order, $user, $overrides) {
-            $order->load('items');
-            $lines = $order->items->map(fn ($item) => [
-                'product_id' => $item->product_id,
-                'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price,
-                'tax_rate' => $item->tax_rate,
-                'batch_no' => $item->batch_no,
-                'serial_no' => $item->serial_no,
-            ])->all();
+            $order->load(['items.product']);
 
             $warehouseId = $this->resolveWarehouseId(
                 isset($overrides['warehouse_id']) ? (int) $overrides['warehouse_id'] : ($order->warehouse_id ? (int) $order->warehouse_id : null)
             );
+
+            $lines = $order->items->map(function ($item) use ($warehouseId) {
+                $batchNo = $item->batch_no;
+                $product = $item->product;
+
+                if ($warehouseId && $product && $product->track_batch) {
+                    $batchNo = $this->inventory->resolveOutboundBatch(
+                        $warehouseId,
+                        $product,
+                        (float) $item->quantity,
+                        $item->batch_no
+                    );
+                }
+
+                return [
+                    'product_id' => $item->product_id,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'tax_rate' => $item->tax_rate,
+                    'batch_no' => $batchNo,
+                    'serial_no' => $item->serial_no,
+                ];
+            })->all();
 
             $invoice = $this->createInvoice([
                 'invoice_date' => $overrides['invoice_date'] ?? now()->toDateString(),

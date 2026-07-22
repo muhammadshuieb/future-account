@@ -70,13 +70,13 @@ class InventoryService
     ): StockMovement {
         return DB::transaction(function () use ($warehouseId, $productId, $quantityDelta, $type, $user, $meta) {
             $product = Product::query()->findOrFail($productId);
-            $this->validateBatchSerial($product, $meta);
 
-            $batch = $this->resolveBatchKey($product, $meta['batch_no'] ?? null);
-
-            if ($quantityDelta < 0 && $batch === '' && ! $product->track_batch) {
-                return $this->deductAcrossBatches($warehouseId, $product, abs($quantityDelta), $type, $user, $meta);
+            if ($quantityDelta < 0) {
+                return $this->deductStock($warehouseId, $product, abs($quantityDelta), $type, $user, $meta);
             }
+
+            $this->validateBatchSerial($product, $meta);
+            $batch = $this->resolveBatchKey($product, $meta['batch_no'] ?? null);
 
             return $this->adjustSingleBatchLevel(
                 $warehouseId,
@@ -88,6 +88,37 @@ class InventoryService
                 $meta
             );
         });
+    }
+
+    /**
+     * Resolve the batch to use for an outbound line (FIFO when preferred batch is empty or insufficient).
+     */
+    public function resolveOutboundBatch(
+        int $warehouseId,
+        Product $product,
+        float $requiredQty,
+        ?string $preferredBatch = null
+    ): ?string {
+        if (! $product->track_batch) {
+            return $preferredBatch;
+        }
+
+        if ($preferredBatch !== null && $preferredBatch !== ''
+            && $this->availableQty($warehouseId, $product->id, $preferredBatch, $product) >= $requiredQty - 0.0001) {
+            return $preferredBatch;
+        }
+
+        $fifoBatch = $this->pickFifoBatch($warehouseId, $product->id, $requiredQty);
+        if ($fifoBatch !== null) {
+            return $fifoBatch;
+        }
+
+        $totalAvailable = $this->availableQty($warehouseId, $product->id, null, $product);
+        if ($totalAvailable >= $requiredQty - 0.0001) {
+            return $this->firstFifoBatch($warehouseId, $product->id);
+        }
+
+        return $preferredBatch;
     }
 
     /**
@@ -156,9 +187,9 @@ class InventoryService
     /**
      * Validate batch/serial requirements for products with tracking flags.
      */
-    public function validateBatchSerial(Product $product, array $line): void
+    public function validateBatchSerial(Product $product, array $line, bool $forOutbound = false): void
     {
-        if ($product->track_batch && empty($line['batch_no'])) {
+        if ($product->track_batch && empty($line['batch_no']) && ! $forOutbound) {
             throw ValidationException::withMessages([
                 'batch_no' => ["الصنف {$product->name} يتطلب رقم دفعة."],
             ]);
@@ -179,10 +210,22 @@ class InventoryService
         ?Product $product = null
     ): void {
         $product ??= Product::query()->findOrFail($productId);
-        $available = $this->availableQty($warehouseId, $productId, $batchNo, $product);
 
-        if ($requiredQty > $available + 0.0001) {
-            throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available, $batchNo);
+        if ($product->track_batch && $batchNo !== null && $batchNo !== '') {
+            $batchAvailable = $this->availableQty($warehouseId, $productId, $batchNo, $product);
+            if ($requiredQty <= $batchAvailable + 0.0001) {
+                return;
+            }
+        }
+
+        $totalAvailable = $this->availableQty($warehouseId, $productId, null, $product);
+
+        if ($requiredQty > $totalAvailable + 0.0001) {
+            $batchAvailable = ($product->track_batch && $batchNo !== null && $batchNo !== '')
+                ? $this->availableQty($warehouseId, $productId, $batchNo, $product)
+                : $totalAvailable;
+
+            throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $batchAvailable, $batchNo);
         }
     }
 
@@ -321,6 +364,88 @@ class InventoryService
         }
 
         return $batchNo === null ? '' : $batchNo;
+    }
+
+    protected function deductStock(
+        int $warehouseId,
+        Product $product,
+        float $requiredQty,
+        string $type,
+        User $user,
+        array $meta
+    ): StockMovement {
+        $preferredBatch = $this->resolveBatchKey($product, $meta['batch_no'] ?? null);
+
+        if (! $product->track_batch) {
+            if ($preferredBatch === '') {
+                return $this->deductAcrossBatches($warehouseId, $product, $requiredQty, $type, $user, $meta);
+            }
+
+            return $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                $preferredBatch,
+                -$requiredQty,
+                $type,
+                $user,
+                $meta
+            );
+        }
+
+        if ($preferredBatch !== ''
+            && $this->availableQty($warehouseId, $product->id, $preferredBatch, $product) >= $requiredQty - 0.0001) {
+            return $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                $preferredBatch,
+                -$requiredQty,
+                $type,
+                $user,
+                $meta
+            );
+        }
+
+        $fifoBatch = $this->pickFifoBatch($warehouseId, $product->id, $requiredQty);
+        if ($fifoBatch !== null) {
+            $meta['batch_no'] = $fifoBatch;
+
+            return $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                $fifoBatch,
+                -$requiredQty,
+                $type,
+                $user,
+                $meta
+            );
+        }
+
+        return $this->deductAcrossBatches($warehouseId, $product, $requiredQty, $type, $user, $meta);
+    }
+
+    protected function pickFifoBatch(int $warehouseId, int $productId, float $requiredQty): ?string
+    {
+        $level = StockLevel::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->where('quantity', '>=', $requiredQty - 0.0001)
+            ->where('quantity', '>', 0)
+            ->orderBy('id')
+            ->first();
+
+        return $level ? (string) $level->batch_no : null;
+    }
+
+    protected function firstFifoBatch(int $warehouseId, int $productId): ?string
+    {
+        $level = StockLevel::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId)
+            ->where('quantity', '>', 0)
+            ->orderBy('id')
+            ->first();
+
+        return $level ? (string) $level->batch_no : null;
     }
 
     protected function adjustSingleBatchLevel(

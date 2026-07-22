@@ -183,7 +183,7 @@ class StockAvailabilityTest extends TestCase
             ->assertJsonPath('errors.quantity.0', fn (string $message) => str_contains($message, 'ترحيل فاتورة المشتريات'));
     }
 
-    public function test_insufficient_stock_lists_other_batches_for_batch_tracked_product(): void
+    public function test_batch_tracked_sale_auto_assigns_fifo_when_requested_batch_unavailable(): void
     {
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
@@ -199,17 +199,63 @@ class StockAvailabilityTest extends TestCase
             'lines' => [['product_id' => $product->id, 'quantity' => 5, 'unit_cost' => 800, 'tax_rate' => 0, 'batch_no' => 'LOT-A']],
         ])->assertCreated();
 
-        $response = $this->postJson('/api/sales-invoices', [
+        $this->postJson('/api/sales-invoices', [
             'invoice_date' => now()->toDateString(),
             'customer_id' => $customer->id,
             'warehouse_id' => $warehouse->id,
             'status' => 'posted',
             'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0, 'batch_no' => 'WRONG-BATCH']],
-        ]);
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'posted');
 
-        $response->assertStatus(422)
-            ->assertJsonPath('errors.quantity.0', fn (string $message) => str_contains($message, 'LOT-A')
-                && str_contains($message, 'المتوفر'));
+        $this->assertDatabaseHas('sales_invoice_lines', [
+            'product_id' => $product->id,
+            'batch_no' => 'LOT-A',
+        ]);
+    }
+
+    public function test_sales_order_convert_uses_fifo_when_order_batch_unavailable(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product->update(['track_batch' => true]);
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 800, 'tax_rate' => 0, 'batch_no' => '100']],
+        ])->assertCreated();
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 800, 'tax_rate' => 0, 'batch_no' => '2']],
+        ])->assertCreated();
+
+        $order = $this->postJson('/api/sales-orders', [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0, 'batch_no' => '20']],
+        ])->assertCreated();
+
+        $orderId = $order->json('data.id');
+
+        $this->postJson("/api/sales-orders/{$orderId}/convert-to-invoice", ['status' => 'posted'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'posted');
+
+        $this->assertDatabaseHas('sales_invoice_lines', [
+            'product_id' => $product->id,
+            'batch_no' => '100',
+        ]);
     }
 
     public function test_product_stock_endpoint_returns_breakdown(): void
