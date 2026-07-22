@@ -17,14 +17,15 @@ export default function HeaderLiveClock() {
     <time
       dateTime={now.toISOString()}
       title={`${dateLabel} ${timeLabel} (${APP_TIMEZONE})`}
-      className="inline-flex max-w-[9.5rem] shrink-0 flex-col items-end justify-center rounded-lg border border-[var(--color-line)] bg-white px-2 py-1 text-ink/75 sm:max-w-none sm:px-2.5 sm:py-1.5"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--color-line)] bg-white px-2 py-1.5 text-ink/80 sm:gap-2 sm:px-2.5 sm:py-1.5"
       aria-live="polite"
       aria-atomic="true"
     >
-      <span className="hidden text-[10px] font-medium leading-tight text-teal tabular-nums sm:inline">
+      <span className="text-xs font-medium leading-none tabular-nums text-teal sm:text-sm">
         {dateLabel}
       </span>
-      <span className="text-[11px] font-semibold leading-tight tabular-nums tracking-wide text-ink sm:text-xs">
+      <span className="h-3 w-px shrink-0 bg-[var(--color-line)] sm:h-3.5" aria-hidden="true" />
+      <span className="text-xs font-semibold leading-none tabular-nums tracking-wide text-ink sm:text-base sm:font-medium">
         {timeLabel}
       </span>
     </time>
