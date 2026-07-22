@@ -44,13 +44,9 @@ class SalesQuoteController extends ApiController
     public function destroy(SalesQuote $salesQuote): JsonResponse
     {
         $this->authorizePermission('sales.manage');
-        if ($salesQuote->status === 'converted') {
-            abort(422, 'لا يمكن حذف عرض محوّل.');
-        }
-        $salesQuote->items()->delete();
-        $salesQuote->delete();
+        $this->sales->deleteQuote($salesQuote);
 
-        return $this->ok(['deleted' => true]);
+        return response()->json(['message' => 'تم حذف عرض السعر.']);
     }
 
     public function convertToOrder(Request $request, SalesQuote $salesQuote): JsonResponse

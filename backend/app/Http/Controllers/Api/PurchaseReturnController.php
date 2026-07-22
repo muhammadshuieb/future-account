@@ -44,4 +44,12 @@ class PurchaseReturnController extends ApiController
 
         return $this->ok($this->purchases->postReturn($purchaseReturn, request()->user()));
     }
+
+    public function destroy(PurchaseReturn $purchaseReturn): JsonResponse
+    {
+        $this->authorizePermission('purchases.manage');
+        $this->purchases->deleteReturn($purchaseReturn);
+
+        return response()->json(['message' => 'تم حذف مرتجع المشتريات.']);
+    }
 }

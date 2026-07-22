@@ -2,11 +2,23 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\InventoryCountLine;
 use App\Models\Product;
+use App\Models\PurchaseInvoiceLine;
+use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseRequestItem;
+use App\Models\PurchaseReturnLine;
+use App\Models\SalesInvoiceLine;
+use App\Models\SalesOrderItem;
+use App\Models\SalesQuoteItem;
+use App\Models\SalesReturnLine;
 use App\Models\StockLevel;
+use App\Models\StockMovement;
+use App\Models\WarehouseTransferLine;
 use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends ApiController
 {
@@ -99,9 +111,32 @@ class ProductController extends ApiController
     public function destroy(Product $product): JsonResponse
     {
         $this->authorizePermission('warehouse.manage');
+
+        $inUse =
+            StockMovement::query()->where('product_id', $product->id)->exists()
+            || StockLevel::query()->where('product_id', $product->id)->where('quantity', '!=', 0)->exists()
+            || SalesInvoiceLine::query()->where('product_id', $product->id)->exists()
+            || SalesReturnLine::query()->where('product_id', $product->id)->exists()
+            || SalesQuoteItem::query()->where('product_id', $product->id)->exists()
+            || SalesOrderItem::query()->where('product_id', $product->id)->exists()
+            || PurchaseInvoiceLine::query()->where('product_id', $product->id)->exists()
+            || PurchaseReturnLine::query()->where('product_id', $product->id)->exists()
+            || PurchaseRequestItem::query()->where('product_id', $product->id)->exists()
+            || PurchaseOrderItem::query()->where('product_id', $product->id)->exists()
+            || WarehouseTransferLine::query()->where('product_id', $product->id)->exists()
+            || InventoryCountLine::query()->where('product_id', $product->id)->exists();
+
+        if ($inUse) {
+            throw ValidationException::withMessages([
+                'product' => ['لا يمكن حذف الصنف لأنه مستخدم في فواتير/حركات مخزون'],
+            ]);
+        }
+
+        // Zero-qty stock levels (if any) cascade; remove explicitly for clarity.
+        StockLevel::query()->where('product_id', $product->id)->delete();
         $product->delete();
 
-        return response()->json(['message' => 'تم الحذف.']);
+        return response()->json(['message' => 'تم حذف الصنف.']);
     }
 
     protected function validated(Request $request, ?int $id = null): array

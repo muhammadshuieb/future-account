@@ -55,4 +55,12 @@ class PurchaseInvoiceController extends ApiController
 
         return $this->ok($this->purchases->postInvoice($purchaseInvoice, request()->user()));
     }
+
+    public function destroy(PurchaseInvoice $purchaseInvoice): JsonResponse
+    {
+        $this->authorizePermission('purchases.manage');
+        $this->purchases->deleteInvoice($purchaseInvoice);
+
+        return response()->json(['message' => 'تم حذف فاتورة المشتريات.']);
+    }
 }

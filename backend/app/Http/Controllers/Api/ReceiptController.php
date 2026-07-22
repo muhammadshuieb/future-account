@@ -42,4 +42,12 @@ class ReceiptController extends ApiController
 
         return $this->ok($this->sales->postReceipt($receipt, request()->user()));
     }
+
+    public function destroy(Receipt $receipt): JsonResponse
+    {
+        $this->authorizePermission('sales.manage');
+        $this->sales->deleteReceipt($receipt);
+
+        return response()->json(['message' => 'تم حذف سند القبض.']);
+    }
 }

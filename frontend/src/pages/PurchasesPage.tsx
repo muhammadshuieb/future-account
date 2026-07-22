@@ -65,8 +65,37 @@ export default function PurchasesPage() {
     status: 'posted',
   })
 
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'stock-levels'] })
+  const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels'] })
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
+
+  const purchaseDeletePath = (rowTab: string, id: number) => {
+    if (rowTab === 'requests') return `/purchase-requests/${id}`
+    if (rowTab === 'orders') return `/purchase-orders/${id}`
+    if (rowTab === 'invoices') return `/purchase-invoices/${id}`
+    if (rowTab === 'returns') return `/purchase-returns/${id}`
+    return `/supplier-payments/${id}`
+  }
+
+  const canDeletePurchase = (rowTab: string, status: string) => {
+    if (rowTab === 'requests' || rowTab === 'orders') return status !== 'converted'
+    return status === 'draft'
+  }
+
+  const deleteDoc = useMutation({
+    mutationFn: ({ path }: { path: string }) => api.delete(path),
+    onSuccess: () => {
+      msg.setMessage(t('common.deleted'))
+      invalidate()
+      closeModal()
+    },
+    onError: msg.fromErr,
+  })
+
+  const askDelete = (rowTab: string, id: number, status: string) => {
+    if (!canDeletePurchase(rowTab, status)) return
+    if (!window.confirm(t('common.confirmDelete'))) return
+    deleteDoc.mutate({ path: purchaseDeletePath(rowTab, id) })
+  }
   const openCreate = () => {
     setSelectedId(null)
     setSelectedRow(null)
@@ -245,7 +274,12 @@ export default function PurchasesPage() {
                     <td>{r.supplier?.name || '—'}</td>
                     <td>{r.total}</td>
                     <td>{r.status}</td>
-                    <td>{r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertReq.mutate(r.id) }}>{t('purchases.convertToOrder')}</button>}</td>
+                    <td className="space-x-2 space-x-reverse">
+                      {r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertReq.mutate(r.id) }}>{t('purchases.convertToOrder')}</button>}
+                      {canDeletePurchase('requests', r.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('requests', r.id, r.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -264,7 +298,12 @@ export default function PurchasesPage() {
                     <td>{o.supplier?.name}</td>
                     <td>{o.total}</td>
                     <td>{o.status}</td>
-                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertPo.mutate(o.id) }}>{t('purchases.convertToInvoice')}</button>}</td>
+                    <td className="space-x-2 space-x-reverse">
+                      {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertPo.mutate(o.id) }}>{t('purchases.convertToInvoice')}</button>}
+                      {canDeletePurchase('orders', o.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('orders', o.id, o.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -275,10 +314,20 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}><td className="font-mono text-xs">{i.invoice_number}</td><td>{i.supplier?.name}</td><td>{i.total}</td><td>{i.status}</td></tr>
+                  <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
+                    <td className="font-mono text-xs">{i.invoice_number}</td>
+                    <td>{i.supplier?.name}</td>
+                    <td>{i.total}</td>
+                    <td>{i.status}</td>
+                    <td>
+                      {canDeletePurchase('invoices', i.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -288,10 +337,20 @@ export default function PurchasesPage() {
       {tab === 'returns' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.return_number}</td><td>{r.supplier?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
+                    <td className="font-mono text-xs">{r.return_number}</td>
+                    <td>{r.supplier?.name}</td>
+                    <td>{r.total}</td>
+                    <td>{r.status}</td>
+                    <td>
+                      {canDeletePurchase('returns', r.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('returns', r.id, r.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -301,16 +360,31 @@ export default function PurchasesPage() {
       {tab === 'payments' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>مبلغ</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>رقم</th><th>{t('common.supplier')}</th><th>مبلغ</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(payments.data || []).map((p: { id: number; payment_number: string; amount: number; status: string; supplier?: { name: string } }) => (
-                  <tr key={p.id} className="cursor-pointer" onClick={() => openRow(p)}><td className="font-mono text-xs">{p.payment_number}</td><td>{p.supplier?.name}</td><td>{p.amount}</td><td>{p.status}</td></tr>
+                  <tr key={p.id} className="cursor-pointer" onClick={() => openRow(p)}>
+                    <td className="font-mono text-xs">{p.payment_number}</td>
+                    <td>{p.supplier?.name}</td>
+                    <td>{p.amount}</td>
+                    <td>{p.status}</td>
+                    <td>
+                      {canDeletePurchase('payments', p.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('payments', p.id, p.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
         </Panel>
       )}
-      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>}>
+      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
+          {selectedId && selectedRow && canDeletePurchase(tab, String(selectedRow.status || '')) && (
+            <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
+          )}
+          <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
+        </>}>
         {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}{productFields(po, setPo)}</>}

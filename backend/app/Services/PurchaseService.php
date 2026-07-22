@@ -533,6 +533,82 @@ class PurchaseService
         return $default ? (int) $default : null;
     }
 
+    public function deleteRequest(PurchaseRequest $request): void
+    {
+        if ($request->status === 'converted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف طلب محوّل.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($request) {
+            $request->items()->delete();
+            $request->delete();
+        });
+    }
+
+    public function deleteOrder(PurchaseOrder $order): void
+    {
+        if ($order->status === 'converted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف أمر محوّل.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($order) {
+            $order->items()->delete();
+            $order->delete();
+        });
+    }
+
+    public function deleteInvoice(PurchaseInvoice $invoice): void
+    {
+        $this->assertDraftNotPosted($invoice->status);
+
+        DB::transaction(function () use ($invoice) {
+            $invoice->lines()->delete();
+            $invoice->delete();
+        });
+    }
+
+    public function deleteReturn(PurchaseReturn $ret): void
+    {
+        $this->assertDraftNotPosted($ret->status);
+
+        DB::transaction(function () use ($ret) {
+            $ret->lines()->delete();
+            $ret->delete();
+        });
+    }
+
+    public function deletePayment(SupplierPayment $payment): void
+    {
+        $this->assertDraftNotPosted($payment->status);
+
+        if ($payment->journal_entry_id) {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف سند مرتبط بقيد محاسبي.'],
+            ]);
+        }
+
+        $payment->delete();
+    }
+
+    protected function assertDraftNotPosted(string $status): void
+    {
+        if ($status === 'posted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف مستند مرحّل. يمكنك إلغاؤه إن وُجدت خاصية void'],
+            ]);
+        }
+
+        if ($status !== 'draft') {
+            throw ValidationException::withMessages([
+                'status' => ['يمكن حذف المسودات فقط.'],
+            ]);
+        }
+    }
+
     public function supplierStatement(Supplier $supplier): array
     {
         $invoices = $supplier->invoices()->where('status', 'posted')->orderBy('invoice_date')->get();

@@ -44,4 +44,12 @@ class SalesReturnController extends ApiController
 
         return $this->ok($this->sales->postReturn($salesReturn, request()->user()));
     }
+
+    public function destroy(SalesReturn $salesReturn): JsonResponse
+    {
+        $this->authorizePermission('sales.manage');
+        $this->sales->deleteReturn($salesReturn);
+
+        return response()->json(['message' => 'تم حذف مرتجع المبيعات.']);
+    }
 }

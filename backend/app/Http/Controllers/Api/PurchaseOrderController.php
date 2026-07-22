@@ -36,13 +36,9 @@ class PurchaseOrderController extends ApiController
     public function destroy(PurchaseOrder $purchaseOrder): JsonResponse
     {
         $this->authorizePermission('purchases.manage');
-        if ($purchaseOrder->status === 'converted') {
-            abort(422, 'لا يمكن حذف أمر محوّل.');
-        }
-        $purchaseOrder->items()->delete();
-        $purchaseOrder->delete();
+        $this->purchases->deleteOrder($purchaseOrder);
 
-        return $this->ok(['deleted' => true]);
+        return response()->json(['message' => 'تم حذف أمر الشراء.']);
     }
 
     public function convertToInvoice(Request $request, PurchaseOrder $purchaseOrder): JsonResponse

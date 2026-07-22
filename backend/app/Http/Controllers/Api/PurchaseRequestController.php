@@ -44,13 +44,9 @@ class PurchaseRequestController extends ApiController
     public function destroy(PurchaseRequest $purchaseRequest): JsonResponse
     {
         $this->authorizePermission('purchases.manage');
-        if ($purchaseRequest->status === 'converted') {
-            abort(422, 'لا يمكن حذف طلب محوّل.');
-        }
-        $purchaseRequest->items()->delete();
-        $purchaseRequest->delete();
+        $this->purchases->deleteRequest($purchaseRequest);
 
-        return $this->ok(['deleted' => true]);
+        return response()->json(['message' => 'تم حذف طلب الشراء.']);
     }
 
     public function convertToOrder(Request $request, PurchaseRequest $purchaseRequest): JsonResponse

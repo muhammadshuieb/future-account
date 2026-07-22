@@ -182,6 +182,34 @@ export default function WarehousePage() {
     onError: msg.fromErr,
   })
 
+  const deletePr = useMutation({
+    mutationFn: (id: number) => api.delete(`/products/${id}`),
+    onSuccess: () => {
+      msg.setMessage(t('common.deleted'))
+      closeModal()
+      void qc.invalidateQueries({ queryKey: ['products'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const askDeleteProduct = () => {
+    if (!editingId) return
+    if (!window.confirm(t('common.confirmDelete'))) return
+    deletePr.mutate(editingId)
+  }
+
+  const deletePr = useMutation({
+    mutationFn: (id: number) => api.delete(`/products/${id}`),
+    onSuccess: () => { msg.setMessage(t('common.deleted')); closeModal(); void qc.invalidateQueries({ queryKey: ['products'] }) },
+    onError: msg.fromErr,
+  })
+
+  const askDeleteProduct = () => {
+    if (!editingId) return
+    if (!window.confirm(t('common.confirmDelete'))) return
+    deletePr.mutate(editingId)
+  }
+
   const saveMv = useMutation({
     mutationFn: () =>
       api.post('/stock-movements', {
@@ -295,7 +323,7 @@ export default function WarehousePage() {
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th><th>{t('sales.stockLocation')}</th></tr></thead>
+              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
               <tbody>
                 {filteredProducts.map((p: { id: number; sku: string; name: string; barcode?: string; category_id?: number; unit_id?: number; cost_price: number; sale_price: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean; on_hand?: number; stock_locations?: StockLocation[] }) => (
                   <tr
@@ -334,6 +362,16 @@ export default function WarehousePage() {
                             </span>
                           ))
                         : '—'}
+                    </td>
+                    <td>
+                      {(p.on_hand ?? 0) === 0
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingId(p.id)
+                            if (!window.confirm(t('common.confirmDelete'))) return
+                            deletePr.mutate(p.id)
+                          }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title="لا يمكن حذف الصنف لأنه مستخدم في فواتير/حركات مخزون">{t('common.delete')}</span>}
                     </td>
                   </tr>
                 ))}
@@ -528,7 +566,11 @@ export default function WarehousePage() {
         </div>
       </Modal>
 
-      <Modal open={modalOpen && tab === 'products'} onClose={closeModal} title={editingId ? 'تعديل صنف' : 'صنف جديد'} size="lg" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={savePr.isPending} onClick={() => savePr.mutate()}>حفظ</Button></>}>
+      <Modal open={modalOpen && tab === 'products'} onClose={closeModal} title={editingId ? 'تعديل صنف' : 'صنف جديد'} size="lg" footer={<>
+          {editingId && <Button variant="danger" disabled={deletePr.isPending} onClick={askDeleteProduct}>{t('common.delete')}</Button>}
+          <Button variant="secondary" onClick={closeModal}>إلغاء</Button>
+          <Button variant="primary" disabled={savePr.isPending} onClick={() => savePr.mutate()}>حفظ</Button>
+        </>}>
         <div className="space-y-3">
           <Field label="SKU"><input className={inputClass} value={prForm.sku} onChange={(e) => setPrForm({ ...prForm, sku: e.target.value })} required /></Field>
           <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>

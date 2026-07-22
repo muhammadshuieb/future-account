@@ -55,4 +55,12 @@ class SalesInvoiceController extends ApiController
 
         return $this->ok($this->sales->postInvoice($salesInvoice, request()->user()));
     }
+
+    public function destroy(SalesInvoice $salesInvoice): JsonResponse
+    {
+        $this->authorizePermission('sales.manage');
+        $this->sales->deleteInvoice($salesInvoice);
+
+        return response()->json(['message' => 'تم حذف فاتورة المبيعات.']);
+    }
 }

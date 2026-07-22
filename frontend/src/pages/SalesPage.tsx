@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { LOGO } from '@/lib/brand'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
@@ -135,8 +136,38 @@ export default function SalesPage() {
     }
   }
 
-  const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
+  const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'receipts', 'stock-levels'] })
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null) }
+
+  const salesDeletePath = (rowTab: string, id: number) => {
+    if (rowTab === 'quotes') return `/sales-quotes/${id}`
+    if (rowTab === 'orders') return `/sales-orders/${id}`
+    if (rowTab === 'invoices') return `/sales-invoices/${id}`
+    if (rowTab === 'returns') return `/sales-returns/${id}`
+    return `/receipts/${id}`
+  }
+
+  const canDeleteSales = (rowTab: string, status: string) => {
+    if (rowTab === 'quotes') return status !== 'converted'
+    if (rowTab === 'orders') return status === 'draft'
+    return status === 'draft'
+  }
+
+  const deleteDoc = useMutation({
+    mutationFn: ({ path }: { path: string }) => api.delete(path),
+    onSuccess: () => {
+      msg.setMessage(t('common.deleted'))
+      invalidateSales()
+      closeModal()
+    },
+    onError: msg.fromErr,
+  })
+
+  const askDelete = (rowTab: string, id: number, status: string) => {
+    if (!canDeleteSales(rowTab, status)) return
+    if (!window.confirm(t('common.confirmDelete'))) return
+    deleteDoc.mutate({ path: salesDeletePath(rowTab, id) })
+  }
   const openCreate = () => {
     setPrintId(null)
     setSelectedId(null)
@@ -483,7 +514,12 @@ export default function SalesPage() {
                     <td>{q.customer?.name}</td>
                     <td>{q.total}</td>
                     <td>{q.status}</td>
-                    <td>{q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertQuote.mutate(q.id) }}>{t('sales.convertToOrder')}</button>}</td>
+                    <td className="space-x-2 space-x-reverse">
+                      {q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertQuote.mutate(q.id) }}>{t('sales.convertToOrder')}</button>}
+                      {canDeleteSales('quotes', q.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('quotes', q.id, q.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -504,7 +540,12 @@ export default function SalesPage() {
                     <td>{o.customer?.name}</td>
                     <td>{o.total}</td>
                     <td>{o.status}</td>
-                    <td>{o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}</td>
+                    <td className="space-x-2 space-x-reverse">
+                      {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}
+                      {canDeleteSales('orders', o.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('orders', o.id, o.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={o.status === 'converted' ? t('common.cannotDeleteConverted') : t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -526,7 +567,12 @@ export default function SalesPage() {
                     <td>{i.currency || 'SYP'}</td>
                     <td className="tabular-nums">{i.total}</td>
                     <td>{i.status}</td>
-                    <td><button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); setPrintId(i.id) }}>{t('common.print')}</button></td>
+                    <td className="space-x-2 space-x-reverse">
+                      <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); setPrintId(i.id) }}>{t('common.print')}</button>
+                      {canDeleteSales('invoices', i.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -549,10 +595,20 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; customer?: { name: string } }) => (
-                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.return_number}</td><td>{r.customer?.name}</td><td>{r.total}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
+                    <td className="font-mono text-xs">{r.return_number}</td>
+                    <td>{r.customer?.name}</td>
+                    <td>{r.total}</td>
+                    <td>{r.status}</td>
+                    <td>
+                      {canDeleteSales('returns', r.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('returns', r.id, r.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -564,17 +620,32 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>مبلغ</th><th>{t('common.status')}</th></tr></thead>
+              <thead><tr><th>رقم</th><th>{t('common.customer')}</th><th>مبلغ</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(receipts.data || []).map((r: { id: number; receipt_number: string; amount: number; status: string; customer?: { name: string } }) => (
-                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}><td className="font-mono text-xs">{r.receipt_number}</td><td>{r.customer?.name}</td><td>{r.amount}</td><td>{r.status}</td></tr>
+                  <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
+                    <td className="font-mono text-xs">{r.receipt_number}</td>
+                    <td>{r.customer?.name}</td>
+                    <td>{r.amount}</td>
+                    <td>{r.status}</td>
+                    <td>
+                      {canDeleteSales('receipts', r.status)
+                        ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('receipts', r.id, r.status) }}>{t('common.delete')}</button>
+                        : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
             </div>
         </Panel>
       )}
-      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>}>
+      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <>
+          {selectedId && selectedRow && canDeleteSales(tab, String(selectedRow.status || '')) && (
+            <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
+          )}
+          <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
+        </>}>
         {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : (
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
@@ -717,19 +788,25 @@ function InvoicePrintView({
 
   return (
     <div className="space-y-4 text-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-black/10 pb-4">
+        <div className="flex items-center gap-3">
+          <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
+          <div>
+            <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
+            <p className="text-xs text-black/55">شركة ساينا</p>
+          </div>
+        </div>
+        {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
+      </div>
       <div className="rounded-lg border-2 border-teal/30 bg-teal/5 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-teal">{t('sales.eInvoice')} — future-account-einvoice/1.0</p>
         <p className="mt-1 font-mono text-xs text-black/60">UUID: {structured?.uuid || eInvoice?.e_invoice_uuid || invoice.e_invoice_uuid || '—'}</p>
       </div>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-lg font-bold">{structured?.seller?.name || 'Syna Co'}</p>
-          {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
-          <p className="mt-2 font-mono">{invoice.invoice_number}</p>
-          <p>{String(invoice.invoice_date).slice(0, 10)}</p>
-          <p>{t('common.customer')}: {invoice.customer?.name}</p>
-        </div>
-        {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
+      <div>
+        {structured?.seller?.tax_number && <p className="text-xs text-black/55">Tax: {structured.seller.tax_number}</p>}
+        <p className="mt-2 font-mono">{invoice.invoice_number}</p>
+        <p>{String(invoice.invoice_date).slice(0, 10)}</p>
+        <p>{t('common.customer')}: {invoice.customer?.name}</p>
       </div>
       <table className="data-table">
         <thead><tr><th>{t('common.product')}</th><th title={t('common.quantityUnit')}>{t('common.quantity')}</th><th>{t('common.price')}</th><th>{t('common.batch')}</th><th>{t('common.total')}</th></tr></thead>

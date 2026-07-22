@@ -36,13 +36,9 @@ class SalesOrderController extends ApiController
     public function destroy(SalesOrder $salesOrder): JsonResponse
     {
         $this->authorizePermission('sales.manage');
-        if ($salesOrder->status === 'converted') {
-            abort(422, 'لا يمكن حذف أمر محوّل.');
-        }
-        $salesOrder->items()->delete();
-        $salesOrder->delete();
+        $this->sales->deleteOrder($salesOrder);
 
-        return $this->ok(['deleted' => true]);
+        return response()->json(['message' => 'تم حذف أمر البيع.']);
     }
 
     public function convertToInvoice(Request $request, SalesOrder $salesOrder): JsonResponse

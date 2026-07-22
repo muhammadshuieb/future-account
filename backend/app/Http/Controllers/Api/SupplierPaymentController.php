@@ -42,4 +42,12 @@ class SupplierPaymentController extends ApiController
 
         return $this->ok($this->purchases->postPayment($supplierPayment, request()->user()));
     }
+
+    public function destroy(SupplierPayment $supplierPayment): JsonResponse
+    {
+        $this->authorizePermission('purchases.manage');
+        $this->purchases->deletePayment($supplierPayment);
+
+        return response()->json(['message' => 'تم حذف سند الدفع.']);
+    }
 }

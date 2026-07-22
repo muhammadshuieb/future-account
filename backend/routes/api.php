@@ -127,14 +127,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('sales-invoices', [SalesInvoiceController::class, 'store']);
     Route::get('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'show']);
     Route::post('sales-invoices/{salesInvoice}/post', [SalesInvoiceController::class, 'post']);
+    Route::delete('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'destroy']);
 
     Route::get('sales-returns', [SalesReturnController::class, 'index']);
     Route::post('sales-returns', [SalesReturnController::class, 'store']);
     Route::post('sales-returns/{salesReturn}/post', [SalesReturnController::class, 'post']);
+    Route::delete('sales-returns/{salesReturn}', [SalesReturnController::class, 'destroy']);
 
     Route::get('receipts', [ReceiptController::class, 'index']);
     Route::post('receipts', [ReceiptController::class, 'store']);
     Route::post('receipts/{receipt}/post', [ReceiptController::class, 'post']);
+    Route::delete('receipts/{receipt}', [ReceiptController::class, 'destroy']);
 
     Route::get('purchase-requests', [PurchaseRequestController::class, 'index']);
     Route::post('purchase-requests', [PurchaseRequestController::class, 'store']);
@@ -153,14 +156,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('purchase-invoices', [PurchaseInvoiceController::class, 'store']);
     Route::get('purchase-invoices/{purchaseInvoice}', [PurchaseInvoiceController::class, 'show']);
     Route::post('purchase-invoices/{purchaseInvoice}/post', [PurchaseInvoiceController::class, 'post']);
+    Route::delete('purchase-invoices/{purchaseInvoice}', [PurchaseInvoiceController::class, 'destroy']);
 
     Route::get('purchase-returns', [PurchaseReturnController::class, 'index']);
     Route::post('purchase-returns', [PurchaseReturnController::class, 'store']);
     Route::post('purchase-returns/{purchaseReturn}/post', [PurchaseReturnController::class, 'post']);
+    Route::delete('purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
 
     Route::get('supplier-payments', [SupplierPaymentController::class, 'index']);
     Route::post('supplier-payments', [SupplierPaymentController::class, 'store']);
     Route::post('supplier-payments/{supplierPayment}/post', [SupplierPaymentController::class, 'post']);
+    Route::delete('supplier-payments/{supplierPayment}', [SupplierPaymentController::class, 'destroy']);
 
     // Phase 4 — Cash & Reports
     Route::apiResource('cash-boxes', CashBoxController::class)->except(['show']);

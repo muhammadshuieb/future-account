@@ -618,6 +618,88 @@ class SalesService
         return ['customer' => $customer, 'rows' => $rows, 'balance' => $balance];
     }
 
+    public function deleteQuote(SalesQuote $quote): void
+    {
+        if ($quote->status === 'converted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف عرض محوّل.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($quote) {
+            $quote->items()->delete();
+            $quote->delete();
+        });
+    }
+
+    public function deleteOrder(SalesOrder $order): void
+    {
+        if ($order->status === 'converted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف أمر محوّل.'],
+            ]);
+        }
+
+        if ($order->status !== 'draft') {
+            throw ValidationException::withMessages([
+                'status' => ['يمكن حذف أوامر البيع المسودة فقط.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($order) {
+            $order->items()->delete();
+            $order->delete();
+        });
+    }
+
+    public function deleteInvoice(SalesInvoice $invoice): void
+    {
+        $this->assertDraftNotPosted($invoice->status);
+
+        DB::transaction(function () use ($invoice) {
+            $invoice->lines()->delete();
+            $invoice->delete();
+        });
+    }
+
+    public function deleteReturn(SalesReturn $ret): void
+    {
+        $this->assertDraftNotPosted($ret->status);
+
+        DB::transaction(function () use ($ret) {
+            $ret->lines()->delete();
+            $ret->delete();
+        });
+    }
+
+    public function deleteReceipt(Receipt $receipt): void
+    {
+        $this->assertDraftNotPosted($receipt->status);
+
+        if ($receipt->journal_entry_id) {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف سند مرتبط بقيد محاسبي.'],
+            ]);
+        }
+
+        $receipt->delete();
+    }
+
+    protected function assertDraftNotPosted(string $status): void
+    {
+        if ($status === 'posted') {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن حذف مستند مرحّل. يمكنك إلغاؤه إن وُجدت خاصية void'],
+            ]);
+        }
+
+        if ($status !== 'draft') {
+            throw ValidationException::withMessages([
+                'status' => ['يمكن حذف المسودات فقط.'],
+            ]);
+        }
+    }
+
     protected function resolveWarehouseId(?int $warehouseId): ?int
     {
         if ($warehouseId) {
