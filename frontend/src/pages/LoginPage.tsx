@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/context/AuthContext'
+import { LOGO } from '@/lib/brand'
 
 export default function LoginPage() {
   const { t } = useTranslation()
@@ -46,7 +47,11 @@ export default function LoginPage() {
       />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl shadow-black/20">
         <div className="bg-slate-panel px-8 py-10 text-white">
-          <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-teal to-teal-dark text-xl font-extrabold">س</div>
+          <img
+            src={LOGO.onDark}
+            alt="SYNAMOR TECHNOLOGY"
+            className="brand-logo brand-logo--login mb-5"
+          />
           <p className="text-3xl font-extrabold tracking-tight">{t('app.name')}</p>
           <p className="mt-1 text-sm font-medium text-teal-soft/90">Syna Co</p>
           <p className="mt-2 text-sm leading-6 text-white/65">{t('login.subtitle')}</p>

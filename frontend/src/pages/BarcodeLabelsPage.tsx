@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import JsBarcode from 'jsbarcode'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { LOGO } from '@/lib/brand'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, EmptyState, Field, LoadingBlock, Msg, PageHeader, Panel, inputClass, useFormMessage } from '@/components/ui'
 
@@ -171,17 +172,23 @@ export default function BarcodeLabelsPage() {
             <EmptyState title="لا توجد ملصقات بعد" description="اختر أصنافاً ثم اضغط تجهيز ملصقات." />
           </div>
         ) : (
-          <div className="barcode-sheet grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {labels.map((l, i) => (
-              <div key={`${l.product_id}-${i}`} className="barcode-label rounded-lg border border-[var(--color-line)] bg-white p-3 text-center">
-                <p className="text-[10px] text-black/45">{l.company}</p>
-                <p className="text-sm font-semibold leading-tight">{l.name}</p>
-                <p className="text-xs text-black/50 font-mono">{l.sku}</p>
-                <BarcodeSvg value={l.barcode} format={l.format} />
-                <p className="text-xs font-medium">{Number(l.price).toLocaleString('ar')}</p>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="mb-3 hidden items-center gap-2 border-b border-black/10 pb-2 print:flex">
+              <img src={LOGO.mark} alt="" className="brand-logo brand-logo--barcode-mark" />
+              <p className="text-xs font-semibold">شركة ساينا — Syna Co</p>
+            </div>
+            <div className="barcode-sheet grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {labels.map((l, i) => (
+                <div key={`${l.product_id}-${i}`} className="barcode-label rounded-lg border border-[var(--color-line)] bg-white p-3 text-center">
+                  <p className="text-[10px] text-black/45">{l.company}</p>
+                  <p className="text-sm font-semibold leading-tight">{l.name}</p>
+                  <p className="text-xs text-black/50 font-mono">{l.sku}</p>
+                  <BarcodeSvg value={l.barcode} format={l.format} />
+                  <p className="text-xs font-medium">{Number(l.price).toLocaleString('ar')}</p>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

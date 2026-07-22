@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { formatRoleNames } from '@/lib/rbacLabels'
 import { APP_VERSION } from '@/version'
+import { LOGO } from '@/lib/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { navGroups, type NavItem } from '@/config/navigation'
 
@@ -75,12 +76,14 @@ export default function AppLayout() {
     <>
       <div className="app-sidebar-header shrink-0 border-b border-white/10 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-teal to-teal-dark text-lg font-extrabold shadow-lg shadow-black/20">
-            س
-          </div>
+          <img
+            src={LOGO.mark}
+            alt="SYNAMOR"
+            className="brand-logo brand-logo--sidebar-mark shrink-0"
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-bold leading-tight">{t('app.name')}</p>
-            <p className="truncate text-xs text-white/55">{t('app.tagline')}</p>
+            <p className="truncate text-xs text-white/55">Syna Co</p>
             <p className="text-[10px] text-white/35">v{APP_VERSION}</p>
           </div>
         </div>

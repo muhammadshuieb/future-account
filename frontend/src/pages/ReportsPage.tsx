@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
+import { LOGO } from '@/lib/brand'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
@@ -191,7 +192,15 @@ export default function ReportsPage() {
 
       <Panel className="print-area">
         <div className="hidden border-b border-black/10 px-4 py-3 print:block">
-          <p className="text-lg font-bold">{t('app.name')} — {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}</p>
+          <div className="mb-2 flex items-center gap-3">
+            <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
+            <div>
+              <p className="text-lg font-bold">{t('app.name')} — Syna Co</p>
+              <p className="text-sm font-semibold">
+                {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
+              </p>
+            </div>
+          </div>
           <p className="text-xs text-black/60">
             العملة الأساسية: {base}
             {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}

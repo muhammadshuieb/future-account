@@ -36,3 +36,6 @@ frontend/.env.local
 .idea/
 .vscode/
 *.swp
+
+# Local tooling
+tmp-logo-extract/
