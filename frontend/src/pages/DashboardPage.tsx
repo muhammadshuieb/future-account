@@ -2,31 +2,58 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeftRight, Package, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChevronLeft, Package, Users } from 'lucide-react'
 import api from '@/lib/api'
+import { resolveAlertHref } from '@/lib/alertLinks'
 import type { DashboardSummary } from '@/types'
 import { EmptyState, LoadingBlock, Panel, StatTile, formatMoney } from '@/components/ui'
 
-function DailyBarChart({ title, data, currency }: { title: string; data: { date: string; total: number }[]; currency: string }) {
-  const max = Math.max(...data.map((d) => d.total), 1)
+function DailyBarChart({
+  title,
+  data,
+  currency,
+}: {
+  title: string
+  data: { date: string; total: number }[]
+  currency: string
+}) {
+  const totals = data.map((d) => Number(d.total) || 0)
+  const max = Math.max(...totals, 1)
+  const periodTotal = totals.reduce((s, n) => s + n, 0)
+  const hasData = periodTotal > 0
 
   return (
     <Panel>
-      <div className="border-b border-[var(--color-line)] px-5 py-3">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--color-line)] px-5 py-3">
         <h2 className="font-semibold">{title}</h2>
+        <p className="text-xs tabular-nums text-black/55">
+          الإجمالي: {formatMoney(periodTotal, currency)}
+        </p>
       </div>
-      <div className="flex h-44 items-end gap-1 p-4">
-        {data.map((d) => (
-          <div key={d.date} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-            <div
-              className="w-full rounded-t bg-teal/80 transition-all"
-              style={{ height: `${Math.max(4, (d.total / max) * 100)}%` }}
-              title={`${d.date}: ${d.total} ${currency}`}
-            />
-            <span className="truncate text-[9px] text-black/45">{d.date.slice(5)}</span>
-          </div>
-        ))}
-      </div>
+      {!hasData ? (
+        <div className="flex h-44 items-center justify-center px-4">
+          <p className="text-sm text-black/45">لا توجد حركات في هذه الفترة</p>
+        </div>
+      ) : (
+        <div className="flex h-44 gap-1 p-4 pt-3">
+          {data.map((d, i) => {
+            const total = totals[i]
+            const pct = Math.max(total > 0 ? 8 : 0, (total / max) * 100)
+            return (
+              <div key={d.date} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+                <div className="relative flex w-full flex-1 items-end">
+                  <div
+                    className="w-full rounded-t bg-teal/80 transition-all"
+                    style={{ height: `${pct}%` }}
+                    title={`${d.date}: ${formatMoney(total, currency)}`}
+                  />
+                </div>
+                <span className="truncate text-[9px] text-black/45">{d.date.slice(5)}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </Panel>
   )
 }
@@ -46,17 +73,18 @@ export default function DashboardPage() {
   if (isLoading) return <LoadingBlock label={t('common.loading')} />
   if (error || !data) return <p className="text-danger">تعذر تحميل البيانات.</p>
 
+  const currency = data.currency || 'SYP'
   const primary = [
-    { label: 'إيرادات الفترة', value: formatMoney(data.revenue, data.currency), tone: 'success' as const },
-    { label: 'مصروفات الفترة', value: formatMoney(data.expense, data.currency), tone: 'amber' as const },
-    { label: 'صافي الربح', value: formatMoney(data.net_income, data.currency), tone: 'teal' as const },
+    { label: 'إيرادات الفترة', value: formatMoney(data.revenue, currency), tone: 'success' as const },
+    { label: 'مصروفات الفترة', value: formatMoney(data.expense, currency), tone: 'amber' as const },
+    { label: 'صافي الربح', value: formatMoney(data.net_income, currency), tone: 'teal' as const },
   ]
 
   const secondary = [
-    { label: 'ذمم مدينة', value: formatMoney(data.receivables ?? 0, data.currency), hint: 'مستحق من العملاء' },
-    { label: 'ذمم دائنة', value: formatMoney(data.payables ?? 0, data.currency), hint: 'مستحق للموردين' },
-    { label: 'مبيعات الشهر', value: formatMoney(data.month_sales ?? 0, data.currency) },
-    { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, data.currency) },
+    { label: 'ذمم مدينة', value: formatMoney(data.receivables ?? 0, currency), hint: 'مستحق من العملاء' },
+    { label: 'ذمم دائنة', value: formatMoney(data.payables ?? 0, currency), hint: 'مستحق للموردين' },
+    { label: 'مبيعات الشهر', value: formatMoney(data.month_sales ?? 0, currency) },
+    { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, currency) },
   ]
 
   return (
@@ -66,7 +94,7 @@ export default function DashboardPage() {
           <p className="text-sm font-medium text-white/70">{t('app.name')}</p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">{data.company_name}</h1>
           <p className="mt-2 max-w-xl text-sm leading-7 text-white/75">
-            ملخص تشغيلي موحّد — العملة الأساسية {data.currency}
+            ملخص تشغيلي موحّد — العملة الأساسية {currency}
           </p>
         </div>
       </header>
@@ -89,8 +117,8 @@ export default function DashboardPage() {
       </div>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <DailyBarChart title={t('dashboard.dailySales')} data={data.daily_sales || []} currency={data.currency} />
-        <DailyBarChart title={t('dashboard.dailyPurchases')} data={data.daily_purchases || []} currency={data.currency} />
+        <DailyBarChart title={t('dashboard.dailySales')} data={data.daily_sales || []} currency={currency} />
+        <DailyBarChart title={t('dashboard.dailyPurchases')} data={data.daily_purchases || []} currency={currency} />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -103,15 +131,33 @@ export default function DashboardPage() {
               <EmptyState title="لا توجد تنبيهات حالياً" description="سيظهر هنا نقص المخزون والذمم والقيود المعلّقة." />
             ) : (
               <ul className="divide-y divide-[var(--color-line)]">
-                {(data.alerts || []).map((a, i) => (
-                  <li key={i} className="flex gap-3 px-4 py-3">
-                    <AlertTriangle className={a.type === 'warning' ? 'text-amber' : 'text-teal'} size={18} />
-                    <div>
-                      <p className="text-sm font-semibold">{a.title}</p>
-                      <p className="text-xs text-black/55">{a.body}</p>
-                    </div>
-                  </li>
-                ))}
+                {(data.alerts || []).map((a, i) => {
+                  const href = resolveAlertHref(a)
+                  const inner = (
+                    <>
+                      <AlertTriangle className={`mt-0.5 shrink-0 ${a.type === 'warning' ? 'text-amber' : 'text-teal'}`} size={18} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{a.title}</p>
+                        <p className="text-xs text-black/55">{a.body}</p>
+                      </div>
+                      {href && <ChevronLeft size={16} className="shrink-0 text-black/30" />}
+                    </>
+                  )
+                  return (
+                    <li key={`${a.code || a.title}-${i}`}>
+                      {href ? (
+                        <Link
+                          to={href}
+                          className="flex cursor-pointer gap-3 px-4 py-3 transition hover:bg-mist"
+                        >
+                          {inner}
+                        </Link>
+                      ) : (
+                        <div className="flex gap-3 px-4 py-3">{inner}</div>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
@@ -125,7 +171,7 @@ export default function DashboardPage() {
             <Link to="/sales" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">
               <ArrowLeftRight size={16} className="text-teal" /> {t('sales.title')}
             </Link>
-            <Link to="/warehouse" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">
+            <Link to="/warehouse?tab=alerts" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">
               <Package size={16} className="text-teal" /> {t('warehouse.title')}
             </Link>
             <Link to="/partners" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">

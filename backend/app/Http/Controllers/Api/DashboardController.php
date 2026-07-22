@@ -117,14 +117,41 @@ class DashboardController extends Controller
 
         $alerts = [];
         if ($lowStock > 0) {
-            $alerts[] = ['type' => 'warning', 'title' => 'تنبيه مخزون', 'body' => "{$lowStock} صنف تحت حد إعادة الطلب"];
+            $alerts[] = [
+                'type' => 'warning',
+                'code' => 'low_stock',
+                'title' => 'تنبيه مخزون',
+                'body' => "{$lowStock} صنف تحت حد إعادة الطلب",
+                'href' => '/warehouse?tab=alerts',
+            ];
         }
         if ($receivables > 0) {
-            $alerts[] = ['type' => 'info', 'title' => 'ذمم مدينة', 'body' => 'يوجد أرصدة مستحقة على العملاء'];
+            $alerts[] = [
+                'type' => 'info',
+                'code' => 'receivables',
+                'title' => 'ذمم مدينة',
+                'body' => 'يوجد أرصدة مستحقة على العملاء',
+                'href' => '/partners?tab=customers',
+            ];
+        }
+        if ($payables > 0) {
+            $alerts[] = [
+                'type' => 'info',
+                'code' => 'payables',
+                'title' => 'ذمم دائنة',
+                'body' => 'يوجد أرصدة مستحقة للموردين',
+                'href' => '/partners?tab=suppliers',
+            ];
         }
         $draftCount = JournalEntry::query()->where('status', 'draft')->count();
         if ($draftCount > 0) {
-            $alerts[] = ['type' => 'info', 'title' => 'قيود مسودة', 'body' => "{$draftCount} قيد بانتظار الترحيل"];
+            $alerts[] = [
+                'type' => 'info',
+                'code' => 'draft_journals',
+                'title' => 'قيود مسودة',
+                'body' => "{$draftCount} قيد بانتظار الترحيل",
+                'href' => '/journal-entries',
+            ];
         }
 
         // Seed a couple of system notifications if empty (stub center)
@@ -133,6 +160,7 @@ class DashboardController extends Controller
                 'type' => 'info',
                 'title' => 'مرحباً بك في Syna Co',
                 'body' => 'لوحة الإشعارات جاهزة — ستظهر هنا تنبيهات المخزون والذمم.',
+                'data' => ['href' => '/'],
             ]);
         }
 

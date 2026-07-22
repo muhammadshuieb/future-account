@@ -170,16 +170,19 @@ export function formatQuantity(value: number | string | null | undefined): strin
   return quantityFormatter.format(n)
 }
 
-export function formatMoney(value: number, currency = 'SYP') {
+export function formatMoney(value: number | string | null | undefined, currency = 'SYP') {
+  const n = typeof value === 'number' ? value : Number(value ?? 0)
+  const safe = Number.isFinite(n) ? n : 0
+  const code = currency || 'SYP'
   try {
     return new Intl.NumberFormat(NUMBER_LOCALE, {
       style: 'currency',
-      currency: currency || 'SYP',
+      currency: code,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(value)
+    }).format(safe)
   } catch {
-    return `${Number(value).toLocaleString(NUMBER_LOCALE)} ${currency}`
+    return `${safe.toLocaleString(NUMBER_LOCALE)} ${code}`
   }
 }
 

@@ -65,7 +65,7 @@ export type DashboardSummary = {
   suppliers_count?: number
   products_count?: number
   low_stock_count?: number
-  alerts?: { type: string; title: string; body: string }[]
+  alerts?: { type: string; code?: string; title: string; body: string; href?: string }[]
 }
 
 export type Setting = {

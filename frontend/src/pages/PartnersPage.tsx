@@ -4,15 +4,17 @@ import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
+import { useQueryTab } from '@/lib/useQueryTab'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean }
 
+const PARTNER_TABS = ['customers', 'suppliers'] as const
 const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' }
 
 export default function PartnersPage() {
-  const [tab, setTab] = useState('customers')
+  const [tab, setTab] = useQueryTab(PARTNER_TABS, 'customers')
   const [statementId, setStatementId] = useState<number | null>(null)
   const [from, setFrom] = useState(yearStartYmd)
   const [to, setTo] = useState(todayYmd)

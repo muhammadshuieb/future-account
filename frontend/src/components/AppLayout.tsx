@@ -1,10 +1,11 @@
-import { NavLink, Outlet, Navigate } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LogOut, Shield, Bell, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
+import { resolveAlertHref } from '@/lib/alertLinks'
 import { formatRoleNames } from '@/lib/rbacLabels'
 import { APP_VERSION } from '@/version'
 import { LOGO } from '@/lib/brand'
@@ -19,8 +20,19 @@ function canSeeNavItem(item: NavItem, hasPermission: (p: string) => boolean): bo
   return hasPermission(item.permission)
 }
 
+type NotifItem = {
+  id: number
+  type?: string
+  title: string
+  body?: string
+  read_at?: string | null
+  created_at: string
+  data?: { href?: string } | null
+}
+
 export default function AppLayout() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { user, loading, logout, hasPermission } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
@@ -36,7 +48,7 @@ export default function AppLayout() {
   const notifications = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => (await api.get('/notifications')).data.data as {
-      items: { id: number; title: string; body?: string; read_at?: string | null; created_at: string }[]
+      items: NotifItem[]
       unread_count: number
     },
     enabled: !!user,
@@ -48,6 +60,19 @@ export default function AppLayout() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['notifications'] }),
   })
 
+  const openNotification = async (n: NotifItem) => {
+    const href = resolveAlertHref(n)
+    setNotifOpen(false)
+    try {
+      if (!n.read_at) {
+        await api.post(`/notifications/${n.id}/read`)
+        void qc.invalidateQueries({ queryKey: ['notifications'] })
+      }
+    } catch {
+      /* still navigate */
+    }
+    if (href) navigate(href)
+  }
   if (loading) {
     return (
       <div className="grid min-h-screen place-items-center">
@@ -223,9 +248,15 @@ export default function AppLayout() {
                         <li className="px-3 py-6 text-center text-sm text-black/45">{t('nav.noNotifications')}</li>
                       )}
                       {(notifications.data?.items || []).map((n) => (
-                        <li key={n.id} className={`border-b border-[var(--color-line)] px-3 py-2.5 ${n.read_at ? 'opacity-60' : ''}`}>
-                          <p className="text-sm font-medium">{n.title}</p>
-                          {n.body && <p className="mt-0.5 text-xs text-black/55">{n.body}</p>}
+                        <li key={n.id}>
+                          <button
+                            type="button"
+                            className={`w-full cursor-pointer border-b border-[var(--color-line)] px-3 py-2.5 text-right transition hover:bg-mist ${n.read_at ? 'opacity-60' : ''}`}
+                            onClick={() => void openNotification(n)}
+                          >
+                            <p className="text-sm font-medium">{n.title}</p>
+                            {n.body && <p className="mt-0.5 text-xs text-black/55">{n.body}</p>}
+                          </button>
                         </li>
                       ))}
                     </ul>

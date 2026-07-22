@@ -6,9 +6,12 @@ import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
+import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+
+const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
 
 type ProductRow = { id: number; name: string; sale_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -47,7 +50,7 @@ async function fetchStockInfo(productId: string, warehouseId: string, batchNo?: 
 
 export default function SalesPage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState('invoices')
+  const [tab, setTab] = useQueryTab(SALES_TABS, 'invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
   const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)

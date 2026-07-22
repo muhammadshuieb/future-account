@@ -5,8 +5,11 @@ import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { formatDateTimeLocal, todayYmd } from '@/lib/dates'
 import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
+import { useQueryTab } from '@/lib/useQueryTab'
 import type { Setting } from '@/types'
 import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+
+const SETTINGS_TABS = ['general', 'currencies', 'backup', 'barcode', 'users'] as const
 
 type CurrencyRow = {
   id: number
@@ -52,7 +55,7 @@ export default function SettingsPage() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<'general' | 'currencies' | 'backup' | 'barcode' | 'users'>('general')
+  const [tab, setTab] = useQueryTab(SETTINGS_TABS, 'general')
   const [values, setValues] = useState<Record<string, string>>({})
   const msg = useFormMessage()
 

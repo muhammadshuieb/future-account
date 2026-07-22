@@ -26,6 +26,8 @@ class AppNotificationService
 
     public function notifyAdmins(string $type, string $title, string $body, array $data = []): void
     {
+        $data = $this->withHref($type, $data);
+
         foreach ($this->adminUserIds() as $userId) {
             AppNotification::query()->create([
                 'user_id' => $userId,
@@ -42,6 +44,8 @@ class AppNotificationService
      */
     public function notifyAdminsOnceDaily(string $type, string $title, string $body, array $data = []): void
     {
+        $data = $this->withHref($type, $data);
+
         foreach ($this->adminUserIds() as $userId) {
             $exists = AppNotification::query()
                 ->where('type', $type)
@@ -65,5 +69,28 @@ class AppNotificationService
                 'data' => $data,
             ]);
         }
+    }
+
+    /** @param  array<string, mixed>  $data */
+    protected function withHref(string $type, array $data): array
+    {
+        if (isset($data['href']) && is_string($data['href']) && $data['href'] !== '') {
+            return $data;
+        }
+
+        $map = [
+            'backup_drive_missing' => '/settings?tab=backup',
+            'backup_failed' => '/settings?tab=backup',
+            'low_stock' => '/warehouse?tab=alerts',
+            'receivables' => '/partners?tab=customers',
+            'payables' => '/partners?tab=suppliers',
+            'draft_journals' => '/journal-entries',
+        ];
+
+        if (isset($map[$type])) {
+            $data['href'] = $map[$type];
+        }
+
+        return $data;
     }
 }

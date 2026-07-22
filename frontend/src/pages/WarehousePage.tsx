@@ -3,10 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
+import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
-type Tab = 'warehouses' | 'products' | 'categories' | 'units' | 'stock' | 'movements' | 'transfers' | 'alerts' | 'counts'
+const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
+type Tab = (typeof WAREHOUSE_TABS)[number]
 
 type ProductRow = { id: number; name: string; track_batch?: boolean; track_serial?: boolean }
 
@@ -83,7 +85,7 @@ const emptyTr = {
 
 export default function WarehousePage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('warehouses')
+  const [tab, setTab] = useQueryTab(WAREHOUSE_TABS, 'warehouses')
   const qc = useQueryClient()
   const msg = useFormMessage()
   const [modalOpen, setModalOpen] = useState(false)
