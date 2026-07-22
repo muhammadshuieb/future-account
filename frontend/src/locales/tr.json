@@ -77,7 +77,8 @@
     "convertToOrder": "Siparişe Dönüştür",
     "convertToInvoice": "Faturaya Dönüştür",
     "eInvoice": "E-Fatura",
-    "creditLimitExceeded": "Müşteri kredi limiti aşıldı"
+    "creditLimitExceeded": "Müşteri kredi limiti aşıldı",
+    "stockRemaining": "Depoda kalan: {{qty}}"
   },
   "purchases": {
     "title": "Satın Alma",

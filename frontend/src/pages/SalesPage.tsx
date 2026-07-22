@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
@@ -17,6 +17,16 @@ function linePayload(productId: string, qty: string, price: string, batch: strin
     tax_rate: 15,
     batch_no: batch || undefined,
     serial_no: serial || undefined,
+  }
+}
+
+async function fetchAvailableStock(productId: string, warehouseId: string): Promise<number | null> {
+  if (!productId || !warehouseId) return null
+  try {
+    const res = await api.get(`/products/${productId}/stock`, { params: { warehouse_id: warehouseId } })
+    return Number(res.data.data.available_qty ?? 0)
+  } catch {
+    return null
   }
 }
 
@@ -66,8 +76,24 @@ export default function SalesPage() {
     status: 'posted',
   })
   const [printId, setPrintId] = useState<number | null>(null)
+  const [availableStock, setAvailableStock] = useState<number | null>(null)
+  const skipStockAutofill = useRef(false)
 
   const selectedProduct = (products.data || []).find((p) => String(p.id) === inv.product_id)
+
+  const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string }>(
+    setState: Dispatch<SetStateAction<T>>,
+    productId: string,
+    warehouseId: string,
+  ) => {
+    const qty = await fetchAvailableStock(productId, warehouseId)
+    if (qty === null) {
+      setAvailableStock(null)
+      return
+    }
+    setAvailableStock(qty)
+    setState((prev) => ({ ...prev, quantity: String(qty) }))
+  }, [])
 
   async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
     try {
@@ -78,9 +104,16 @@ export default function SalesPage() {
         return
       }
       const patch = { product_id: String(found.id), unit_price: String(found.sale_price) }
-      if (target === 'inv') setInv((prev) => ({ ...prev, ...patch }))
-      else if (target === 'order') setOrder((prev) => ({ ...prev, ...patch }))
-      else setQuote((prev) => ({ ...prev, ...patch }))
+      if (target === 'inv') {
+        setInv((prev) => ({ ...prev, ...patch }))
+        if (inv.warehouse_id) void applyStockToForm(setInv, String(found.id), inv.warehouse_id)
+      } else if (target === 'order') {
+        setOrder((prev) => ({ ...prev, ...patch }))
+        if (order.warehouse_id) void applyStockToForm(setOrder, String(found.id), order.warehouse_id)
+      } else {
+        setQuote((prev) => ({ ...prev, ...patch }))
+        if (quote.warehouse_id) void applyStockToForm(setQuote, String(found.id), quote.warehouse_id)
+      }
       msg.setMessage(`تم العثور على: ${found.name}`)
     } catch {
       msg.setError('تعذر البحث بالباركود')
@@ -88,8 +121,8 @@ export default function SalesPage() {
   }
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'stock-levels'] })
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
-  const openCreate = () => { setPrintId(null); setSelectedId(null); setSelectedRow(null); setModal('create') }
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setAvailableStock(null) }
+  const openCreate = () => { setPrintId(null); setSelectedId(null); setSelectedRow(null); setAvailableStock(null); skipStockAutofill.current = false; setModal('create') }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setPrintId(null); setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
 
   const saveQuote = useMutation({
@@ -207,6 +240,7 @@ export default function SalesPage() {
 
   useEffect(() => {
     if (modal !== 'edit' || !detail.data) return
+    skipStockAutofill.current = true
     const d = detail.data
     const line = d.items?.[0] || d.lines?.[0] || {}
     setQuote({
@@ -222,6 +256,7 @@ export default function SalesPage() {
       currency: d.currency || 'SYP',
       exchange_rate: String(d.exchange_rate || ''),
     })
+    setAvailableStock(null)
   }, [detail.data, modal])
 
   const tabs = [
@@ -232,10 +267,11 @@ export default function SalesPage() {
     { id: 'receipts', label: t('sales.receipts') },
   ]
 
-  const productFields = <T extends { product_id: string; quantity: string; unit_price: string; batch_no: string; serial_no: string }>(
+  const productFields = <T extends { product_id: string; warehouse_id?: string; quantity: string; unit_price: string; batch_no: string; serial_no: string }>(
     state: T,
     setState: Dispatch<SetStateAction<T>>,
     onScan?: (code: string) => void,
+    autoFillStock = false,
   ) => (
     <>
       {onScan && (
@@ -246,13 +282,36 @@ export default function SalesPage() {
         />
       )}
       <Field label={t('common.product')}>
-        <select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required>
+        <select
+          className={inputClass}
+          value={state.product_id}
+          onChange={(e) => {
+            const productId = e.target.value
+            const product = (products.data || []).find((p) => String(p.id) === productId)
+            setState((prev) => ({
+              ...prev,
+              product_id: productId,
+              unit_price: product ? String(product.sale_price) : prev.unit_price,
+            }))
+            if (autoFillStock && productId && state.warehouse_id && !skipStockAutofill.current) {
+              void applyStockToForm(setState, productId, state.warehouse_id)
+            } else if (!productId) {
+              setAvailableStock(null)
+            }
+          }}
+          required
+        >
           <option value="">—</option>
           {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </Field>
       <div className="form-grid-2">
-        <Field label={t('common.quantity')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
+        <Field label={t('common.quantity')}>
+          <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
+          {autoFillStock && availableStock !== null && state.product_id && state.warehouse_id && (
+            <p className="mt-1 text-xs text-black/55">{t('sales.stockRemaining', { qty: availableStock })}</p>
+          )}
+        </Field>
         <Field label={t('common.price')}><NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} /></Field>
       </div>
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
@@ -264,12 +323,42 @@ export default function SalesPage() {
     </>
   )
 
-  const customerField = <T extends { customer_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
+  const customerField = <T extends { customer_id: string; warehouse_id?: string; product_id?: string }>(
+    state: T,
+    setState: Dispatch<SetStateAction<T>>,
+    warehouse = true,
+    onWarehouseChange?: (warehouseId: string, productId?: string) => void,
+  ) => (
     <>
       <Field label={t('common.customer')}><select className={inputClass} value={state.customer_id} onChange={(e) => setState({ ...state, customer_id: e.target.value })} required><option value="">—</option>{(customers.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
+      {warehouse && (
+        <Field label={t('common.warehouse')}>
+          <select
+            className={inputClass}
+            value={state.warehouse_id}
+            onChange={(e) => {
+              const warehouseId = e.target.value
+              setState({ ...state, warehouse_id: warehouseId })
+              onWarehouseChange?.(warehouseId, state.product_id)
+            }}
+          >
+            <option value="">—</option>
+            {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+        </Field>
+      )}
     </>
   )
+
+  const onSalesWarehouseChange = <T extends { product_id: string; warehouse_id?: string; quantity: string }>(
+    setState: Dispatch<SetStateAction<T>>,
+  ) => (warehouseId: string, productId?: string) => {
+    if (productId && warehouseId && !skipStockAutofill.current) {
+      void applyStockToForm(setState, productId, warehouseId)
+    } else if (!warehouseId) {
+      setAvailableStock(null)
+    }
+  }
 
   const summary = (data: Record<string, unknown>) => (
     <div className="space-y-3 text-sm">
@@ -395,9 +484,9 @@ export default function SalesPage() {
       <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>}>
         {modal === 'view' ? (detail.isLoading ? <p>جاري التحميل...</p> : summary(detail.data || selectedRow || {})) : (
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
-            {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote)}{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'))}</>}
-            {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder)}{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'))}</>}
-            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv)}{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'))}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}</>}
+            {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label="صالح حتى"><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
+            {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}</>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label="فاتورة"><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => setRet({ ...ret, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field>{productFields(ret, setRet)}</>}
             {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label="فاتورة"><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => setRc({ ...rc, sales_invoice_id: e.target.value })}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label="صندوق"><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><Field label="المبلغ"><NumericInput value={rc.amount} onChange={(v) => setRc((prev) => ({ ...prev, amount: v }))} required /></Field></>}
           </form>

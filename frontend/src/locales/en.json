@@ -77,7 +77,8 @@
     "convertToOrder": "Convert to Order",
     "convertToInvoice": "Convert to Invoice",
     "eInvoice": "E-Invoice",
-    "creditLimitExceeded": "Customer credit limit exceeded"
+    "creditLimitExceeded": "Customer credit limit exceeded",
+    "stockRemaining": "Remaining in warehouse: {{qty}}"
   },
   "purchases": {
     "title": "Purchases",

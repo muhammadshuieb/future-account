@@ -77,7 +77,8 @@
     "convertToOrder": "تحويل لأمر بيع",
     "convertToInvoice": "تحويل لفاتورة",
     "eInvoice": "فاتورة إلكترونية",
-    "creditLimitExceeded": "تجاوز حد الائتمان للعميل"
+    "creditLimitExceeded": "تجاوز حد الائتمان للعميل",
+    "stockRemaining": "المتبقي في المخزن: {{qty}}"
   },
   "purchases": {
     "title": "المشتريات",

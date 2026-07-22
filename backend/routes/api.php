@@ -91,6 +91,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('categories', CategoryController::class)->except(['show']);
     Route::apiResource('units', UnitController::class)->except(['show']);
     Route::apiResource('products', ProductController::class);
+    Route::get('products/{product}/stock', [ProductController::class, 'stock']);
 
     Route::get('stock-levels', [InventoryController::class, 'stockLevels']);
     Route::get('stock-movements', [InventoryController::class, 'movements']);

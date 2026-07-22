@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Product;
+use App\Models\StockLevel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -34,6 +35,31 @@ class ProductController extends ApiController
         $this->authorizePermission('warehouse.view');
 
         return $this->ok($product->load(['category', 'unit', 'stockLevels.warehouse']));
+    }
+
+    public function stock(Request $request, Product $product): JsonResponse
+    {
+        $this->authorizePermission('warehouse.view');
+        $data = $request->validate([
+            'warehouse_id' => ['required', 'exists:warehouses,id'],
+            'batch_no' => ['nullable', 'string', 'max:64'],
+        ]);
+
+        $query = StockLevel::query()
+            ->where('warehouse_id', $data['warehouse_id'])
+            ->where('product_id', $product->id);
+
+        if (array_key_exists('batch_no', $data) && $data['batch_no'] !== null && $data['batch_no'] !== '') {
+            $query->where('batch_no', $data['batch_no']);
+        }
+
+        $availableQty = round((float) $query->sum('quantity'), 3);
+
+        return $this->ok([
+            'product_id' => $product->id,
+            'warehouse_id' => (int) $data['warehouse_id'],
+            'available_qty' => max(0, $availableQty),
+        ]);
     }
 
     public function update(Request $request, Product $product): JsonResponse
