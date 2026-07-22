@@ -103,12 +103,30 @@ class QuoteOrderFlowTest extends TestCase
             'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 800, 'tax_rate' => 0, 'batch_no' => 'B1']],
         ])->assertCreated();
 
+        // Outbound may omit batch_no — FIFO auto-assigns from available stock.
         $this->postJson('/api/sales-invoices', [
             'invoice_date' => now()->toDateString(),
             'customer_id' => $customer->id,
             'warehouse_id' => $warehouse->id,
             'status' => 'posted',
             'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0]],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'posted');
+
+        $this->assertDatabaseHas('sales_invoice_lines', [
+            'product_id' => $product->id,
+            'batch_no' => 'B1',
+        ]);
+
+        // Serial tracking still required when enabled.
+        $product->update(['track_serial' => true]);
+        $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0, 'batch_no' => 'B1']],
         ])->assertStatus(422);
 
         $this->postJson('/api/sales-invoices', [
@@ -116,7 +134,7 @@ class QuoteOrderFlowTest extends TestCase
             'customer_id' => $customer->id,
             'warehouse_id' => $warehouse->id,
             'status' => 'posted',
-            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0, 'batch_no' => 'B1']],
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1200, 'tax_rate' => 0, 'batch_no' => 'B1', 'serial_no' => 'SN-1']],
         ])->assertCreated();
     }
 

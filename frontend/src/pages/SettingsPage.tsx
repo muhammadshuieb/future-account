@@ -38,6 +38,9 @@ const HIDDEN_GENERAL_KEYS = new Set([
   'locale',
   'backup_time_1',
   'backup_time_2',
+  'default_branch_id',
+  'default_warehouse_id',
+  'multi_language',
 ])
 
 function isTruthy(value: string | undefined): boolean {
@@ -91,7 +94,17 @@ export default function SettingsPage() {
 
   const usersAdmin = useQuery({
     queryKey: ['admin-users'],
-    queryFn: async () => (await api.get('/users')).data.data as { id: number; name: string; email: string; is_active: boolean; roles: string[] }[],
+    queryFn: async () => (await api.get('/users')).data.data as {
+      id: number
+      name: string
+      first_name?: string
+      last_name?: string
+      username?: string
+      mobile?: string
+      email: string
+      is_active: boolean
+      roles: string[]
+    }[],
     enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
     retry: false,
   })
@@ -103,7 +116,16 @@ export default function SettingsPage() {
     retry: false,
   })
 
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', roles: ['accountant'] as string[] })
+  const emptyUserForm = {
+    first_name: '',
+    last_name: '',
+    username: '',
+    mobile: '',
+    email: '',
+    password: '',
+    roles: ['accountant'] as string[],
+  }
+  const [userForm, setUserForm] = useState(emptyUserForm)
   const [userModal, setUserModal] = useState<'create' | 'edit' | null>(null)
   const [editingUserId, setEditingUserId] = useState<number | null>(null)
 
@@ -193,13 +215,23 @@ export default function SettingsPage() {
 
   const saveUser = useMutation({
     mutationFn: () => {
-      if (!editingUserId) return api.post('/users', userForm)
-      const { password, ...payload } = userForm
-      return api.put(`/users/${editingUserId}`, password ? { ...payload, password } : payload)
+      const payload = {
+        first_name: userForm.first_name,
+        last_name: userForm.last_name,
+        username: userForm.username,
+        mobile: userForm.mobile,
+        email: userForm.email || undefined,
+        roles: userForm.roles,
+        ...(userForm.password ? { password: userForm.password } : {}),
+      }
+      if (!editingUserId) {
+        return api.post('/users', { ...payload, password: userForm.password })
+      }
+      return api.put(`/users/${editingUserId}`, payload)
     },
     onSuccess: () => {
       msg.setMessage(editingUserId ? t('settings.userUpdated') : t('settings.userCreated'))
-      setUserForm({ name: '', email: '', password: '', roles: ['accountant'] })
+      setUserForm(emptyUserForm)
       setEditingUserId(null)
       setUserModal(null)
       void queryClient.invalidateQueries({ queryKey: ['admin-users'] })
@@ -242,7 +274,7 @@ export default function SettingsPage() {
       <PageHeader
         title={t('nav.settings')}
         subtitle={t('settings.subtitle')}
-        actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm({ name: '', email: '', password: '', roles: ['accountant'] }); setUserModal('create') }}>{t('common.add')}</Button> : undefined}
+        actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm); setUserModal('create') }}>{t('common.add')}</Button> : undefined}
       />
       <Tabs
         tabs={[
@@ -530,10 +562,42 @@ export default function SettingsPage() {
         <Panel>
             <div className="border-b border-[var(--color-line)] px-5 py-3"><h2 className="font-semibold">{t('settings.users')}</h2></div>
             <table className="data-table text-sm">
-              <thead><tr><th>{t('settings.name')}</th><th>{t('settings.email')}</th><th>{t('settings.roles')}</th><th>{t('common.status')}</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>{t('settings.name')}</th>
+                  <th>{t('settings.username')}</th>
+                  <th>{t('settings.mobile')}</th>
+                  <th>{t('settings.email')}</th>
+                  <th>{t('settings.roles')}</th>
+                  <th>{t('common.status')}</th>
+                </tr>
+              </thead>
               <tbody>
                 {(usersAdmin.data || []).map((u) => (
-                  <tr key={u.id} className="cursor-pointer" onClick={() => { setEditingUserId(u.id); setUserForm({ name: u.name, email: u.email, password: '', roles: u.roles.length ? u.roles : ['accountant'] }); setUserModal('edit') }}><td>{u.name}</td><td>{u.email}</td><td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td><td>{u.is_active ? t('common.active') : t('common.inactive')}</td></tr>
+                  <tr
+                    key={u.id}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      setEditingUserId(u.id)
+                      setUserForm({
+                        first_name: u.first_name || '',
+                        last_name: u.last_name || '',
+                        username: u.username || '',
+                        mobile: u.mobile || '',
+                        email: u.email || '',
+                        password: '',
+                        roles: u.roles.length ? u.roles : ['accountant'],
+                      })
+                      setUserModal('edit')
+                    }}
+                  >
+                    <td>{u.name}</td>
+                    <td className="font-mono text-xs">{u.username || '—'}</td>
+                    <td>{u.mobile || '—'}</td>
+                    <td>{u.email}</td>
+                    <td>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</td>
+                    <td>{u.is_active ? t('common.active') : t('common.inactive')}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -576,8 +640,13 @@ export default function SettingsPage() {
       )}
       <Modal open={userModal !== null} onClose={() => { setUserModal(null); setEditingUserId(null) }} title={userModal === 'edit' ? t('common.edit') : t('settings.newUser')} footer={<><Button variant="secondary" onClick={() => { setUserModal(null); setEditingUserId(null) }}>{t('common.cancel')}</Button><Button type="submit" form="user-form" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button></>}>
         <form id="user-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
-          <Field label={t('settings.name')}><input className={inputClass} value={userForm.name} onChange={(e) => setUserForm({ ...userForm, name: e.target.value })} required /></Field>
-          <Field label={t('settings.email')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} required /></Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={t('settings.firstName')}><input className={inputClass} value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} required /></Field>
+            <Field label={t('settings.lastName')}><input className={inputClass} value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} required /></Field>
+          </div>
+          <Field label={t('settings.username')}><input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} required autoComplete="username" /></Field>
+          <Field label={t('settings.mobile')}><input className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required inputMode="tel" /></Field>
+          <Field label={t('settings.email')} hint={t('settings.emailOptionalHint')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Field>
           <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
           <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
         </form>
