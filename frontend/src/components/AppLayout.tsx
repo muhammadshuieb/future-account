@@ -74,16 +74,18 @@ export default function AppLayout() {
 
   const nav = (
     <>
-      <div className="app-sidebar-header shrink-0 border-b border-white/10 px-5 py-4">
+      <div className="app-sidebar-header shrink-0 border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3">
-          <img
-            src={LOGO.mark}
-            alt="SYNAMOR"
-            className="brand-logo brand-logo--sidebar-mark shrink-0"
-          />
+          <div className="brand-logo-chip shrink-0">
+            <img
+              src={LOGO.onLight}
+              alt="SYNAMOR TECHNOLOGY"
+              className="brand-logo brand-logo--sidebar"
+            />
+          </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-base font-bold leading-tight">{t('app.name')}</p>
-            <p className="truncate text-xs text-white/55">Syna Co</p>
+            <p className="truncate text-sm font-semibold leading-tight">{t('app.name')}</p>
+            <p className="truncate text-[11px] text-white/55">Syna Co</p>
             <p className="text-[10px] text-white/35">v{APP_VERSION}</p>
           </div>
         </div>

@@ -46,15 +46,15 @@ export default function LoginPage() {
         }}
       />
       <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-white shadow-2xl shadow-black/20">
-        <div className="bg-slate-panel px-8 py-10 text-white">
+        <div className="border-b border-black/5 bg-paper px-8 py-9 text-center">
           <img
-            src={LOGO.onDark}
+            src={LOGO.onLight}
             alt="SYNAMOR TECHNOLOGY"
-            className="brand-logo brand-logo--login mb-5"
+            className="brand-logo brand-logo--login mx-auto"
           />
-          <p className="text-3xl font-extrabold tracking-tight">{t('app.name')}</p>
-          <p className="mt-1 text-sm font-medium text-teal-soft/90">Syna Co</p>
-          <p className="mt-2 text-sm leading-6 text-white/65">{t('login.subtitle')}</p>
+          <p className="mt-4 text-sm font-semibold text-slate-panel">{t('app.name')}</p>
+          <p className="mt-0.5 text-xs font-medium text-teal">Syna Co</p>
+          <p className="mt-2 text-sm leading-6 text-black/50">{t('login.subtitle')}</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4 px-8 py-8">
           <div>

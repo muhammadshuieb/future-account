@@ -45,21 +45,38 @@ body {
   object-fit: contain;
 }
 
+/* White chip so teal+gold logo stays correct on dark UI */
+.brand-logo-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.625rem;
+  background: #fff;
+  padding: 0.35rem 0.5rem;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.brand-logo--sidebar {
+  height: 38px;
+  width: auto;
+  max-width: 118px;
+}
+
 .brand-logo--sidebar-mark {
   height: 38px;
   width: 38px;
 }
 
 .brand-logo--login {
-  height: 56px;
-  width: auto;
-  max-width: min(100%, 280px);
+  width: 148px;
+  height: auto;
+  max-width: min(100%, 160px);
 }
 
 .brand-logo--print {
-  height: 88px;
+  height: 72px;
   width: auto;
-  max-width: 280px;
+  max-width: 220px;
 }
 
 .brand-logo--barcode-mark {
