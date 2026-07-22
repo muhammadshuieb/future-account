@@ -170,7 +170,7 @@ export default function CashBanksPage() {
       />
       <Msg message={msg.message} error={msg.error} />
 
-      {activeQuery.isError && listOrEmpty(activeQuery.data).length === 0 && (
+      {activeQuery.isError && !(Array.isArray(activeQuery.data) && activeQuery.data.length > 0) && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">
           تعذر تحميل البيانات — تحقق من صلاحية «الصناديق والبنوك» أو أعد المحاولة.
         </p>
