@@ -100,20 +100,13 @@ export default function AppLayout() {
 
   const nav = (
     <>
-      <div className="app-sidebar-header shrink-0 border-b border-white/10 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="brand-logo-chip shrink-0">
-            <img
-              src={LOGO.onLight}
-              alt="SYNAMOR TECHNOLOGY"
-              className="brand-logo brand-logo--sidebar"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-tight">{t('app.name')}</p>
-            <p className="truncate text-[11px] text-white/55">Syna Co</p>
-            <p className="text-[10px] text-white/35">v{APP_VERSION}</p>
-          </div>
+      <div className="app-sidebar-header shrink-0 border-b border-white/10 px-3 py-3">
+        <div className="brand-logo-chip brand-logo-chip--sidebar-full">
+          <img
+            src={LOGO.onLight}
+            alt="SYNAMOR TECHNOLOGY"
+            className="brand-logo brand-logo--sidebar"
+          />
         </div>
       </div>
 
@@ -154,7 +147,12 @@ export default function AppLayout() {
       </nav>
 
       <div className="app-sidebar-footer shrink-0 border-t border-white/10 p-4">
-        <div className="mb-3 flex items-center gap-3 text-sm text-white/80">
+        <div className="app-sidebar-brand mb-3 text-center">
+          <p className="truncate text-sm font-semibold leading-tight text-white">{t('app.name')}</p>
+          <p className="truncate text-[11px] text-white/55">Syna Co</p>
+          <p className="mt-0.5 text-[10px] text-white/35">v{APP_VERSION}</p>
+        </div>
+        <div className="mb-3 flex items-center gap-3 border-t border-white/10 pt-3 text-sm text-white/80">
           <Shield size={16} className="shrink-0 text-teal" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-white">{user.name}</p>

@@ -56,10 +56,20 @@ body {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
+/* Full-width logo banner at top of sidebar */
+.brand-logo-chip--sidebar-full {
+  display: flex;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+}
+
 .brand-logo--sidebar {
-  height: 38px;
-  width: auto;
-  max-width: 118px;
+  height: auto;
+  width: 100%;
+  max-width: 100%;
+  max-height: 56px;
+  object-fit: contain;
 }
 
 .brand-logo--sidebar-mark {
@@ -141,6 +151,11 @@ textarea {
 
 .app-sidebar-drawer {
   animation: slideInRight 0.22s ease-out;
+}
+
+/* Room for the absolute close control above the full-width logo chip */
+.app-sidebar-drawer .app-sidebar-header {
+  padding-top: 2.75rem;
 }
 
 @keyframes slideInRight {
