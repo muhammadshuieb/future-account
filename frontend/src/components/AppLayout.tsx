@@ -147,12 +147,7 @@ export default function AppLayout() {
       </nav>
 
       <div className="app-sidebar-footer shrink-0 border-t border-white/10 p-4">
-        <div className="app-sidebar-brand mb-3 text-center">
-          <p className="truncate text-sm font-semibold leading-tight text-white">{t('app.name')}</p>
-          <p className="truncate text-[11px] text-white/55">Syna Co</p>
-          <p className="mt-0.5 text-[10px] text-white/35">v{APP_VERSION}</p>
-        </div>
-        <div className="mb-3 flex items-center gap-3 border-t border-white/10 pt-3 text-sm text-white/80">
+        <div className="mb-3 flex items-center gap-3 text-sm text-white/80">
           <Shield size={16} className="shrink-0 text-teal" />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-white">{user.name}</p>
@@ -167,7 +162,9 @@ export default function AppLayout() {
           <LogOut size={16} />
           {t('nav.logout')}
         </button>
-        <p className="mt-3 text-center text-[10px] text-white/30">© {new Date().getFullYear()} {t('app.name')}</p>
+        <p className="mt-3 text-center text-[10px] leading-relaxed text-white/35">
+          © {new Date().getFullYear()} {t('app.name')} · v{APP_VERSION}
+        </p>
       </div>
     </>
   )
