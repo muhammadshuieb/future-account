@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
+import { formatDateTimeLocal } from '@/lib/dates'
 import { EmptyState, LoadingBlock, PageHeader, Panel } from '@/components/ui'
 
 type AuditRow = {
@@ -68,7 +69,7 @@ export default function AuditLogPage() {
                 return (
                   <tr key={row.id}>
                     <td className="whitespace-nowrap font-mono text-xs">
-                      {String(row.created_at).slice(0, 19).replace('T', ' ')}
+                      {formatDateTimeLocal(row.created_at)}
                     </td>
                     <td>{row.user?.name || '—'}</td>
                     <td>
