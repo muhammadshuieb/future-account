@@ -1,12 +1,11 @@
 import { NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { LogOut, Shield, Bell, Menu, X } from 'lucide-react'
+import { LogOut, Bell, Menu, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { resolveAlertHref } from '@/lib/alertLinks'
-import { formatRoleNames } from '@/lib/rbacLabels'
 import { APP_VERSION } from '@/version'
 import { LOGO } from '@/lib/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
@@ -146,23 +145,8 @@ export default function AppLayout() {
         </div>
       </nav>
 
-      <div className="app-sidebar-footer shrink-0 border-t border-white/10 p-4">
-        <div className="mb-3 flex items-center gap-3 text-sm text-white/80">
-          <Shield size={16} className="shrink-0 text-teal" />
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-medium text-white">{user.name}</p>
-            <p className="truncate text-xs text-white/45">{formatRoleNames(t, user.roles)}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="touch-target flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
-        >
-          <LogOut size={16} />
-          {t('nav.logout')}
-        </button>
-        <p className="mt-3 text-center text-[10px] leading-relaxed text-white/35">
+      <div className="app-sidebar-footer shrink-0 border-t border-white/10 px-4 py-3">
+        <p className="text-center text-[10px] leading-relaxed text-white/35">
           © {new Date().getFullYear()} {t('app.name')} · v{APP_VERSION}
         </p>
       </div>
@@ -224,6 +208,7 @@ export default function AppLayout() {
                   className="touch-target relative rounded-lg border border-[var(--color-line)] bg-white p-2.5 text-ink/70 hover:bg-mist"
                   onClick={() => setNotifOpen((v) => !v)}
                   aria-label={t('nav.notifications')}
+                  title={t('nav.notifications')}
                 >
                   <Bell size={18} />
                   {(notifications.data?.unread_count || 0) > 0 && (
@@ -260,6 +245,16 @@ export default function AppLayout() {
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="touch-target inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] bg-white px-2.5 py-2 text-ink/70 transition hover:bg-mist hover:text-ink"
+                aria-label={t('nav.logout')}
+                title={t('nav.logout')}
+              >
+                <LogOut size={18} />
+                <span className="hidden text-xs font-medium sm:inline">{t('nav.logout')}</span>
+              </button>
             </div>
           </div>
         </header>
