@@ -55,6 +55,9 @@ export type DashboardSummary = {
   expense: number
   net_income: number
   currency: string
+  base_currency?: string
+  filter_branch_id?: number | null
+  filter_currency?: string | null
   receivables?: number
   payables?: number
   month_sales?: number

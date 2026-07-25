@@ -219,7 +219,11 @@
     "dailySales": "مبيعات يومية",
     "dailyPurchases": "مشتريات يومية",
     "last7Days": "آخر 7 أيام",
-    "last30Days": "آخر 30 يوم"
+    "last30Days": "آخر 30 يوم",
+    "branch": "الفرع",
+    "currency": "العملة",
+    "allBranches": "كل الفروع",
+    "allCurrencies": "كل العملات"
   },
   "roleNames": {
     "admin": "مدير النظام",

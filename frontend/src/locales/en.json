@@ -219,7 +219,11 @@
     "dailySales": "Daily Sales",
     "dailyPurchases": "Daily Purchases",
     "last7Days": "Last 7 days",
-    "last30Days": "Last 30 days"
+    "last30Days": "Last 30 days",
+    "branch": "Branch",
+    "currency": "Currency",
+    "allBranches": "All branches",
+    "allCurrencies": "All currencies"
   },
   "roleNames": {
     "admin": "System Admin",

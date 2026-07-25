@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeftRight, ChevronLeft, Package, Users } from 'lucide-react'
 import api from '@/lib/api'
 import { resolveAlertHref } from '@/lib/alertLinks'
 import type { DashboardSummary } from '@/types'
-import { EmptyState, LoadingBlock, Panel, StatTile, formatMoney } from '@/components/ui'
+import { EmptyState, Field, LoadingBlock, Panel, StatTile, formatMoney, inputClass } from '@/components/ui'
+
+type BranchOption = { id: number; name: string; is_active?: boolean }
+type CurrencyOption = { code: string; name: string; is_active?: boolean }
 
 function DailyBarChart({
   title,
@@ -61,19 +64,52 @@ function DailyBarChart({
 export default function DashboardPage() {
   const { t } = useTranslation()
   const [days, setDays] = useState<7 | 30>(7)
+  const [branchId, setBranchId] = useState('')
+  const [currencyFilter, setCurrencyFilter] = useState('')
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard', days],
-    queryFn: async () => {
-      const res = await api.get('/dashboard/summary', { params: { days } })
-      return res.data.data as DashboardSummary
-    },
+  const branches = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => (await api.get('/branches')).data.data as BranchOption[],
   })
 
-  if (isLoading) return <LoadingBlock label={t('common.loading')} />
+  const currencies = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () =>
+      (await api.get('/currencies')).data.data as {
+        base_currency: string
+        currencies: CurrencyOption[]
+      },
+  })
+
+  const activeCurrencies = (currencies.data?.currencies || []).filter((c) => c.is_active !== false)
+  const currencyOptions = activeCurrencies.length
+    ? activeCurrencies
+    : [
+        { code: 'SYP', name: 'ليرة سورية' },
+        { code: 'TRY', name: 'ليرة تركية' },
+        { code: 'USD', name: 'دولار أمريكي' },
+      ]
+
+  const { data, isLoading, error, isFetching } = useQuery({
+    queryKey: ['dashboard', days, branchId, currencyFilter],
+    queryFn: async () => {
+      const res = await api.get('/dashboard/summary', {
+        params: {
+          days,
+          ...(branchId ? { branch_id: branchId } : {}),
+          ...(currencyFilter ? { currency: currencyFilter } : {}),
+        },
+      })
+      return res.data.data as DashboardSummary
+    },
+    placeholderData: keepPreviousData,
+  })
+
+  if (isLoading && !data) return <LoadingBlock label={t('common.loading')} />
   if (error || !data) return <p className="text-danger">تعذر تحميل البيانات.</p>
 
-  const currency = data.currency || 'SYP'
+  const currency = data.currency || currencies.data?.base_currency || 'SYP'
+  const baseCurrency = data.base_currency || currencies.data?.base_currency || 'SYP'
   const primary = [
     { label: 'إيرادات الفترة', value: formatMoney(data.revenue, currency), tone: 'success' as const },
     { label: 'مصروفات الفترة', value: formatMoney(data.expense, currency), tone: 'amber' as const },
@@ -87,17 +123,73 @@ export default function DashboardPage() {
     { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, currency) },
   ]
 
+  const currencyHint = currencyFilter
+    ? `عرض المبالغ بعملة ${currency}`
+    : `جميع العملات محوّلة إلى ${baseCurrency}`
+
   return (
-    <div className="space-y-8">
+    <div className={`space-y-8 ${isFetching ? 'opacity-90' : ''}`}>
       <header className="relative overflow-hidden rounded-2xl border border-[var(--color-line)] bg-gradient-to-l from-slate-panel via-[#154456] to-teal px-6 py-8 text-white shadow-sm">
         <div className="relative">
           <p className="text-sm font-medium text-white/70">{t('app.name')}</p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">{data.company_name}</h1>
           <p className="mt-2 max-w-xl text-sm leading-7 text-white/75">
-            ملخص تشغيلي موحّد — العملة الأساسية {currency}
+            ملخص تشغيلي موحّد — {currencyHint}
           </p>
         </div>
       </header>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <Field label={t('dashboard.branch')}>
+          <select
+            className={`${inputClass} min-w-[12rem]`}
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+          >
+            <option value="">{t('dashboard.allBranches')}</option>
+            {(branches.data || [])
+              .filter((b) => b.is_active !== false)
+              .map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+
+        <Field label={t('dashboard.currency')}>
+          <select
+            className={`${inputClass} min-w-[10rem]`}
+            value={currencyFilter}
+            onChange={(e) => setCurrencyFilter(e.target.value)}
+          >
+            <option value="">{t('dashboard.allCurrencies')}</option>
+            {currencyOptions.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.code}
+                {c.name ? ` — ${c.name}` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="flex gap-2 pb-0.5">
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 text-sm ${days === 7 ? 'bg-teal text-white' : 'bg-mist'}`}
+            onClick={() => setDays(7)}
+          >
+            {t('dashboard.last7Days')}
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-3 py-1.5 text-sm ${days === 30 ? 'bg-teal text-white' : 'bg-mist'}`}
+            onClick={() => setDays(30)}
+          >
+            {t('dashboard.last30Days')}
+          </button>
+        </div>
+      </div>
 
       <section className="grid gap-3 sm:grid-cols-3">
         {primary.map((c) => (
@@ -110,11 +202,6 @@ export default function DashboardPage() {
           <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
         ))}
       </section>
-
-      <div className="flex gap-2">
-        <button type="button" className={`rounded-lg px-3 py-1.5 text-sm ${days === 7 ? 'bg-teal text-white' : 'bg-mist'}`} onClick={() => setDays(7)}>{t('dashboard.last7Days')}</button>
-        <button type="button" className={`rounded-lg px-3 py-1.5 text-sm ${days === 30 ? 'bg-teal text-white' : 'bg-mist'}`} onClick={() => setDays(30)}>{t('dashboard.last30Days')}</button>
-      </div>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <DailyBarChart title={t('dashboard.dailySales')} data={data.daily_sales || []} currency={currency} />
