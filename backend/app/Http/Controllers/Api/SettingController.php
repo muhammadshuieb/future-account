@@ -22,9 +22,14 @@ class SettingController extends Controller
 
     public function index(): JsonResponse
     {
-        return response()->json([
-            'data' => Setting::query()->orderBy('group')->orderBy('key')->get(),
-        ]);
+        $rows = Setting::query()
+            ->orderBy('group')
+            ->orderBy('key')
+            ->get()
+            ->reject(fn (Setting $s) => Setting::isHiddenFromSettingsApi($s->key))
+            ->values();
+
+        return response()->json(['data' => $rows]);
     }
 
     public function update(Request $request): JsonResponse
@@ -38,6 +43,10 @@ class SettingController extends Controller
         foreach ($data['settings'] as $item) {
             $key = $item['key'];
             $value = $item['value'] ?? '';
+
+            if (Setting::isHiddenFromSettingsApi($key) || $key === 'backup_last_cleanup') {
+                continue;
+            }
 
             if ($key === 'tax_enabled') {
                 $value = filter_var($value, FILTER_VALIDATE_BOOLEAN) || $value === '1' || $value === 1 || $value === true
@@ -83,8 +92,15 @@ class SettingController extends Controller
             }
         }
 
+        $rows = Setting::query()
+            ->orderBy('group')
+            ->orderBy('key')
+            ->get()
+            ->reject(fn (Setting $s) => Setting::isHiddenFromSettingsApi($s->key))
+            ->values();
+
         return response()->json([
-            'data' => Setting::query()->orderBy('group')->orderBy('key')->get(),
+            'data' => $rows,
             'message' => 'تم حفظ الإعدادات.',
         ]);
     }

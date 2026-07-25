@@ -50,7 +50,7 @@ Artisan::command('syna:backup', function () {
         $notify->notifyAdminsOnceDaily(
             'backup_drive_missing',
             'Google Drive غير مربوط',
-            'النسخ الاحتياطي يعمل محلياً فقط. اربط Google Drive من إعدادات الخادم لتلافي فقدان النسخ.',
+                'النسخ الاحتياطي يعمل محلياً فقط. اربط Google Drive من الإعدادات ← النسخ الاحتياطي لتلافي فقدان النسخ.',
             ['google_drive' => false],
         );
         $this->warn('Google Drive is not configured.');
@@ -103,7 +103,7 @@ Artisan::command('syna:check-backup-health', function () {
     $notify->notifyAdminsOnceDaily(
         'backup_drive_missing',
         'Google Drive غير مربوط',
-        'تحذير يومي: لم يتم ربط Google Drive للنسخ الاحتياطي. راجع الإعدادات على الخادم (GOOGLE_DRIVE_CREDENTIALS_JSON و GOOGLE_DRIVE_FOLDER_ID).',
+        'تحذير يومي: لم يتم ربط Google Drive للنسخ الاحتياطي. اربطه من الإعدادات ← النسخ الاحتياطي (أو عبر متغيرات البيئة كاحتياطي).',
         ['google_drive' => false],
     );
 

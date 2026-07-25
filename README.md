@@ -95,6 +95,22 @@ API: `GET /api/barcodes/labels` ، `POST /api/products/{id}/barcode`
 | إنشاء | `pg_dump -Fc` إلى volume `future_account_backups` |
 | تنزيل | تحميل ملف `.dump` |
 | استعادة | `pg_restore --clean` (يستبدل البيانات — تأكيد مطلوب) |
+| Google Drive / Telegram | بطاقتا ربط في نفس التبويب: حفظ / اختبار / قطع اتصال |
+
+### ربط Google Drive وتيليجرام
+
+من الواجهة: **الإعدادات → النسخ الاحتياطي → وجهات النسخ الاحتياطي**
+
+- **Google Drive**: ارفع JSON لحساب الخدمة + Folder ID، ثم «اختبار الاتصال».
+- **Telegram**: Bot Token + Chat ID، ثم «اختبار الإرسال».
+
+الأسرار تُحفظ مشفّرة في جدول `settings` (Laravel Crypt) ولا تُعاد للواجهة بعد الحفظ.  
+الأمر المجدول `syna:backup` يقرأ الإعدادات المحفوظة أولاً، ثم يرجع لمتغيرات البيئة إن وُجدت:
+
+```
+GOOGLE_DRIVE_CREDENTIALS_JSON / GOOGLE_DRIVE_FOLDER_ID
+TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
+```
 
 المسار داخل الحاوية: `/var/www/html/storage/app/backups`  
 المتغير: `BACKUP_PATH`

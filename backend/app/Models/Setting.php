@@ -4,9 +4,30 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Crypt;
 
 class Setting extends Model
 {
+    /** Keys that must never be returned via the general settings API. */
+    public const SECRET_KEYS = [
+        'backup_gdrive_credentials_json',
+        'backup_gdrive_folder_id',
+        'backup_telegram_bot_token',
+        'backup_telegram_chat_id',
+    ];
+
+    /** Backup destination meta — managed only via /backups APIs. */
+    public const BACKUP_DEST_META_KEYS = [
+        'backup_gdrive_last_success_at',
+        'backup_gdrive_last_error',
+        'backup_telegram_last_success_at',
+        'backup_telegram_last_error',
+    ];
+
+    public static function isHiddenFromSettingsApi(string $key): bool
+    {
+        return self::isSecretKey($key) || in_array($key, self::BACKUP_DEST_META_KEYS, true);
+    }
     protected $fillable = [
         'key',
         'value',
@@ -39,6 +60,36 @@ class Setting extends Model
         Cache::forget("setting.{$key}");
 
         return $setting;
+    }
+
+    public static function setEncrypted(string $key, string $plain, string $group = 'backup', ?string $label = null): self
+    {
+        return static::setValue($key, Crypt::encryptString($plain), $group, 'encrypted', $label);
+    }
+
+    public static function getEncrypted(string $key, ?string $default = null): ?string
+    {
+        $value = static::getValue($key);
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        try {
+            return Crypt::decryptString((string) $value);
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
+    public static function forgetKey(string $key): void
+    {
+        static::query()->where('key', $key)->delete();
+        Cache::forget("setting.{$key}");
+    }
+
+    public static function isSecretKey(string $key): bool
+    {
+        return in_array($key, self::SECRET_KEYS, true);
     }
 
     public static function boolValue(string $key, bool $default = false): bool

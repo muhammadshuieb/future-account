@@ -90,11 +90,25 @@ export default function SettingsPage() {
     retry: false,
   })
 
+  type DestStatus = {
+    configured: boolean
+    status: 'connected' | 'disconnected' | 'error' | string
+    source?: string
+    credentials_set?: boolean
+    folder_id_set?: boolean
+    folder_id_masked?: string | null
+    token_set?: boolean
+    chat_id_set?: boolean
+    chat_id_masked?: string | null
+    last_success_at?: string | null
+    last_error?: string | null
+  }
+
   const backupStatus = useQuery({
     queryKey: ['backups-status'],
     queryFn: async () => (await api.get('/backups/status')).data.data as {
-      google_drive: { configured: boolean }
-      telegram: { configured: boolean }
+      google_drive: DestStatus
+      telegram: DestStatus
       retention?: {
         retention_days: number
         min_keep: number
@@ -114,6 +128,24 @@ export default function SettingsPage() {
     enabled: tab === 'backup',
     retry: false,
   })
+
+  const driveFileInputRef = useRef<HTMLInputElement>(null)
+  const [driveCredentials, setDriveCredentials] = useState('')
+  const [driveFolderId, setDriveFolderId] = useState('')
+  const [telegramToken, setTelegramToken] = useState('')
+  const [telegramChatId, setTelegramChatId] = useState('')
+
+  function destStatusLabel(status?: string) {
+    if (status === 'connected') return t('settings.destConnected')
+    if (status === 'error') return t('settings.destError')
+    return t('settings.destDisconnected')
+  }
+
+  function destStatusClass(status?: string) {
+    if (status === 'connected') return 'text-success'
+    if (status === 'error') return 'text-danger'
+    return 'text-black/45'
+  }
 
   const whatsappStatus = useQuery({
     queryKey: ['whatsapp-status'],
@@ -258,6 +290,76 @@ export default function SettingsPage() {
     onSuccess: () => {
       msg.setMessage(t('settings.backupDeleted'))
       void queryClient.invalidateQueries({ queryKey: ['backups'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const saveDrive = useMutation({
+    mutationFn: () =>
+      api.put('/backups/destinations/google-drive', {
+        credentials_json: driveCredentials.trim() || undefined,
+        folder_id: driveFolderId.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.driveSaved'))
+      setDriveCredentials('')
+      setDriveFolderId('')
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const testDrive = useMutation({
+    mutationFn: () => api.post('/backups/destinations/google-drive/test'),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.driveTestOk'))
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const disconnectDrive = useMutation({
+    mutationFn: () => api.delete('/backups/destinations/google-drive'),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.driveDisconnected'))
+      setDriveCredentials('')
+      setDriveFolderId('')
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const saveTelegram = useMutation({
+    mutationFn: () =>
+      api.put('/backups/destinations/telegram', {
+        bot_token: telegramToken.trim() || undefined,
+        chat_id: telegramChatId.trim() || undefined,
+      }),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.telegramSaved'))
+      setTelegramToken('')
+      setTelegramChatId('')
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const testTelegram = useMutation({
+    mutationFn: () => api.post('/backups/destinations/telegram/test'),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.telegramTestOk'))
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  const disconnectTelegram = useMutation({
+    mutationFn: () => api.delete('/backups/destinations/telegram'),
+    onSuccess: (res) => {
+      msg.setMessage(res.data?.data?.message || t('settings.telegramDisconnected'))
+      setTelegramToken('')
+      setTelegramChatId('')
+      void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
     },
     onError: msg.fromErr,
   })
@@ -568,26 +670,194 @@ export default function SettingsPage() {
             </Button>
           </Panel>
 
-          <Panel className="space-y-3 p-5">
-            <h2 className="font-semibold">{t('settings.backupDestinations')}</h2>
-            <p className="text-xs text-black/50">{t('settings.backupDestHint')}</p>
+          <Panel className="space-y-4 p-5">
+            <div>
+              <h2 className="font-semibold">{t('settings.backupDestinations')}</h2>
+              <p className="mt-1 text-xs text-black/50">{t('settings.backupDestHint')}</p>
+            </div>
             {!backupStatus.data?.google_drive.configured && (
               <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 {t('settings.driveNotConnected')}
               </div>
             )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
-                <p className="font-medium">Google Drive</p>
-                <p className={`mt-1 text-xs ${backupStatus.data?.google_drive.configured ? 'text-success' : 'text-danger'}`}>
-                  {backupStatus.data?.google_drive.configured ? t('settings.driveActive') : t('settings.driveInactive')}
-                </p>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {/* Google Drive */}
+              <div className="space-y-3 rounded-xl border border-[var(--color-line)] p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold">Google Drive</h3>
+                    <p className={`mt-1 text-xs font-medium ${destStatusClass(backupStatus.data?.google_drive.status)}`}>
+                      {destStatusLabel(backupStatus.data?.google_drive.status)}
+                    </p>
+                  </div>
+                  {backupStatus.data?.google_drive.folder_id_masked && (
+                    <p className="font-mono text-[11px] text-black/40">
+                      {t('settings.folderId')}: {backupStatus.data.google_drive.folder_id_masked}
+                    </p>
+                  )}
+                </div>
+
+                <Field label={t('settings.driveCredentialsJson')}>
+                  <textarea
+                    className={`${inputClass} min-h-[96px] font-mono text-xs`}
+                    value={driveCredentials}
+                    onChange={(e) => setDriveCredentials(e.target.value)}
+                    placeholder={backupStatus.data?.google_drive.credentials_set ? t('settings.secretKeepHint') : '{"type":"service_account",...}'}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button type="button" variant="secondary" onClick={() => driveFileInputRef.current?.click()}>
+                      {t('settings.uploadJsonFile')}
+                    </Button>
+                    <input
+                      ref={driveFileInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        e.target.value = ''
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => setDriveCredentials(String(reader.result ?? ''))
+                        reader.readAsText(file)
+                      }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-black/45">{t('settings.driveCredentialsHint')}</p>
+                </Field>
+
+                <Field label={t('settings.folderId')}>
+                  <input
+                    className={inputClass}
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
+                    placeholder={backupStatus.data?.google_drive.folder_id_set ? t('settings.secretKeepHint') : t('settings.folderIdPlaceholder')}
+                    autoComplete="off"
+                  />
+                </Field>
+
+                {(backupStatus.data?.google_drive.last_success_at || backupStatus.data?.google_drive.last_error) && (
+                  <div className="space-y-1 text-xs text-black/55">
+                    {backupStatus.data.google_drive.last_success_at && (
+                      <p>{t('settings.lastSuccess')}: {formatDateTimeLocal(backupStatus.data.google_drive.last_success_at)}</p>
+                    )}
+                    {backupStatus.data.google_drive.last_error && (
+                      <p className="text-danger">{t('settings.lastError')}: {backupStatus.data.google_drive.last_error}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={saveDrive.isPending || (!driveCredentials.trim() && !driveFolderId.trim())}
+                    onClick={() => saveDrive.mutate()}
+                  >
+                    {t('settings.save')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={testDrive.isPending || !backupStatus.data?.google_drive.configured}
+                    onClick={() => testDrive.mutate()}
+                  >
+                    {t('settings.testConnection')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={disconnectDrive.isPending || backupStatus.data?.google_drive.source === 'none'}
+                    onClick={() => {
+                      if (window.confirm(t('settings.disconnectConfirm'))) disconnectDrive.mutate()
+                    }}
+                  >
+                    {t('settings.disconnect')}
+                  </Button>
+                </div>
               </div>
-              <div className="rounded-lg border border-[var(--color-line)] p-3 text-sm">
-                <p className="font-medium">Telegram</p>
-                <p className={`mt-1 text-xs ${backupStatus.data?.telegram.configured ? 'text-success' : 'text-black/45'}`}>
-                  {backupStatus.data?.telegram.configured ? t('settings.telegramActive') : t('settings.telegramInactive')}
-                </p>
+
+              {/* Telegram */}
+              <div className="space-y-3 rounded-xl border border-[var(--color-line)] p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold">Telegram</h3>
+                    <p className={`mt-1 text-xs font-medium ${destStatusClass(backupStatus.data?.telegram.status)}`}>
+                      {destStatusLabel(backupStatus.data?.telegram.status)}
+                    </p>
+                  </div>
+                  {backupStatus.data?.telegram.chat_id_masked && (
+                    <p className="font-mono text-[11px] text-black/40">
+                      Chat: {backupStatus.data.telegram.chat_id_masked}
+                    </p>
+                  )}
+                </div>
+
+                <Field label={t('settings.telegramBotToken')}>
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={telegramToken}
+                    onChange={(e) => setTelegramToken(e.target.value)}
+                    placeholder={backupStatus.data?.telegram.token_set ? t('settings.secretKeepHint') : '123456:ABC...'}
+                    autoComplete="new-password"
+                  />
+                </Field>
+
+                <Field label={t('settings.telegramChatId')}>
+                  <input
+                    className={inputClass}
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder={backupStatus.data?.telegram.chat_id_set ? t('settings.secretKeepHint') : '-100...'}
+                    autoComplete="off"
+                    inputMode="numeric"
+                  />
+                  <p className="mt-1 text-xs text-black/45">{t('settings.telegramChatHint')}</p>
+                </Field>
+
+                {(backupStatus.data?.telegram.last_success_at || backupStatus.data?.telegram.last_error) && (
+                  <div className="space-y-1 text-xs text-black/55">
+                    {backupStatus.data.telegram.last_success_at && (
+                      <p>{t('settings.lastSuccess')}: {formatDateTimeLocal(backupStatus.data.telegram.last_success_at)}</p>
+                    )}
+                    {backupStatus.data.telegram.last_error && (
+                      <p className="text-danger">{t('settings.lastError')}: {backupStatus.data.telegram.last_error}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={saveTelegram.isPending || (!telegramToken.trim() && !telegramChatId.trim())}
+                    onClick={() => saveTelegram.mutate()}
+                  >
+                    {t('settings.save')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={testTelegram.isPending || !backupStatus.data?.telegram.configured}
+                    onClick={() => testTelegram.mutate()}
+                  >
+                    {t('settings.testSend')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={disconnectTelegram.isPending || backupStatus.data?.telegram.source === 'none'}
+                    onClick={() => {
+                      if (window.confirm(t('settings.disconnectConfirm'))) disconnectTelegram.mutate()
+                    }}
+                  >
+                    {t('settings.disconnect')}
+                  </Button>
+                </div>
               </div>
             </div>
           </Panel>

@@ -57,7 +57,7 @@ class BackupController extends ApiController
             app(\App\Services\AppNotificationService::class)->notifyAdminsOnceDaily(
                 'backup_drive_missing',
                 'Google Drive غير مربوط',
-                'النسخ الاحتياطي يعمل محلياً فقط. اربط Google Drive من إعدادات الخادم لتلافي فقدان النسخ.',
+                'النسخ الاحتياطي يعمل محلياً فقط. اربط Google Drive من الإعدادات ← النسخ الاحتياطي لتلافي فقدان النسخ.',
                 ['google_drive' => false],
             );
         }
@@ -160,5 +160,117 @@ class BackupController extends ApiController
         $this->backups->delete($filename);
 
         return $this->ok(['message' => 'تم حذف الملف.']);
+    }
+
+    public function saveGoogleDrive(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'credentials_json' => ['nullable', 'string', 'max:65535'],
+            'folder_id' => ['nullable', 'string', 'max:255'],
+        ], [
+            'credentials_json.max' => 'ملف بيانات حساب الخدمة كبير جداً.',
+            'folder_id.max' => 'معرّف المجلد طويل جداً.',
+        ]);
+
+        if (empty($data['credentials_json']) && empty($data['folder_id'])) {
+            return response()->json(['message' => 'أدخل بيانات حساب الخدمة أو معرّف المجلد على الأقل.'], 422);
+        }
+
+        try {
+            $status = $this->distribution->saveGoogleDrive(
+                $data['credentials_json'] ?? null,
+                $data['folder_id'] ?? null,
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->ok([
+            'google_drive' => $status,
+            'message' => 'تم حفظ إعدادات Google Drive.',
+        ]);
+    }
+
+    public function testGoogleDrive(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        try {
+            $status = $this->distribution->testGoogleDrive();
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->ok($status);
+    }
+
+    public function disconnectGoogleDrive(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $status = $this->distribution->disconnectGoogleDrive();
+
+        return $this->ok([
+            'google_drive' => $status,
+            'message' => 'تم قطع اتصال Google Drive المحفوظ في الإعدادات.',
+        ]);
+    }
+
+    public function saveTelegram(Request $request): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $data = $request->validate([
+            'bot_token' => ['nullable', 'string', 'max:255'],
+            'chat_id' => ['nullable', 'string', 'max:64'],
+        ], [
+            'bot_token.max' => 'رمز البوت طويل جداً.',
+            'chat_id.max' => 'معرّف المحادثة طويل جداً.',
+        ]);
+
+        if (empty($data['bot_token']) && empty($data['chat_id'])) {
+            return response()->json(['message' => 'أدخل رمز البوت أو معرّف المحادثة على الأقل.'], 422);
+        }
+
+        try {
+            $status = $this->distribution->saveTelegram(
+                $data['bot_token'] ?? null,
+                $data['chat_id'] ?? null,
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->ok([
+            'telegram' => $status,
+            'message' => 'تم حفظ إعدادات تيليجرام.',
+        ]);
+    }
+
+    public function testTelegram(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        try {
+            $status = $this->distribution->testTelegram();
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->ok($status);
+    }
+
+    public function disconnectTelegram(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        $status = $this->distribution->disconnectTelegram();
+
+        return $this->ok([
+            'telegram' => $status,
+            'message' => 'تم قطع اتصال تيليجرام المحفوظ في الإعدادات.',
+        ]);
     }
 }

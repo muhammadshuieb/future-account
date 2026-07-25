@@ -77,6 +77,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);
+    Route::put('backups/destinations/google-drive', [BackupController::class, 'saveGoogleDrive']);
+    Route::post('backups/destinations/google-drive/test', [BackupController::class, 'testGoogleDrive']);
+    Route::delete('backups/destinations/google-drive', [BackupController::class, 'disconnectGoogleDrive']);
+    Route::put('backups/destinations/telegram', [BackupController::class, 'saveTelegram']);
+    Route::post('backups/destinations/telegram/test', [BackupController::class, 'testTelegram']);
+    Route::delete('backups/destinations/telegram', [BackupController::class, 'disconnectTelegram']);
     Route::get('backups', [BackupController::class, 'index']);
     Route::post('backups', [BackupController::class, 'store']);
     Route::get('backups/{filename}/download', [BackupController::class, 'download'])->where('filename', '.*');
