@@ -89,6 +89,9 @@
     "sourceAmount": "Kaynak para birimi tutarı",
     "targetAmount": "Sonuç tutarı",
     "exchangeRatePerTarget": "1 {{target}} için kaç {{source}}",
+    "fromCurrency": "Kaynak para birimi",
+    "toCurrency": "Hedef para birimi",
+    "exchangeRateLabel": "Kur (1 {{target}} = ? {{source}})",
     "validUntil": "Geçerlilik",
     "emptyList": "Kayıt yok",
     "emptyListHint": "Yukarıdaki düğmeden yeni kayıt ekleyin"

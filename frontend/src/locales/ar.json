@@ -90,6 +90,9 @@
     "sourceAmount": "المبلغ بالعملة الأصلية",
     "targetAmount": "المبلغ الناتج",
     "exchangeRatePerTarget": "كم {{source}} مقابل 1 {{target}}",
+    "fromCurrency": "العملة المصرّف منها",
+    "toCurrency": "العملة المصرّف إليها",
+    "exchangeRateLabel": "سعر الصرف (1 {{target}} = ? {{source}})",
     "validUntil": "صالح حتى",
     "emptyList": "لا توجد سجلات",
     "emptyListHint": "أضف سجلاً جديداً من الزر أعلاه"

@@ -83,12 +83,27 @@ class CashService
             ]);
         }
 
-        $sourceCurrency = strtoupper((string) ($data['source_currency'] ?? $source->currency ?? 'SYP'));
-        $targetCurrency = strtoupper((string) ($data['target_currency'] ?? $target->currency ?? 'SYP'));
+        $sourceCurrency = strtoupper((string) ($data['source_currency'] ?? $data['from_currency'] ?? $source->currency ?? 'SYP'));
+        $targetCurrency = strtoupper((string) ($data['target_currency'] ?? $data['to_currency'] ?? $target->currency ?? 'SYP'));
 
         if ($sourceCurrency === $targetCurrency) {
             throw ValidationException::withMessages([
                 'target_currency' => ['عملة المصدر والهدف يجب أن تكونا مختلفتين. استخدم التحويل العادي لنفس العملة.'],
+            ]);
+        }
+
+        $sourceBoxCurrency = strtoupper((string) ($source->currency ?: 'SYP'));
+        $targetBoxCurrency = strtoupper((string) ($target->currency ?: 'SYP'));
+
+        if ($sourceBoxCurrency !== $sourceCurrency) {
+            throw ValidationException::withMessages([
+                'source_cash_box_id' => ["صندوق المصدر يجب أن يكون بعملة {$sourceCurrency}."],
+            ]);
+        }
+
+        if ($targetBoxCurrency !== $targetCurrency) {
+            throw ValidationException::withMessages([
+                'target_cash_box_id' => ["صندوق الهدف يجب أن يكون بعملة {$targetCurrency}."],
             ]);
         }
 

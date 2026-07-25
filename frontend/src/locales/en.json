@@ -90,6 +90,9 @@
     "sourceAmount": "Amount in source currency",
     "targetAmount": "Resulting amount",
     "exchangeRatePerTarget": "How many {{source}} per 1 {{target}}",
+    "fromCurrency": "Currency exchanged from",
+    "toCurrency": "Currency exchanged to",
+    "exchangeRateLabel": "Exchange rate (1 {{target}} = ? {{source}})",
     "validUntil": "Valid until",
     "emptyList": "No records",
     "emptyListHint": "Add a new record using the button above"

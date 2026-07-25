@@ -35,12 +35,23 @@ class CurrencyExchangeController extends ApiController
     public function store(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.manage');
+
+        // Accept from_currency / to_currency aliases from the UI.
+        if (! $request->filled('source_currency') && $request->filled('from_currency')) {
+            $request->merge(['source_currency' => $request->input('from_currency')]);
+        }
+        if (! $request->filled('target_currency') && $request->filled('to_currency')) {
+            $request->merge(['target_currency' => $request->input('to_currency')]);
+        }
+
         $data = $request->validate([
             'exchange_date' => ['required', 'date'],
             'source_cash_box_id' => ['required', 'integer', 'exists:cash_boxes,id'],
             'target_cash_box_id' => ['required', 'integer', 'exists:cash_boxes,id', 'different:source_cash_box_id'],
-            'source_currency' => ['nullable', 'string', 'max:8'],
-            'target_currency' => ['nullable', 'string', 'max:8'],
+            'source_currency' => ['required', 'string', 'max:8'],
+            'target_currency' => ['required', 'string', 'max:8', 'different:source_currency'],
+            'from_currency' => ['nullable', 'string', 'max:8'],
+            'to_currency' => ['nullable', 'string', 'max:8'],
             'source_amount' => ['required', 'numeric', 'gt:0'],
             'target_amount' => ['required', 'numeric', 'gt:0'],
             'exchange_rate' => ['required', 'numeric', 'gt:0'],

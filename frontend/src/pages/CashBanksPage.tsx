@@ -66,6 +66,8 @@ const emptyTr = {
 }
 const emptyEx = {
   exchange_date: todayYmd(),
+  source_currency: 'SYP',
+  target_currency: 'USD',
   source_cash_box_id: '',
   target_cash_box_id: '',
   source_amount: '',
@@ -162,29 +164,57 @@ export default function CashBanksPage() {
   const fromList = trForm.from_type === 'cash_box' ? boxRows : bankRows
   const toList = trForm.to_type === 'cash_box' ? boxRows : bankRows
 
-  const sourceBox = boxRows.find((b) => String(b.id) === String(exForm.source_cash_box_id))
-  const targetBox = boxRows.find((b) => String(b.id) === String(exForm.target_cash_box_id))
-  const sourceCur = sourceBox?.currency || 'SYP'
-  const targetCur = targetBox?.currency || 'USD'
+  const sourceCur = (exForm.source_currency || 'SYP').toUpperCase()
+  const targetCur = (exForm.target_currency || 'USD').toUpperCase()
+  const sourceBoxes = boxRows.filter((b) => (b.currency || 'SYP').toUpperCase() === sourceCur)
+  const targetBoxes = boxRows.filter(
+    (b) => (b.currency || 'SYP').toUpperCase() === targetCur && String(b.id) !== String(exForm.source_cash_box_id),
+  )
+  const currencyOptions = useMemo(() => {
+    const active = currencyList.filter((c) => c.is_active)
+    if (active.length) return active
+    if (currencyList.length) return currencyList
+    return [
+      { id: 1, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 1 },
+      { id: 2, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
+      { id: 3, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 0 },
+    ] as CurrencyOption[]
+  }, [currencyList])
 
+  // Keep selected boxes aligned with chosen currencies; prefill rate when pair changes.
   useEffect(() => {
-    if (!sourceBox || !targetBox || sourceBox.id === targetBox.id) return
-    if (sourceCur === targetCur) return
-    const rate = sourcePerTarget(sourceCur, targetCur, currencyList, baseCurrency)
-    if (rate <= 0) return
     setExForm((prev) => {
-      if (prev.exchange_rate && Number(prev.exchange_rate) > 0 && prev.source_cash_box_id === String(sourceBox.id) && prev.target_cash_box_id === String(targetBox.id)) {
-        return prev
+      const next = { ...prev }
+      let changed = false
+      const srcOk = sourceBoxes.some((b) => String(b.id) === String(prev.source_cash_box_id))
+      if (prev.source_cash_box_id && !srcOk) {
+        next.source_cash_box_id = ''
+        changed = true
       }
-      const sourceAmount = Number(prev.source_amount) || 0
-      const targetAmount = sourceAmount > 0 ? round2(sourceAmount / rate) : Number(prev.target_amount) || 0
-      return {
-        ...prev,
-        exchange_rate: String(rate),
-        target_amount: targetAmount > 0 ? String(targetAmount) : prev.target_amount,
+      if (!next.source_cash_box_id && sourceBoxes.length === 1) {
+        next.source_cash_box_id = String(sourceBoxes[0].id)
+        changed = true
       }
+      const tgtOk = targetBoxes.some((b) => String(b.id) === String(prev.target_cash_box_id))
+      if (prev.target_cash_box_id && !tgtOk) {
+        next.target_cash_box_id = ''
+        changed = true
+      }
+      if (!next.target_cash_box_id && targetBoxes.length === 1) {
+        next.target_cash_box_id = String(targetBoxes[0].id)
+        changed = true
+      }
+      if (sourceCur === targetCur) return changed ? next : prev
+      const rate = sourcePerTarget(sourceCur, targetCur, currencyList, baseCurrency)
+      if (rate > 0 && (!prev.exchange_rate || Number(prev.exchange_rate) <= 0)) {
+        const sourceAmount = Number(next.source_amount) || 0
+        next.exchange_rate = String(rate)
+        if (sourceAmount > 0) next.target_amount = String(round2(sourceAmount / rate))
+        changed = true
+      }
+      return changed ? next : prev
     })
-  }, [sourceBox?.id, targetBox?.id, sourceCur, targetCur, currencyList])
+  }, [sourceCur, targetCur, sourceBoxes.map((b) => b.id).join(','), targetBoxes.map((b) => b.id).join(','), currencyList])
 
   const fxPreview = useMemo(() => {
     const s = Number(exForm.source_amount) || 0
@@ -252,6 +282,8 @@ export default function CashBanksPage() {
       target_cash_box_id: Number(exForm.target_cash_box_id),
       source_currency: sourceCur,
       target_currency: targetCur,
+      from_currency: sourceCur,
+      to_currency: targetCur,
       source_amount: Number(exForm.source_amount),
       target_amount: Number(exForm.target_amount),
       exchange_rate: Number(exForm.exchange_rate),
@@ -657,41 +689,94 @@ export default function CashBanksPage() {
           <Field label="التاريخ">
             <input type="date" className={inputClass} value={exForm.exchange_date} onChange={(e) => setExForm({ ...exForm, exchange_date: e.target.value })} />
           </Field>
-          <Field label="الصندوق المصدر">
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="العملة المصرّف منها">
+              <select
+                className={inputClass}
+                value={sourceCur}
+                onChange={(e) => {
+                  const nextFrom = e.target.value
+                  const nextTo = nextFrom === targetCur
+                    ? (currencyOptions.find((c) => c.code !== nextFrom)?.code || targetCur)
+                    : targetCur
+                  setExForm({
+                    ...exForm,
+                    source_currency: nextFrom,
+                    target_currency: nextTo,
+                    source_cash_box_id: '',
+                    target_cash_box_id: nextTo !== targetCur ? '' : exForm.target_cash_box_id,
+                    exchange_rate: '',
+                  })
+                }}
+                required
+              >
+                {currencyOptions.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="العملة المصرّف إليها">
+              <select
+                className={inputClass}
+                value={targetCur}
+                onChange={(e) => setExForm({
+                  ...exForm,
+                  target_currency: e.target.value,
+                  target_cash_box_id: '',
+                  exchange_rate: '',
+                })}
+                required
+              >
+                {currencyOptions
+                  .filter((c) => c.code !== sourceCur)
+                  .map((c) => (
+                    <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                  ))}
+              </select>
+            </Field>
+          </div>
+          <Field label={`الصندوق المصدر (${sourceCur})`}>
             <select
               className={inputClass}
               value={exForm.source_cash_box_id}
-              onChange={(e) => setExForm({ ...exForm, source_cash_box_id: e.target.value, exchange_rate: '' })}
+              onChange={(e) => setExForm({ ...exForm, source_cash_box_id: e.target.value })}
               required
             >
               <option value="">—</option>
-              {boxRows.map((b) => (
-                <option key={b.id} value={b.id}>{b.name} ({b.currency || 'SYP'})</option>
+              {sourceBoxes.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
+            {sourceBoxes.length === 0 && (
+              <p className="mt-1 text-xs text-amber">لا يوجد صندوق بعملة {sourceCur}. أنشئ صندوقاً بهذه العملة أولاً.</p>
+            )}
           </Field>
-          <Field label={`المبلغ بالعملة الأصلية${sourceBox ? ` (${sourceCur})` : ''}`}>
+          <Field label={`المبلغ بالعملة الأصلية (${sourceCur})`}>
             <NumericInput value={exForm.source_amount} onChange={onSourceAmount} required />
           </Field>
-          <Field label="الصندوق الهدف">
+          <Field label={`الصندوق الهدف (${targetCur})`}>
             <select
               className={inputClass}
               value={exForm.target_cash_box_id}
-              onChange={(e) => setExForm({ ...exForm, target_cash_box_id: e.target.value, exchange_rate: '' })}
+              onChange={(e) => setExForm({ ...exForm, target_cash_box_id: e.target.value })}
               required
             >
               <option value="">—</option>
-              {boxRows
-                .filter((b) => String(b.id) !== String(exForm.source_cash_box_id))
-                .map((b) => (
-                  <option key={b.id} value={b.id}>{b.name} ({b.currency || 'SYP'})</option>
-                ))}
+              {targetBoxes.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
             </select>
+            {targetBoxes.length === 0 && (
+              <p className="mt-1 text-xs text-amber">لا يوجد صندوق بعملة {targetCur}. أنشئ صندوقاً بهذه العملة أولاً.</p>
+            )}
           </Field>
-          <Field label="سعر الصرف" hint={sourceBox && targetBox ? `كم ${sourceCur} مقابل 1 ${targetCur}` : undefined}>
+          <Field
+            label={`سعر الصرف (1 ${targetCur} = ? ${sourceCur})`}
+            hint={`كم ${sourceCur} مقابل وحدة واحدة من ${targetCur}`}
+          >
             <NumericInput value={exForm.exchange_rate} onChange={onExchangeRate} required />
           </Field>
-          <Field label={`المبلغ الناتج${targetBox ? ` (${targetCur})` : ''}`}>
+          <Field label={`المبلغ الناتج (${targetCur})`}>
             <NumericInput value={exForm.target_amount} onChange={onTargetAmount} required />
           </Field>
           {fxPreview && (
@@ -718,6 +803,14 @@ export default function CashBanksPage() {
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4"><dt className="text-black/50">رقم</dt><dd className="font-mono">{String(viewRow.exchange_number)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">التاريخ</dt><dd>{String(viewRow.exchange_date || '').slice(0, 10)}</dd></div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">من العملة</dt>
+              <dd className="font-mono">{String(viewRow.source_currency)}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">إلى العملة</dt>
+              <dd className="font-mono">{String(viewRow.target_currency)}</dd>
+            </div>
             <div className="flex justify-between gap-4">
               <dt className="text-black/50">من</dt>
               <dd>{(viewRow.source_cash_box as CashBox | undefined)?.name || '—'} ({String(viewRow.source_currency)})</dd>

@@ -98,6 +98,8 @@ class CashExchangeTest extends TestCase
             'exchange_date' => now()->toDateString(),
             'source_cash_box_id' => $this->sypBox->id,
             'target_cash_box_id' => $this->usdBox->id,
+            'source_currency' => 'SYP',
+            'target_currency' => 'USD',
             'source_amount' => 1_500_000,
             'target_amount' => 90,
             'exchange_rate' => 16666.66666667,
@@ -118,6 +120,8 @@ class CashExchangeTest extends TestCase
             'exchange_date' => now()->toDateString(),
             'source_cash_box_id' => $this->sypBox->id,
             'target_cash_box_id' => $this->usdBox->id,
+            'source_currency' => 'SYP',
+            'target_currency' => 'USD',
             'source_amount' => 5_000_000,
             'target_amount' => 300,
             'exchange_rate' => 15000,
@@ -131,9 +135,56 @@ class CashExchangeTest extends TestCase
             'exchange_date' => now()->toDateString(),
             'source_cash_box_id' => $this->sypBox->id,
             'target_cash_box_id' => $this->sypBox->id,
+            'source_currency' => 'SYP',
+            'target_currency' => 'USD',
             'source_amount' => 1000,
             'target_amount' => 1,
             'exchange_rate' => 1000,
+            'status' => 'posted',
+        ])->assertStatus(422);
+    }
+
+    public function test_rejects_box_currency_mismatch(): void
+    {
+        $this->postJson('/api/currency-exchanges', [
+            'exchange_date' => now()->toDateString(),
+            'source_cash_box_id' => $this->sypBox->id,
+            'target_cash_box_id' => $this->usdBox->id,
+            'source_currency' => 'USD',
+            'target_currency' => 'SYP',
+            'source_amount' => 100,
+            'target_amount' => 1_500_000,
+            'exchange_rate' => 0.00006667,
+            'status' => 'posted',
+        ])->assertStatus(422);
+    }
+
+    public function test_accepts_from_to_currency_aliases(): void
+    {
+        $this->postJson('/api/currency-exchanges', [
+            'exchange_date' => now()->toDateString(),
+            'source_cash_box_id' => $this->sypBox->id,
+            'target_cash_box_id' => $this->usdBox->id,
+            'from_currency' => 'SYP',
+            'to_currency' => 'USD',
+            'source_amount' => 150_000,
+            'target_amount' => 10,
+            'exchange_rate' => 15000,
+            'status' => 'posted',
+        ])->assertCreated()
+            ->assertJsonPath('data.source_currency', 'SYP')
+            ->assertJsonPath('data.target_currency', 'USD');
+    }
+
+    public function test_rejects_missing_explicit_currencies(): void
+    {
+        $this->postJson('/api/currency-exchanges', [
+            'exchange_date' => now()->toDateString(),
+            'source_cash_box_id' => $this->sypBox->id,
+            'target_cash_box_id' => $this->usdBox->id,
+            'source_amount' => 1500,
+            'target_amount' => 1,
+            'exchange_rate' => 1500,
             'status' => 'posted',
         ])->assertStatus(422);
     }
