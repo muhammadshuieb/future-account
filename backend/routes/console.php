@@ -6,6 +6,7 @@ use App\Services\BackupDistributionService;
 use App\Services\BackupService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -14,9 +15,10 @@ Artisan::command('inspire', function () {
 Artisan::command('syna:backup', function () {
     $notify = app(AppNotificationService::class);
     $distribution = app(BackupDistributionService::class);
+    $backups = app(BackupService::class);
 
     try {
-        $meta = app(BackupService::class)->create('auto');
+        $meta = $backups->create('auto');
         $this->info('Backup created: '.$meta['filename']);
     } catch (\Throwable $e) {
         $this->error('Backup failed: '.$e->getMessage());
@@ -52,6 +54,21 @@ Artisan::command('syna:backup', function () {
             ['google_drive' => false],
         );
         $this->warn('Google Drive is not configured.');
+    }
+
+    // Retention runs only after a successful local backup (fresh proof exists).
+    try {
+        $cleanup = $backups->pruneOldBackups();
+        if ($cleanup['skipped'] ?? false) {
+            $this->warn($cleanup['message'] ?? 'Retention skipped');
+        } elseif (($cleanup['deleted_count'] ?? 0) > 0) {
+            $this->info($cleanup['message'] ?? 'Old backups pruned');
+        } else {
+            $this->comment($cleanup['message'] ?? 'No old backups to prune');
+        }
+    } catch (\Throwable $e) {
+        Log::warning('Backup retention failed: '.$e->getMessage());
+        $this->warn('Retention cleanup failed: '.$e->getMessage());
     }
 
     if ($hadFailure) {

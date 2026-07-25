@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Setting;
 use Database\Seeders\AdminUserSeeder;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Spatie\Permission\PermissionRegistrar;
@@ -16,6 +18,18 @@ class BackupService
 
     /** Max upload size in kilobytes (512 MB). */
     public const MAX_UPLOAD_KB = 524288;
+
+    /** Minimum acceptable size for a "fresh" backup proof (bytes). */
+    public const MIN_FRESH_BYTES = 1024;
+
+    /** A backup must be newer than this many hours to count as fresh. */
+    public const FRESH_MAX_AGE_HOURS = 24;
+
+    public const DEFAULT_RETENTION_DAYS = 7;
+
+    public const DEFAULT_MIN_KEEP = 3;
+
+    public const SKIP_MESSAGE_AR = 'لم يتم حذف النسخ القديمة — لا توجد نسخة احتياطية حديثة! تحقق من نظام النسخ';
 
     public function directory(): string
     {
@@ -148,6 +162,160 @@ class BackupService
     public function delete(string $filename): void
     {
         File::delete($this->pathFor($filename));
+    }
+
+    /**
+     * Delete local backups older than retention days, with safety guards:
+     * - require a fresh (≤24h), non-empty backup before any prune
+     * - always keep the newest N backups regardless of age
+     *
+     * Remote copies (Drive/Telegram) are never touched.
+     *
+     * @return array{
+     *   pruned: bool,
+     *   skipped: bool,
+     *   reason: ?string,
+     *   deleted: list<string>,
+     *   deleted_count: int,
+     *   remaining: int,
+     *   retention_days: int,
+     *   min_keep: int,
+     *   message: string,
+     *   at: string
+     * }
+     */
+    public function pruneOldBackups(?int $retentionDays = null, ?int $minKeep = null): array
+    {
+        $retentionDays = max(1, $retentionDays ?? Setting::backupRetentionDays());
+        $minKeep = max(1, $minKeep ?? Setting::backupMinKeep());
+        $files = $this->backupFiles();
+        $remaining = count($files);
+        $at = now()->toIso8601String();
+
+        if (! $this->hasFreshBackup($files)) {
+            $result = [
+                'pruned' => false,
+                'skipped' => true,
+                'reason' => 'no_fresh_backup',
+                'deleted' => [],
+                'deleted_count' => 0,
+                'remaining' => $remaining,
+                'retention_days' => $retentionDays,
+                'min_keep' => $minKeep,
+                'message' => self::SKIP_MESSAGE_AR,
+                'at' => $at,
+            ];
+            $this->persistCleanupResult($result);
+            Log::warning(self::SKIP_MESSAGE_AR, $result);
+            app(AppNotificationService::class)->notifyAdmins(
+                'backup_retention_skipped',
+                'تحذير: تنظيف النسخ الاحتياطية',
+                self::SKIP_MESSAGE_AR,
+                $result,
+            );
+
+            return $result;
+        }
+
+        $cutoff = now()->subDays($retentionDays)->getTimestamp();
+        $protected = array_slice($files, 0, $minKeep);
+        $protectedNames = array_map(fn ($f) => $f->getFilename(), $protected);
+
+        $deleted = [];
+        foreach ($files as $file) {
+            if (in_array($file->getFilename(), $protectedNames, true)) {
+                continue;
+            }
+            if ($file->getMTime() >= $cutoff) {
+                continue;
+            }
+            $name = $file->getFilename();
+            File::delete($file->getPathname());
+            $deleted[] = $name;
+        }
+
+        $remainingAfter = count($this->backupFiles());
+        $result = [
+            'pruned' => $deleted !== [],
+            'skipped' => false,
+            'reason' => null,
+            'deleted' => $deleted,
+            'deleted_count' => count($deleted),
+            'remaining' => $remainingAfter,
+            'retention_days' => $retentionDays,
+            'min_keep' => $minKeep,
+            'message' => $deleted === []
+                ? 'لا توجد نسخ قديمة للحذف.'
+                : 'تم حذف '.count($deleted).' نسخة قديمة. المتبقي: '.$remainingAfter,
+            'at' => $at,
+        ];
+        $this->persistCleanupResult($result);
+        if ($deleted !== []) {
+            Log::info('Backup retention pruned old local files', $result);
+        }
+
+        return $result;
+    }
+
+    public function lastCleanupResult(): ?array
+    {
+        $raw = Setting::getValue('backup_last_cleanup');
+        if (! is_string($raw) || $raw === '') {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : null;
+    }
+
+    public function retentionStatus(): array
+    {
+        return [
+            'retention_days' => Setting::backupRetentionDays(),
+            'min_keep' => Setting::backupMinKeep(),
+            'fresh_max_age_hours' => self::FRESH_MAX_AGE_HOURS,
+            'min_fresh_bytes' => self::MIN_FRESH_BYTES,
+            'has_fresh_backup' => $this->hasFreshBackup($this->backupFiles()),
+            'local_count' => count($this->backupFiles()),
+            'last_cleanup' => $this->lastCleanupResult(),
+            'policy_ar' => 'تُحذف النسخ المحلية الأقدم من '.Setting::backupRetentionDays().' أيام تلقائياً بعد كل نسخ ناجح، بشرط وجود نسخة حديثة (أقل من 24 ساعة) وصحيحة، مع الإبقاء دائماً على أحدث '.Setting::backupMinKeep().' نسخ.',
+        ];
+    }
+
+    /** @return list<\SplFileInfo> newest first */
+    protected function backupFiles(): array
+    {
+        return collect(File::files($this->directory()))
+            ->filter(fn ($f) => Str::endsWith($f->getFilename(), ['.dump', '.sql', '.backup', '.gz']))
+            ->sortByDesc(fn ($f) => $f->getMTime())
+            ->values()
+            ->all();
+    }
+
+    /** @param  list<\SplFileInfo>  $files */
+    protected function hasFreshBackup(array $files): bool
+    {
+        $freshCutoff = now()->subHours(self::FRESH_MAX_AGE_HOURS)->getTimestamp();
+
+        foreach ($files as $file) {
+            if ($file->getMTime() >= $freshCutoff && $file->getSize() > self::MIN_FRESH_BYTES) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param  array<string, mixed>  $result */
+    protected function persistCleanupResult(array $result): void
+    {
+        Setting::setValue(
+            'backup_last_cleanup',
+            json_encode($result, JSON_UNESCAPED_UNICODE),
+            'backup',
+            'json',
+            'آخر نتيجة لتنظيف النسخ',
+        );
     }
 
     protected function afterRestore(bool $ensureAdmin): void

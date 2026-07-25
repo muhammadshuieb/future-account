@@ -50,6 +50,8 @@ class AdminUserSeeder extends Seeder
             ['key' => 'locale', 'value' => 'ar', 'group' => 'general', 'label' => 'اللغة'],
             ['key' => 'backup_time_1', 'value' => '02:00', 'group' => 'backup', 'type' => 'time', 'label' => 'وقت النسخة الأولى'],
             ['key' => 'backup_time_2', 'value' => '14:00', 'group' => 'backup', 'type' => 'time', 'label' => 'وقت النسخة الثانية'],
+            ['key' => 'backup_retention_days', 'value' => '7', 'group' => 'backup', 'type' => 'number', 'label' => 'مدة الاحتفاظ بالنسخ (أيام)'],
+            ['key' => 'backup_min_keep', 'value' => '3', 'group' => 'backup', 'type' => 'number', 'label' => 'الحد الأدنى لعدد النسخ المحتفظ بها'],
         ];
 
         foreach ($settings as $setting) {

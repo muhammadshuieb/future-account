@@ -42,6 +42,9 @@ const HIDDEN_GENERAL_KEYS = new Set([
   'locale',
   'backup_time_1',
   'backup_time_2',
+  'backup_retention_days',
+  'backup_min_keep',
+  'backup_last_cleanup',
   'default_branch_id',
   'default_warehouse_id',
   'multi_language',
@@ -92,6 +95,21 @@ export default function SettingsPage() {
     queryFn: async () => (await api.get('/backups/status')).data.data as {
       google_drive: { configured: boolean }
       telegram: { configured: boolean }
+      retention?: {
+        retention_days: number
+        min_keep: number
+        has_fresh_backup: boolean
+        local_count: number
+        policy_ar: string
+        last_cleanup: {
+          pruned?: boolean
+          skipped?: boolean
+          deleted_count?: number
+          remaining?: number
+          message?: string
+          at?: string
+        } | null
+      }
     },
     enabled: tab === 'backup',
     retry: false,
@@ -158,6 +176,8 @@ export default function SettingsPage() {
     if (map.tax_enabled === undefined) map.tax_enabled = '1'
     if (!map.backup_time_1) map.backup_time_1 = '02:00'
     if (!map.backup_time_2) map.backup_time_2 = '14:00'
+    if (!map.backup_retention_days) map.backup_retention_days = '7'
+    if (!map.backup_min_keep) map.backup_min_keep = '3'
     setValues(map)
   }, [settings])
 
@@ -490,6 +510,61 @@ export default function SettingsPage() {
             </div>
             <Button type="button" variant="primary" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               {t('settings.saveSchedule')}
+            </Button>
+          </Panel>
+
+          <Panel className="space-y-4 p-5">
+            <h2 className="font-semibold">{t('settings.backupRetention')}</h2>
+            <p className="text-xs text-black/50">
+              {backupStatus.data?.retention?.policy_ar || t('settings.backupRetentionPolicy')}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('settings.backupRetentionDays')}>
+                <NumericInput
+                  value={values.backup_retention_days || '7'}
+                  onChange={(v) => setValue('backup_retention_days', v)}
+                />
+              </Field>
+              <Field label={t('settings.backupMinKeep')}>
+                <NumericInput
+                  value={values.backup_min_keep || '3'}
+                  onChange={(v) => setValue('backup_min_keep', v)}
+                />
+              </Field>
+            </div>
+            {backupStatus.data?.retention?.last_cleanup && (
+              <div className={`rounded-lg border px-3 py-2 text-sm ${
+                backupStatus.data.retention.last_cleanup.skipped
+                  ? 'border-amber-300 bg-amber-50 text-amber-900'
+                  : 'border-[var(--color-line)] text-black/70'
+              }`}>
+                <p className="font-medium">{t('settings.backupLastCleanup')}</p>
+                <p className="mt-1 text-xs">
+                  {backupStatus.data.retention.last_cleanup.message}
+                  {backupStatus.data.retention.last_cleanup.at
+                    ? ` · ${formatDateTimeLocal(backupStatus.data.retention.last_cleanup.at)}`
+                    : ''}
+                </p>
+              </div>
+            )}
+            {!backupStatus.data?.retention?.has_fresh_backup && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {t('settings.backupNoFreshWarning')}
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="primary"
+              disabled={saveMutation.isPending}
+              onClick={() => {
+                saveMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+                  },
+                })
+              }}
+            >
+              {t('settings.saveRetention')}
             </Button>
           </Panel>
 

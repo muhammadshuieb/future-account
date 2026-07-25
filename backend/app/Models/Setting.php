@@ -81,6 +81,20 @@ class Setting extends Model
         return [$t1, $t2];
     }
 
+    public static function backupRetentionDays(): int
+    {
+        $days = (int) (static::getValue('backup_retention_days', 7) ?? 7);
+
+        return max(1, min(365, $days > 0 ? $days : 7));
+    }
+
+    public static function backupMinKeep(): int
+    {
+        $n = (int) (static::getValue('backup_min_keep', 3) ?? 3);
+
+        return max(1, min(50, $n > 0 ? $n : 3));
+    }
+
     public static function normalizeTime(string $value, string $fallback): string
     {
         if (preg_match('/^([01]?\d|2[0-3]):([0-5]\d)$/', trim($value), $m)) {

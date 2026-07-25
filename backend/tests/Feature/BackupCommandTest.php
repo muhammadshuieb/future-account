@@ -29,6 +29,20 @@ class BackupCommandTest extends TestCase
                 'filename' => 'future_account_auto_test.dump',
                 'path' => storage_path('app/backups/future_account_auto_test.dump'),
             ]);
+        $backup->shouldReceive('pruneOldBackups')
+            ->once()
+            ->andReturn([
+                'pruned' => false,
+                'skipped' => false,
+                'reason' => null,
+                'deleted' => [],
+                'deleted_count' => 0,
+                'remaining' => 1,
+                'retention_days' => 7,
+                'min_keep' => 3,
+                'message' => 'لا توجد نسخ قديمة للحذف.',
+                'at' => now()->toIso8601String(),
+            ]);
 
         $dist = Mockery::mock(BackupDistributionService::class);
         $dist->shouldReceive('distribute')

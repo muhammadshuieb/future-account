@@ -55,6 +55,20 @@ class SettingController extends Controller
                 $value = Setting::normalizeTime((string) $value, $key === 'backup_time_1' ? '02:00' : '14:00');
             }
 
+            if ($key === 'backup_retention_days') {
+                $n = (int) $value;
+                $value = (string) max(1, min(365, $n > 0 ? $n : 7));
+            }
+
+            if ($key === 'backup_min_keep') {
+                $n = (int) $value;
+                $value = (string) max(1, min(50, $n > 0 ? $n : 3));
+            }
+
+            if ($key === 'backup_last_cleanup') {
+                continue;
+            }
+
             $existing = Setting::query()->where('key', $key)->first();
             Setting::setValue(
                 $key,
@@ -79,7 +93,7 @@ class SettingController extends Controller
     {
         return match ($key) {
             'tax_enabled', 'tax_rate', 'currency', 'multi_currency', 'fiscal_year_start' => 'finance',
-            'backup_time_1', 'backup_time_2' => 'backup',
+            'backup_time_1', 'backup_time_2', 'backup_retention_days', 'backup_min_keep', 'backup_last_cleanup' => 'backup',
             'company_name', 'company_name_en' => 'company',
             default => 'general',
         };
@@ -89,8 +103,9 @@ class SettingController extends Controller
     {
         return match ($key) {
             'tax_enabled', 'multi_currency' => 'boolean',
-            'tax_rate' => 'number',
+            'tax_rate', 'backup_retention_days', 'backup_min_keep' => 'number',
             'backup_time_1', 'backup_time_2' => 'time',
+            'backup_last_cleanup' => 'json',
             default => 'string',
         };
     }
@@ -103,6 +118,9 @@ class SettingController extends Controller
             'default_locale' => 'اللغة الافتراضية',
             'backup_time_1' => 'وقت النسخة الأولى',
             'backup_time_2' => 'وقت النسخة الثانية',
+            'backup_retention_days' => 'مدة الاحتفاظ بالنسخ (أيام)',
+            'backup_min_keep' => 'الحد الأدنى لعدد النسخ المحتفظ بها',
+            'backup_last_cleanup' => 'آخر نتيجة لتنظيف النسخ',
             default => null,
         };
     }

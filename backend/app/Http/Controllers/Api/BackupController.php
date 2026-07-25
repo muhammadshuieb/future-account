@@ -36,7 +36,10 @@ class BackupController extends ApiController
     {
         $this->authorizeAdmin();
 
-        return $this->ok($this->distribution->status());
+        return $this->ok(array_merge(
+            $this->distribution->status(),
+            ['retention' => $this->backups->retentionStatus()],
+        ));
     }
 
     public function store(Request $request): JsonResponse

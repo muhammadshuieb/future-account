@@ -81,6 +81,7 @@ class AppNotificationService
         $map = [
             'backup_drive_missing' => '/settings?tab=backup',
             'backup_failed' => '/settings?tab=backup',
+            'backup_retention_skipped' => '/settings?tab=backup',
             'low_stock' => '/warehouse?tab=alerts',
             'receivables' => '/partners?tab=customers',
             'payables' => '/partners?tab=suppliers',
