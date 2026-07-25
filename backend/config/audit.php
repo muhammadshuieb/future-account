@@ -18,6 +18,7 @@ return [
         App\Models\Branch::class,
         App\Models\CashBox::class,
         App\Models\CashTransfer::class,
+        App\Models\CurrencyExchange::class,
         App\Models\Category::class,
         App\Models\Company::class,
         App\Models\Currency::class,

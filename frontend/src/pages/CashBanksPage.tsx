@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
@@ -13,13 +13,38 @@ import {
   PageHeader,
   Panel,
   Tabs,
+  formatMoney,
   inputClass,
   useFormMessage,
 } from '@/components/ui'
+import type { CurrencyOption } from '@/components/CurrencyFields'
 
-type CashBox = { id: number; code: string; name: string; opening_balance: number }
-type Bank = { id: number; code: string; name: string; account_number?: string; opening_balance?: number }
+type CashBox = {
+  id: number
+  code: string
+  name: string
+  opening_balance: number
+  currency?: string
+  balance?: number
+}
+type Bank = { id: number; code: string; name: string; account_number?: string; opening_balance?: number; currency?: string }
 type Transfer = { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }
+type CurrencyExchange = {
+  id: number
+  exchange_number: string
+  exchange_date: string
+  source_cash_box_id: number
+  target_cash_box_id: number
+  source_currency: string
+  target_currency: string
+  source_amount: number
+  target_amount: number
+  exchange_rate: number
+  status: string
+  notes?: string | null
+  source_cash_box?: CashBox
+  target_cash_box?: CashBox
+}
 type Reconciliation = {
   id: number
   statement_balance: number
@@ -28,7 +53,7 @@ type Reconciliation = {
   bank?: { name: string }
 }
 
-const emptyBox = { code: '', name: '', opening_balance: '0' }
+const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'SYP' }
 const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
 const emptyTr = {
   transfer_date: todayYmd(),
@@ -39,6 +64,16 @@ const emptyTr = {
   amount: '',
   status: 'posted',
 }
+const emptyEx = {
+  exchange_date: todayYmd(),
+  source_cash_box_id: '',
+  target_cash_box_id: '',
+  source_amount: '',
+  target_amount: '',
+  exchange_rate: '',
+  notes: '',
+  status: 'posted',
+}
 const emptyRec = {
   bank_id: '',
   statement_date: todayYmd(),
@@ -47,6 +82,32 @@ const emptyRec = {
 
 function listOrEmpty<T>(data: T[] | undefined): T[] {
   return Array.isArray(data) ? data : []
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
+function round8(n: number) {
+  return Math.round(n * 1e8) / 1e8
+}
+
+function fmtLatn(n: number) {
+  return n.toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 8 })
+}
+
+function rateToBase(code: string, currencies: CurrencyOption[], base: string) {
+  if (code === base) return 1
+  const row = currencies.find((c) => c.code === code)
+  return row?.rate_to_base && row.rate_to_base > 0 ? row.rate_to_base : 0
+}
+
+/** 1 target = N source */
+function sourcePerTarget(sourceCur: string, targetCur: string, currencies: CurrencyOption[], base: string) {
+  const s = rateToBase(sourceCur, currencies, base)
+  const t = rateToBase(targetCur, currencies, base)
+  if (!s || !t) return 0
+  return round8(t / s)
 }
 
 export default function CashBanksPage() {
@@ -60,6 +121,7 @@ export default function CashBanksPage() {
   const [boxForm, setBoxForm] = useState(emptyBox)
   const [bankForm, setBankForm] = useState(emptyBank)
   const [trForm, setTrForm] = useState(emptyTr)
+  const [exForm, setExForm] = useState(emptyEx)
   const [recForm, setRecForm] = useState(emptyRec)
 
   const boxes = useQuery({
@@ -70,10 +132,19 @@ export default function CashBanksPage() {
     queryKey: ['banks'],
     queryFn: async () => (await api.get('/banks')).data.data as Bank[],
   })
+  const currencies = useQuery({
+    queryKey: ['currencies'],
+    queryFn: async () => (await api.get('/currencies')).data.data as CurrencyOption[],
+  })
   const transfers = useQuery({
     queryKey: ['cash-transfers'],
     queryFn: async () => (await api.get('/cash-transfers')).data.data as Transfer[],
     enabled: tab === 'transfers',
+  })
+  const exchanges = useQuery({
+    queryKey: ['currency-exchanges'],
+    queryFn: async () => (await api.get('/currency-exchanges')).data.data as CurrencyExchange[],
+    enabled: tab === 'exchange',
   })
   const reconciliations = useQuery({
     queryKey: ['bank-reconciliations'],
@@ -84,15 +155,50 @@ export default function CashBanksPage() {
   const boxRows = listOrEmpty(boxes.data)
   const bankRows = listOrEmpty(banks.data)
   const transferRows = listOrEmpty(transfers.data)
+  const exchangeRows = listOrEmpty(exchanges.data)
   const reconcileRows = listOrEmpty(reconciliations.data)
+  const currencyList = listOrEmpty(currencies.data)
+  const baseCurrency = 'SYP'
   const fromList = trForm.from_type === 'cash_box' ? boxRows : bankRows
   const toList = trForm.to_type === 'cash_box' ? boxRows : bankRows
+
+  const sourceBox = boxRows.find((b) => String(b.id) === String(exForm.source_cash_box_id))
+  const targetBox = boxRows.find((b) => String(b.id) === String(exForm.target_cash_box_id))
+  const sourceCur = sourceBox?.currency || 'SYP'
+  const targetCur = targetBox?.currency || 'USD'
+
+  useEffect(() => {
+    if (!sourceBox || !targetBox || sourceBox.id === targetBox.id) return
+    if (sourceCur === targetCur) return
+    const rate = sourcePerTarget(sourceCur, targetCur, currencyList, baseCurrency)
+    if (rate <= 0) return
+    setExForm((prev) => {
+      if (prev.exchange_rate && Number(prev.exchange_rate) > 0 && prev.source_cash_box_id === String(sourceBox.id) && prev.target_cash_box_id === String(targetBox.id)) {
+        return prev
+      }
+      const sourceAmount = Number(prev.source_amount) || 0
+      const targetAmount = sourceAmount > 0 ? round2(sourceAmount / rate) : Number(prev.target_amount) || 0
+      return {
+        ...prev,
+        exchange_rate: String(rate),
+        target_amount: targetAmount > 0 ? String(targetAmount) : prev.target_amount,
+      }
+    })
+  }, [sourceBox?.id, targetBox?.id, sourceCur, targetCur, currencyList])
+
+  const fxPreview = useMemo(() => {
+    const s = Number(exForm.source_amount) || 0
+    const t = Number(exForm.target_amount) || 0
+    if (s <= 0 || t <= 0) return null
+    return `${fmtLatn(s)} ${sourceCur} = ${fmtLatn(t)} ${targetCur}`
+  }, [exForm.source_amount, exForm.target_amount, sourceCur, targetCur])
 
   const activeQuery =
     tab === 'boxes' ? boxes
       : tab === 'banks' ? banks
         : tab === 'transfers' ? transfers
-          : reconciliations
+          : tab === 'exchange' ? exchanges
+            : reconciliations
 
   function closeModal() {
     setModalOpen(false)
@@ -106,13 +212,19 @@ export default function CashBanksPage() {
     if (tab === 'boxes') setBoxForm(emptyBox)
     if (tab === 'banks') setBankForm(emptyBank)
     if (tab === 'transfers') setTrForm(emptyTr)
+    if (tab === 'exchange') setExForm(emptyEx)
     if (tab === 'reconcile') setRecForm(emptyRec)
     setModalOpen(true)
   }
 
   const saveBox = useMutation({
     mutationFn: () => {
-      const payload = { ...boxForm, opening_balance: Number(boxForm.opening_balance), is_active: true }
+      const payload = {
+        ...boxForm,
+        opening_balance: Number(boxForm.opening_balance),
+        currency: boxForm.currency || 'SYP',
+        is_active: true,
+      }
       if (editingId) return api.put(`/cash-boxes/${editingId}`, payload)
       return api.post('/cash-boxes', payload)
     },
@@ -133,6 +245,27 @@ export default function CashBanksPage() {
     onSuccess: () => { msg.setMessage('تم ترحيل التحويل'); closeModal(); void qc.invalidateQueries({ queryKey: ['cash-transfers'] }) },
     onError: msg.fromErr,
   })
+  const saveEx = useMutation({
+    mutationFn: () => api.post('/currency-exchanges', {
+      exchange_date: exForm.exchange_date,
+      source_cash_box_id: Number(exForm.source_cash_box_id),
+      target_cash_box_id: Number(exForm.target_cash_box_id),
+      source_currency: sourceCur,
+      target_currency: targetCur,
+      source_amount: Number(exForm.source_amount),
+      target_amount: Number(exForm.target_amount),
+      exchange_rate: Number(exForm.exchange_rate),
+      notes: exForm.notes || null,
+      status: exForm.status,
+    }),
+    onSuccess: () => {
+      msg.setMessage('تم ترحيل صرف العملة')
+      closeModal()
+      void qc.invalidateQueries({ queryKey: ['currency-exchanges'] })
+      void qc.invalidateQueries({ queryKey: ['cash-boxes'] })
+    },
+    onError: msg.fromErr,
+  })
   const saveRec = useMutation({
     mutationFn: () => api.post('/bank-reconciliations', { ...recForm, bank_id: Number(recForm.bank_id), statement_balance: Number(recForm.statement_balance) }),
     onSuccess: () => { msg.setMessage('تم إنشاء التسوية'); closeModal(); void qc.invalidateQueries({ queryKey: ['bank-reconciliations'] }) },
@@ -143,20 +276,55 @@ export default function CashBanksPage() {
     tab === 'boxes' ? 'صندوق جديد'
       : tab === 'banks' ? 'حساب بنكي'
         : tab === 'transfers' ? 'تحويل'
-          : 'تسوية بنكية'
+          : tab === 'exchange' ? 'صرف عملة'
+            : 'تسوية بنكية'
 
   const emptyCopy: Record<string, { title: string; description: string }> = {
     boxes: { title: 'لا توجد صناديق', description: 'أضف صندوقاً نقدياً للبدء.' },
     banks: { title: 'لا توجد حسابات بنكية', description: 'أضف حساباً بنكياً للبدء.' },
     transfers: { title: 'لا توجد تحويلات', description: 'أنشئ تحويلاً بين صندوق وبنك.' },
+    exchange: { title: 'لا توجد عمليات صرف', description: 'سجّل صرف عملة بين صندوقين بعملتين مختلفتين.' },
     reconcile: { title: 'لا توجد تسويات', description: 'أنشئ تسوية كشف حساب بنكي.' },
+  }
+
+  function onSourceAmount(v: string) {
+    const rate = Number(exForm.exchange_rate) || 0
+    const source = Number(v) || 0
+    const target = rate > 0 && source > 0 ? round2(source / rate) : Number(exForm.target_amount) || 0
+    setExForm((prev) => ({
+      ...prev,
+      source_amount: v,
+      target_amount: source > 0 && rate > 0 ? String(target) : prev.target_amount,
+    }))
+  }
+
+  function onTargetAmount(v: string) {
+    const source = Number(exForm.source_amount) || 0
+    const target = Number(v) || 0
+    const rate = source > 0 && target > 0 ? round8(source / target) : Number(exForm.exchange_rate) || 0
+    setExForm((prev) => ({
+      ...prev,
+      target_amount: v,
+      exchange_rate: source > 0 && target > 0 ? String(rate) : prev.exchange_rate,
+    }))
+  }
+
+  function onExchangeRate(v: string) {
+    const rate = Number(v) || 0
+    const source = Number(exForm.source_amount) || 0
+    const target = rate > 0 && source > 0 ? round2(source / rate) : Number(exForm.target_amount) || 0
+    setExForm((prev) => ({
+      ...prev,
+      exchange_rate: v,
+      target_amount: source > 0 && rate > 0 ? String(target) : prev.target_amount,
+    }))
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="الصناديق والبنوك"
-        subtitle="صناديق نقدية، حسابات بنكية، تحويلات، وتسوية كشف حساب"
+        subtitle="صناديق نقدية، حسابات بنكية، تحويلات، صرف عملة، وتسوية كشف حساب"
         actions={<Button variant="primary" onClick={openCreate}>إضافة</Button>}
       />
       <Tabs
@@ -164,6 +332,7 @@ export default function CashBanksPage() {
           { id: 'boxes', label: 'الصناديق' },
           { id: 'banks', label: 'البنوك' },
           { id: 'transfers', label: 'التحويلات' },
+          { id: 'exchange', label: 'صرف عملة' },
           { id: 'reconcile', label: 'التسويات' },
         ]}
         active={tab}
@@ -186,7 +355,13 @@ export default function CashBanksPage() {
           {!boxes.isLoading && boxRows.length > 0 && (
             <table className="w-full text-sm">
               <thead className="bg-mist text-right text-black/60">
-                <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">افتتاحي</th></tr>
+                <tr>
+                  <th className="px-4 py-3">رمز</th>
+                  <th className="px-4 py-3">اسم</th>
+                  <th className="px-4 py-3">عملة</th>
+                  <th className="px-4 py-3">رصيد</th>
+                  <th className="px-4 py-3">افتتاحي</th>
+                </tr>
               </thead>
               <tbody>
                 {boxRows.map((b) => (
@@ -195,14 +370,21 @@ export default function CashBanksPage() {
                     className="row-clickable border-t border-black/5"
                     onClick={() => {
                       setEditingId(b.id)
-                      setBoxForm({ code: b.code, name: b.name, opening_balance: String(b.opening_balance) })
+                      setBoxForm({
+                        code: b.code,
+                        name: b.name,
+                        opening_balance: String(b.opening_balance),
+                        currency: b.currency || 'SYP',
+                      })
                       setModalOpen(true)
                     }}
                     tabIndex={0}
                   >
                     <td className="px-4 py-3 font-mono">{b.code}</td>
                     <td className="px-4 py-3">{b.name}</td>
-                    <td className="px-4 py-3">{b.opening_balance}</td>
+                    <td className="px-4 py-3 font-mono">{b.currency || 'SYP'}</td>
+                    <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance, b.currency || 'SYP')}</td>
+                    <td className="px-4 py-3">{formatMoney(b.opening_balance, b.currency || 'SYP')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -281,6 +463,50 @@ export default function CashBanksPage() {
         </Panel>
       )}
 
+      {tab === 'exchange' && (
+        <Panel>
+          {exchanges.isLoading && <LoadingBlock />}
+          {!exchanges.isLoading && !exchanges.isError && exchangeRows.length === 0 && (
+            <EmptyState title={emptyCopy.exchange.title} description={emptyCopy.exchange.description} />
+          )}
+          {!exchanges.isLoading && exchangeRows.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-mist text-right text-black/60">
+                <tr>
+                  <th className="px-4 py-3">رقم</th>
+                  <th className="px-4 py-3">من → إلى</th>
+                  <th className="px-4 py-3">مبلغ أصلي</th>
+                  <th className="px-4 py-3">ناتج</th>
+                  <th className="px-4 py-3">سعر</th>
+                  <th className="px-4 py-3">حالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exchangeRows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="row-clickable border-t border-black/5"
+                    onClick={() => { setViewRow(row as unknown as Record<string, unknown>); setModalOpen(true) }}
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3 font-mono text-xs">{row.exchange_number}</td>
+                    <td className="px-4 py-3">
+                      {row.source_cash_box?.name || row.source_currency}
+                      {' → '}
+                      {row.target_cash_box?.name || row.target_currency}
+                    </td>
+                    <td className="px-4 py-3">{formatMoney(row.source_amount, row.source_currency)}</td>
+                    <td className="px-4 py-3">{formatMoney(row.target_amount, row.target_currency)}</td>
+                    <td className="px-4 py-3 font-mono text-xs">{fmtLatn(Number(row.exchange_rate))}</td>
+                    <td className="px-4 py-3">{row.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      )}
+
       {tab === 'reconcile' && (
         <Panel>
           {reconciliations.isLoading && <LoadingBlock />}
@@ -326,6 +552,17 @@ export default function CashBanksPage() {
         <div className="space-y-3">
           <Field label="رمز"><input className={inputClass} value={boxForm.code} onChange={(e) => setBoxForm({ ...boxForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={boxForm.name} onChange={(e) => setBoxForm({ ...boxForm, name: e.target.value })} required /></Field>
+          <Field label="العملة">
+            <select className={inputClass} value={boxForm.currency} onChange={(e) => setBoxForm({ ...boxForm, currency: e.target.value })}>
+              {(currencyList.length ? currencyList : [
+                { id: 1, code: 'SYP', name: 'ليرة سورية', is_active: true },
+                { id: 2, code: 'USD', name: 'دولار', is_active: true },
+                { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+              ]).map((c) => (
+                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="رصيد افتتاحي"><NumericInput value={boxForm.opening_balance} onChange={(v) => setBoxForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
         </div>
       </Modal>
@@ -370,7 +607,7 @@ export default function CashBanksPage() {
           <Field label="من معرف">
             <select className={inputClass} value={trForm.from_id} onChange={(e) => setTrForm({ ...trForm, from_id: e.target.value })} required>
               <option value="">—</option>
-              {fromList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {fromList.map((x) => <option key={x.id} value={x.id}>{x.name}{'currency' in x && x.currency ? ` (${x.currency})` : ''}</option>)}
             </select>
           </Field>
           <Field label="إلى نوع">
@@ -382,7 +619,7 @@ export default function CashBanksPage() {
           <Field label="إلى معرف">
             <select className={inputClass} value={trForm.to_id} onChange={(e) => setTrForm({ ...trForm, to_id: e.target.value })} required>
               <option value="">—</option>
-              {toList.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {toList.map((x) => <option key={x.id} value={x.id}>{x.name}{'currency' in x && x.currency ? ` (${x.currency})` : ''}</option>)}
             </select>
           </Field>
           <Field label="المبلغ"><NumericInput value={trForm.amount} onChange={(v) => setTrForm((prev) => ({ ...prev, amount: v }))} required /></Field>
@@ -401,6 +638,110 @@ export default function CashBanksPage() {
             <div className="flex justify-between gap-4"><dt className="text-black/50">من → إلى</dt><dd>{String(viewRow.from_type)} → {String(viewRow.to_type)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">مبلغ</dt><dd>{String(viewRow.amount)}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">حالة</dt><dd>{String(viewRow.status)}</dd></div>
+          </dl>
+        )}
+      </Modal>
+
+      <Modal
+        open={modalOpen && tab === 'exchange' && !viewRow}
+        onClose={closeModal}
+        title="صرف عملة"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>إلغاء</Button>
+            <Button variant="primary" disabled={saveEx.isPending} onClick={() => saveEx.mutate()}>ترحيل</Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="التاريخ">
+            <input type="date" className={inputClass} value={exForm.exchange_date} onChange={(e) => setExForm({ ...exForm, exchange_date: e.target.value })} />
+          </Field>
+          <Field label="الصندوق المصدر">
+            <select
+              className={inputClass}
+              value={exForm.source_cash_box_id}
+              onChange={(e) => setExForm({ ...exForm, source_cash_box_id: e.target.value, exchange_rate: '' })}
+              required
+            >
+              <option value="">—</option>
+              {boxRows.map((b) => (
+                <option key={b.id} value={b.id}>{b.name} ({b.currency || 'SYP'})</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={`المبلغ بالعملة الأصلية${sourceBox ? ` (${sourceCur})` : ''}`}>
+            <NumericInput value={exForm.source_amount} onChange={onSourceAmount} required />
+          </Field>
+          <Field label="الصندوق الهدف">
+            <select
+              className={inputClass}
+              value={exForm.target_cash_box_id}
+              onChange={(e) => setExForm({ ...exForm, target_cash_box_id: e.target.value, exchange_rate: '' })}
+              required
+            >
+              <option value="">—</option>
+              {boxRows
+                .filter((b) => String(b.id) !== String(exForm.source_cash_box_id))
+                .map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} ({b.currency || 'SYP'})</option>
+                ))}
+            </select>
+          </Field>
+          <Field label="سعر الصرف" hint={sourceBox && targetBox ? `كم ${sourceCur} مقابل 1 ${targetCur}` : undefined}>
+            <NumericInput value={exForm.exchange_rate} onChange={onExchangeRate} required />
+          </Field>
+          <Field label={`المبلغ الناتج${targetBox ? ` (${targetCur})` : ''}`}>
+            <NumericInput value={exForm.target_amount} onChange={onTargetAmount} required />
+          </Field>
+          {fxPreview && (
+            <p className="rounded-md bg-black/[0.03] px-2.5 py-2 text-xs text-black/65">{fxPreview}</p>
+          )}
+          <Field label="ملاحظات">
+            <input className={inputClass} value={exForm.notes} onChange={(e) => setExForm({ ...exForm, notes: e.target.value })} placeholder="اسم الصراف مثلاً" />
+          </Field>
+        </div>
+      </Modal>
+
+      <Modal
+        open={modalOpen && tab === 'exchange' && !!viewRow}
+        onClose={closeModal}
+        title="عرض صرف عملة"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => window.print()}>طباعة</Button>
+            <Button variant="secondary" onClick={closeModal}>إغلاق</Button>
+          </>
+        }
+      >
+        {viewRow && (
+          <dl className="space-y-2 text-sm">
+            <div className="flex justify-between gap-4"><dt className="text-black/50">رقم</dt><dd className="font-mono">{String(viewRow.exchange_number)}</dd></div>
+            <div className="flex justify-between gap-4"><dt className="text-black/50">التاريخ</dt><dd>{String(viewRow.exchange_date || '').slice(0, 10)}</dd></div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">من</dt>
+              <dd>{(viewRow.source_cash_box as CashBox | undefined)?.name || '—'} ({String(viewRow.source_currency)})</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">إلى</dt>
+              <dd>{(viewRow.target_cash_box as CashBox | undefined)?.name || '—'} ({String(viewRow.target_currency)})</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">المبلغ الأصلي</dt>
+              <dd>{formatMoney(viewRow.source_amount as number, String(viewRow.source_currency))}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">المبلغ الناتج</dt>
+              <dd>{formatMoney(viewRow.target_amount as number, String(viewRow.target_currency))}</dd>
+            </div>
+            <div className="flex justify-between gap-4">
+              <dt className="text-black/50">سعر الصرف</dt>
+              <dd className="font-mono">{fmtLatn(Number(viewRow.exchange_rate))}</dd>
+            </div>
+            <div className="flex justify-between gap-4"><dt className="text-black/50">حالة</dt><dd>{String(viewRow.status)}</dd></div>
+            {viewRow.notes ? (
+              <div className="flex justify-between gap-4"><dt className="text-black/50">ملاحظات</dt><dd>{String(viewRow.notes)}</dd></div>
+            ) : null}
           </dl>
         )}
       </Modal>

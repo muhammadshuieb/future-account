@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\BarcodeController;
 use App\Http\Controllers\Api\BranchController;
 use App\Http\Controllers\Api\CashBoxController;
 use App\Http\Controllers\Api\CashTransferController;
+use App\Http\Controllers\Api\CurrencyExchangeController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\CurrencyController;
@@ -183,6 +184,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('cash-transfers', [CashTransferController::class, 'index']);
     Route::post('cash-transfers', [CashTransferController::class, 'store']);
     Route::post('cash-transfers/{cashTransfer}/post', [CashTransferController::class, 'post']);
+    Route::get('currency-exchanges', [CurrencyExchangeController::class, 'index']);
+    Route::post('currency-exchanges', [CurrencyExchangeController::class, 'store']);
+    Route::get('currency-exchanges/{currencyExchange}', [CurrencyExchangeController::class, 'show']);
+    Route::post('currency-exchanges/{currencyExchange}/post', [CurrencyExchangeController::class, 'post']);
     Route::get('bank-reconciliations', [BankReconciliationController::class, 'index']);
     Route::post('bank-reconciliations', [BankReconciliationController::class, 'store']);
 

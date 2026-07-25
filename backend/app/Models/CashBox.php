@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CashBox extends Model
 {
-    protected $fillable = ['branch_id', 'code', 'name', 'account_id', 'opening_balance', 'is_active'];
+    protected $fillable = ['branch_id', 'code', 'name', 'account_id', 'opening_balance', 'currency', 'is_active'];
 
     protected function casts(): array
     {

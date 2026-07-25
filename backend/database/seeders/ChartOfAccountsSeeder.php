@@ -16,6 +16,7 @@ class ChartOfAccountsSeeder extends Seeder
                     ['code' => '1102', 'name' => 'البنك', 'name_en' => 'Bank', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1103', 'name' => 'العملاء', 'name_en' => 'Accounts Receivable', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1104', 'name' => 'المخزون', 'name_en' => 'Inventory', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1105', 'name' => 'صندوق العملات الأجنبية', 'name_en' => 'Foreign Currency Cash', 'type' => 'asset', 'nature' => 'debit'],
                 ]],
                 ['code' => '12', 'name' => 'الأصول الثابتة', 'name_en' => 'Fixed Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
                     ['code' => '1201', 'name' => 'الأثاث والمعدات', 'name_en' => 'Furniture & Equipment', 'type' => 'asset', 'nature' => 'debit'],
@@ -34,12 +35,14 @@ class ChartOfAccountsSeeder extends Seeder
             ['code' => '4', 'name' => 'الإيرادات', 'name_en' => 'Revenue', 'type' => 'revenue', 'nature' => 'credit', 'is_group' => true, 'children' => [
                 ['code' => '4101', 'name' => 'إيرادات المبيعات', 'name_en' => 'Sales Revenue', 'type' => 'revenue', 'nature' => 'credit'],
                 ['code' => '4102', 'name' => 'إيرادات أخرى', 'name_en' => 'Other Income', 'type' => 'revenue', 'nature' => 'credit'],
+                ['code' => '4103', 'name' => 'أرباح فروق أسعار الصرف', 'name_en' => 'Foreign Exchange Gain', 'type' => 'revenue', 'nature' => 'credit'],
             ]],
             ['code' => '5', 'name' => 'المصروفات', 'name_en' => 'Expenses', 'type' => 'expense', 'nature' => 'debit', 'is_group' => true, 'children' => [
                 ['code' => '5101', 'name' => 'تكلفة البضاعة المباعة', 'name_en' => 'Cost of Goods Sold', 'type' => 'expense', 'nature' => 'debit'],
                 ['code' => '5102', 'name' => 'مصروف الرواتب', 'name_en' => 'Salaries Expense', 'type' => 'expense', 'nature' => 'debit'],
                 ['code' => '5103', 'name' => 'مصروف الإيجار', 'name_en' => 'Rent Expense', 'type' => 'expense', 'nature' => 'debit'],
                 ['code' => '5104', 'name' => 'مصروفات عمومية', 'name_en' => 'General Expenses', 'type' => 'expense', 'nature' => 'debit'],
+                ['code' => '5105', 'name' => 'خسائر فروق أسعار الصرف', 'name_en' => 'Foreign Exchange Loss', 'type' => 'expense', 'nature' => 'debit'],
             ]],
         ];
 

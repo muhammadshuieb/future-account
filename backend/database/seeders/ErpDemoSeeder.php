@@ -162,7 +162,27 @@ class ErpDemoSeeder extends Seeder
 
         CashBox::query()->updateOrCreate(
             ['code' => 'CASH-01'],
-            ['name' => 'الصندوق الرئيسي', 'branch_id' => $branch->id, 'account_id' => $cashAcc, 'opening_balance' => 10000, 'is_active' => true]
+            [
+                'name' => 'الصندوق الرئيسي',
+                'branch_id' => $branch->id,
+                'account_id' => $cashAcc,
+                'opening_balance' => 10000,
+                'currency' => 'SYP',
+                'is_active' => true,
+            ]
+        );
+
+        $fxCashAcc = Account::query()->where('code', '1105')->value('id');
+        CashBox::query()->updateOrCreate(
+            ['code' => 'CASH-USD'],
+            [
+                'name' => 'صندوق الدولار',
+                'branch_id' => $branch->id,
+                'account_id' => $fxCashAcc,
+                'opening_balance' => 0,
+                'currency' => 'USD',
+                'is_active' => true,
+            ]
         );
 
         Bank::query()->updateOrCreate(

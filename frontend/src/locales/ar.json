@@ -84,6 +84,12 @@
     "amount": "مبلغ",
     "invoice": "فاتورة",
     "cashBox": "صندوق",
+    "currencyExchange": "صرف عملة",
+    "sourceCashBox": "الصندوق المصدر",
+    "targetCashBox": "الصندوق الهدف",
+    "sourceAmount": "المبلغ بالعملة الأصلية",
+    "targetAmount": "المبلغ الناتج",
+    "exchangeRatePerTarget": "كم {{source}} مقابل 1 {{target}}",
     "validUntil": "صالح حتى",
     "emptyList": "لا توجد سجلات",
     "emptyListHint": "أضف سجلاً جديداً من الزر أعلاه"

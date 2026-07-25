@@ -83,6 +83,12 @@
     "amount": "Tutar",
     "invoice": "Fatura",
     "cashBox": "Kasa",
+    "currencyExchange": "Döviz bozumu",
+    "sourceCashBox": "Kaynak kasa",
+    "targetCashBox": "Hedef kasa",
+    "sourceAmount": "Kaynak para birimi tutarı",
+    "targetAmount": "Sonuç tutarı",
+    "exchangeRatePerTarget": "1 {{target}} için kaç {{source}}",
     "validUntil": "Geçerlilik",
     "emptyList": "Kayıt yok",
     "emptyListHint": "Yukarıdaki düğmeden yeni kayıt ekleyin"

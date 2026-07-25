@@ -84,6 +84,12 @@
     "amount": "Amount",
     "invoice": "Invoice",
     "cashBox": "Cash box",
+    "currencyExchange": "Currency exchange",
+    "sourceCashBox": "Source cash box",
+    "targetCashBox": "Target cash box",
+    "sourceAmount": "Amount in source currency",
+    "targetAmount": "Resulting amount",
+    "exchangeRatePerTarget": "How many {{source}} per 1 {{target}}",
     "validUntil": "Valid until",
     "emptyList": "No records",
     "emptyListHint": "Add a new record using the button above"
