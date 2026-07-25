@@ -2,11 +2,13 @@ FROM php:8.3-cli-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git unzip curl ca-certificates gnupg libpq-dev libzip-dev \
+    libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
     && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-16 \
-    && docker-php-ext-install pdo_pgsql pgsql zip bcmath \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install pdo_pgsql pgsql zip bcmath gd \
     && echo 'date.timezone=Asia/Damascus' > /usr/local/etc/php/conf.d/99-timezone.ini \
     && rm -rf /var/lib/apt/lists/*
 
