@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\CurrencyController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
@@ -74,6 +75,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // WhatsApp (Cloud API optional — wa.me + download always works client-side)
     Route::get('whatsapp/status', [WhatsAppController::class, 'status']);
     Route::post('whatsapp/send', [WhatsAppController::class, 'send']);
+
+    // Excel exports
+    Route::get('exports/full', [ExportController::class, 'full']);
+    Route::get('exports/reports/{type}', [ExportController::class, 'report']);
+    Route::get('exports/{module}', [ExportController::class, 'module']);
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);

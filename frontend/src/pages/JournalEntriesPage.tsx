@@ -4,6 +4,7 @@ import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
 import type { Account, JournalEntry } from '@/types'
 import { documentStatusLabel } from '@/lib/statusLabels'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
 
 type LineDraft = {
@@ -157,7 +158,12 @@ export default function JournalEntriesPage() {
       <PageHeader
         title="القيود اليومية"
         subtitle="قيد مزدوج — مجموع المدين يجب أن يساوي مجموع الدائن"
-        actions={<Button variant="primary" onClick={openCreate}>إضافة</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path="/exports/journal-entries" />
+            <Button variant="primary" onClick={openCreate}>إضافة</Button>
+          </div>
+        }
       />
       <Msg message={message} error={error} />
 

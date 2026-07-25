@@ -7,6 +7,8 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { useQueryTab } from '@/lib/useQueryTab'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForPartnersTab } from '@/lib/excelExport'
 import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean }
@@ -93,7 +95,12 @@ export default function PartnersPage() {
       <PageHeader
         title="العملاء والموردون"
         subtitle="بطاقات الاتصال، حدود الائتمان، وكشوف الحساب"
-        actions={<Button variant="primary" onClick={openCreate}>إضافة</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path={`/exports/${excelModuleForPartnersTab(tab)}`} />
+            <Button variant="primary" onClick={openCreate}>إضافة</Button>
+          </div>
+        }
       />
       <Tabs
         tabs={[{ id: 'customers', label: 'العملاء' }, { id: 'suppliers', label: 'الموردون' }]}
@@ -176,6 +183,14 @@ export default function PartnersPage() {
               {statement.data ? formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base) : '…'}
             </div>
             <div className="print-hide flex flex-wrap items-center gap-2">
+              <ExcelExportButton
+                path={`/exports/reports/${tab === 'suppliers' ? 'supplier-statement' : 'customer-statement'}`}
+                params={{
+                  from,
+                  to,
+                  ...(tab === 'suppliers' ? { supplier_id: statementId } : { customer_id: statementId }),
+                }}
+              />
               <Button variant="secondary" onClick={() => printStatement(statementId)}>
                 <Printer size={16} /> طباعة
               </Button>

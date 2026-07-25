@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { Account } from '@/types'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
 
 const typeLabels: Record<Account['type'], string> = {
@@ -112,6 +113,7 @@ export default function AccountsPage() {
         subtitle="هيكل حسابات هرمي مع أنواع القيد الخمسة"
         actions={
           <>
+            <ExcelExportButton path="/exports/accounts" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}

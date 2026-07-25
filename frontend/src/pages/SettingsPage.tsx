@@ -7,6 +7,7 @@ import { formatDateTimeLocal, todayYmd } from '@/lib/dates'
 import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import type { Setting } from '@/types'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 const SETTINGS_TABS = ['general', 'currencies', 'backup', 'whatsapp', 'barcode', 'users'] as const
@@ -33,6 +34,7 @@ type BackupRow = {
   filename: string
   size_human: string
   created_at: string
+  kind?: 'sql' | 'excel' | string
 }
 
 const HIDDEN_GENERAL_KEYS = new Set([
@@ -869,6 +871,11 @@ export default function SettingsPage() {
                 <p className="text-xs text-black/50">{t('settings.dbBackupHint')}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <ExcelExportButton
+                  path="/exports/full"
+                  label={t('settings.exportFullExcel')}
+                  fileName={`syna-full-archive-${new Date().toISOString().slice(0, 10)}.xlsx`}
+                />
                 <Button variant="primary" onClick={() => createBackup.mutate()} disabled={createBackup.isPending}>
                   {t('settings.createBackupNow')}
                 </Button>
@@ -894,6 +901,7 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+            <p className="text-xs text-black/50">{t('settings.exportFullExcelHint')}</p>
 
             {backups.isError && (
               <p className="text-sm text-danger">{t('settings.backupListError')}</p>
@@ -903,24 +911,32 @@ export default function SettingsPage() {
               <EmptyState title={t('settings.noBackups')} description={t('settings.noBackupsHint')} />
             )}
             <ul className="divide-y divide-[var(--color-line)]">
-              {(backups.data || []).map((b) => (
+              {(backups.data || []).map((b) => {
+                const isExcel = b.kind === 'excel' || b.filename.toLowerCase().endsWith('.xlsx')
+                return (
                 <li key={b.filename} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
                   <div>
                     <p className="font-mono text-xs sm:text-sm">{b.filename}</p>
-                    <p className="text-xs text-black/45">{b.size_human} · {formatDateTimeLocal(b.created_at)}</p>
+                    <p className="text-xs text-black/45">
+                      {isExcel ? t('settings.backupKindExcel') : t('settings.backupKindSql')}
+                      {' · '}
+                      {b.size_human} · {formatDateTimeLocal(b.created_at)}
+                    </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void downloadBackup(b.filename)}>{t('settings.download')}</Button>
-                    <Button
-                      variant="danger"
-                      onClick={() => {
-                        if (window.confirm(t('settings.restoreConfirm'))) {
-                          restoreBackup.mutate(b.filename)
-                        }
-                      }}
-                    >
-                      {t('settings.restore')}
-                    </Button>
+                    {!isExcel && (
+                      <Button
+                        variant="danger"
+                        onClick={() => {
+                          if (window.confirm(t('settings.restoreConfirm'))) {
+                            restoreBackup.mutate(b.filename)
+                          }
+                        }}
+                      >
+                        {t('settings.restore')}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       onClick={() => {
@@ -931,7 +947,8 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           </Panel>
         </div>

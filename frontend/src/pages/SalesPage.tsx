@@ -10,6 +10,8 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForSalesTab } from '@/lib/excelExport'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
@@ -535,7 +537,16 @@ export default function SalesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('sales.title')} subtitle={t('sales.subtitle')} actions={<Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>} />
+      <PageHeader
+        title={t('sales.title')}
+        subtitle={t('sales.subtitle')}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path={`/exports/${excelModuleForSalesTab(tab)}`} />
+            <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
+          </div>
+        }
+      />
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <Msg message={msg.message} error={msg.error} />
 

@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { monthYm, todayYmd } from '@/lib/dates'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForHrTab } from '@/lib/excelExport'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 
 const emptyEmp = { employee_number: '', name: '', job_title: '', basic_salary: '0' }
@@ -77,7 +79,12 @@ export default function HrPage() {
       <PageHeader
         title="الموارد البشرية"
         subtitle="موظفون، حضور، إجازات، وسجلات رواتب"
-        actions={<Button variant="primary" onClick={openCreate}>إضافة</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path={`/exports/${excelModuleForHrTab(tab)}`} />
+            <Button variant="primary" onClick={openCreate}>إضافة</Button>
+          </div>
+        }
       />
       <Tabs
         tabs={[

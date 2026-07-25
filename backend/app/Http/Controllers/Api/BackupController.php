@@ -52,6 +52,9 @@ class BackupController extends ApiController
 
         $meta = $this->backups->create($data['label'] ?? null);
         $meta['distribution'] = $this->distribution->distribute($meta['path'], $meta['filename']);
+        if (! empty($meta['excel_path']) && ! empty($meta['excel_filename'])) {
+            $meta['excel_distribution'] = $this->distribution->distribute($meta['excel_path'], $meta['excel_filename']);
+        }
 
         if (! $this->distribution->googleDriveConfigured()) {
             app(\App\Services\AppNotificationService::class)->notifyAdminsOnceDaily(
@@ -62,7 +65,8 @@ class BackupController extends ApiController
             );
         }
 
-        $failed = collect($meta['distribution'])
+        $failed = collect($meta['distribution'] ?? [])
+            ->merge($meta['excel_distribution'] ?? [])
             ->filter(fn ($r) => ! ($r['skipped'] ?? false) && ! ($r['ok'] ?? false));
 
         if ($failed->isNotEmpty()) {

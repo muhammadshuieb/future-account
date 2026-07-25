@@ -18,6 +18,8 @@ import {
   useFormMessage,
 } from '@/components/ui'
 import type { CurrencyOption } from '@/components/CurrencyFields'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForCashTab } from '@/lib/excelExport'
 
 type CashBox = {
   id: number
@@ -357,7 +359,12 @@ export default function CashBanksPage() {
       <PageHeader
         title="الصناديق والبنوك"
         subtitle="صناديق نقدية، حسابات بنكية، تحويلات، صرف عملة، وتسوية كشف حساب"
-        actions={<Button variant="primary" onClick={openCreate}>إضافة</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {tab !== 'reconcile' ? <ExcelExportButton path={`/exports/${excelModuleForCashTab(tab)}`} /> : null}
+            <Button variant="primary" onClick={openCreate}>إضافة</Button>
+          </div>
+        }
       />
       <Tabs
         tabs={[

@@ -16,6 +16,8 @@ class BackupService
 {
     public const ALLOWED_EXTENSIONS = ['sql', 'dump', 'backup', 'gz'];
 
+    public const LIST_EXTENSIONS = ['sql', 'dump', 'backup', 'gz', 'xlsx'];
+
     /** Max upload size in kilobytes (512 MB). */
     public const MAX_UPLOAD_KB = 524288;
 
@@ -54,7 +56,7 @@ class BackupService
     public function list(): array
     {
         $files = collect(File::files($this->directory()))
-            ->filter(fn ($f) => Str::endsWith($f->getFilename(), ['.dump', '.sql', '.backup', '.gz']))
+            ->filter(fn ($f) => Str::endsWith($f->getFilename(), ['.dump', '.sql', '.backup', '.gz', '.xlsx']))
             ->sortByDesc(fn ($f) => $f->getMTime())
             ->values();
 
@@ -63,6 +65,7 @@ class BackupService
             'size' => $f->getSize(),
             'size_human' => $this->humanSize($f->getSize()),
             'created_at' => date('c', $f->getMTime()),
+            'kind' => Str::endsWith(strtolower($f->getFilename()), '.xlsx') ? 'excel' : 'sql',
         ])->all();
     }
 
@@ -91,13 +94,29 @@ class BackupService
             throw new RuntimeException('فشل إنشاء النسخة الاحتياطية: '.$process->getErrorOutput());
         }
 
-        return [
+        $meta = [
             'filename' => $filename,
             'size' => File::size($path),
             'size_human' => $this->humanSize(File::size($path)),
             'created_at' => now()->toIso8601String(),
             'path' => $path,
+            'kind' => 'sql',
         ];
+
+        try {
+            $excel = app(ExcelExportService::class)->saveFullArchiveBeside($filename, $this->directory());
+            $meta['excel_filename'] = $excel['filename'];
+            $meta['excel_path'] = $excel['path'];
+            $meta['excel_size'] = $excel['size'];
+            $meta['excel_size_human'] = $excel['size_human'];
+        } catch (\Throwable $e) {
+            Log::warning('Backup Excel companion failed: '.$e->getMessage(), [
+                'dump' => $filename,
+            ]);
+            $meta['excel_error'] = $e->getMessage();
+        }
+
+        return $meta;
     }
 
     public function pathFor(string $filename): string
@@ -161,7 +180,17 @@ class BackupService
 
     public function delete(string $filename): void
     {
-        File::delete($this->pathFor($filename));
+        $path = $this->pathFor($filename);
+        File::delete($path);
+
+        // When removing a SQL dump, also remove the companion Excel archive.
+        $lower = strtolower(basename($filename));
+        if (Str::endsWith($lower, ['.dump', '.sql', '.backup', '.gz'])) {
+            $excelCompanion = $this->directory().DIRECTORY_SEPARATOR.pathinfo(basename($filename), PATHINFO_FILENAME).'.xlsx';
+            if (File::exists($excelCompanion)) {
+                File::delete($excelCompanion);
+            }
+        }
     }
 
     /**
@@ -232,6 +261,12 @@ class BackupService
             $name = $file->getFilename();
             File::delete($file->getPathname());
             $deleted[] = $name;
+
+            $excelCompanion = $this->directory().DIRECTORY_SEPARATOR.pathinfo($name, PATHINFO_FILENAME).'.xlsx';
+            if (File::exists($excelCompanion)) {
+                File::delete($excelCompanion);
+                $deleted[] = basename($excelCompanion);
+            }
         }
 
         $remainingAfter = count($this->backupFiles());

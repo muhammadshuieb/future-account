@@ -46,6 +46,23 @@ Artisan::command('syna:backup', function () {
         }
     }
 
+    if (! empty($meta['excel_path']) && ! empty($meta['excel_filename'])) {
+        $this->info('Excel companion: '.$meta['excel_filename']);
+        $excelResults = $distribution->distribute($meta['excel_path'], $meta['excel_filename']);
+        foreach ($excelResults as $dest => $result) {
+            if ($result['skipped'] ?? false) {
+                $this->comment("excel/{$dest}: skipped");
+            } elseif ($result['ok'] ?? false) {
+                $this->info("excel/{$dest}: uploaded");
+            } else {
+                $hadFailure = true;
+                $this->warn("excel/{$dest}: failed — ".($result['error'] ?? 'unknown'));
+            }
+        }
+    } elseif (! empty($meta['excel_error'])) {
+        $this->warn('Excel companion failed: '.$meta['excel_error']);
+    }
+
     if (! $distribution->googleDriveConfigured()) {
         $notify->notifyAdminsOnceDaily(
             'backup_drive_missing',

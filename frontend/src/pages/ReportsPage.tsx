@@ -8,6 +8,7 @@ import { LOGO } from '@/lib/brand'
 import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
@@ -148,6 +149,26 @@ export default function ReportsPage() {
         subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton
+              className="print-hide"
+              disabled={
+                (tab === 'customer-statement' && !customerId) ||
+                (tab === 'supplier-statement' && !supplierId) ||
+                (tab === 'product-movement' && !productId) ||
+                (tab === 'general-ledger' && !accountId)
+              }
+              path={`/exports/reports/${tab}`}
+              params={{
+                from,
+                to,
+                as_of: to,
+                branch_id: branchId || undefined,
+                customer_id: customerId || undefined,
+                supplier_id: supplierId || undefined,
+                product_id: productId || undefined,
+                account_id: accountId || undefined,
+              }}
+            />
             <Button
               variant="secondary"
               className="print-hide"

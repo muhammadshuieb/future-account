@@ -5,6 +5,8 @@ import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
@@ -317,7 +319,14 @@ export default function WarehousePage() {
       <PageHeader
         title="المخازن والمخزون"
         subtitle="مستودعات، أصناف، حركات، تحويلات، وتنبيهات إعادة الطلب"
-        actions={canAdd ? <Button variant="primary" onClick={openCreate}>إضافة</Button> : undefined}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {['alerts', 'counts'].includes(tab) ? null : (
+              <ExcelExportButton path={`/exports/${excelModuleForWarehouseTab(tab)}`} />
+            )}
+            {canAdd ? <Button variant="primary" onClick={openCreate}>إضافة</Button> : null}
+          </div>
+        }
       />
       <Tabs
         tabs={[

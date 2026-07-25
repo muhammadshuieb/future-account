@@ -9,6 +9,8 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import ExcelExportButton from '@/components/ExcelExportButton'
+import { excelModuleForPurchasesTab } from '@/lib/excelExport'
 import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
@@ -354,7 +356,16 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('purchases.title')} subtitle={t('purchases.subtitle')} actions={<Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>} />
+      <PageHeader
+        title={t('purchases.title')}
+        subtitle={t('purchases.subtitle')}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path={`/exports/${excelModuleForPurchasesTab(tab)}`} />
+            <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
+          </div>
+        }
+      />
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <Msg message={msg.message} error={msg.error} />
 

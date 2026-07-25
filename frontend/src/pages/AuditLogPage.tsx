@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { formatDateTimeLocal } from '@/lib/dates'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import { EmptyState, LoadingBlock, PageHeader, Panel } from '@/components/ui'
 
 type AuditRow = {
@@ -49,7 +50,11 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title={t('audit.title')} subtitle={t('audit.subtitle')} />
+      <PageHeader
+        title={t('audit.title')}
+        subtitle={t('audit.subtitle')}
+        actions={<ExcelExportButton path="/exports/audit-logs" />}
+      />
       <Panel>
         <div className="table-wrap">
           <table className="data-table">
