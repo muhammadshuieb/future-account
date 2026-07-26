@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeftRight, ChevronLeft, Package, Users } from 'lucide-react'
 import api from '@/lib/api'
 import { resolveAlertHref } from '@/lib/alertLinks'
-import type { DashboardSummary } from '@/types'
+import type { DashboardCurrencyStats, DashboardSummary } from '@/types'
 import { EmptyState, Field, LoadingBlock, Panel, StatTile, formatMoney, inputClass } from '@/components/ui'
 
 type BranchOption = { id: number; name: string; is_active?: boolean }
@@ -61,6 +61,58 @@ function DailyBarChart({
   )
 }
 
+function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
+  if (!rows.length) {
+    return (
+      <Panel>
+        <div className="border-b border-[var(--color-line)] px-5 py-3">
+          <h2 className="font-semibold">حسب العملة</h2>
+        </div>
+        <EmptyState title="لا توجد حركات" description="ستظهر هنا مبالغ كل عملة عند وجود فواتير." />
+      </Panel>
+    )
+  }
+
+  return (
+    <Panel>
+      <div className="border-b border-[var(--color-line)] px-5 py-3">
+        <h2 className="font-semibold">حسب العملة</h2>
+        <p className="mt-0.5 text-xs text-black/50">مبالغ أصلية لكل عملة بدون تحويل</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[44rem] text-sm">
+          <thead>
+            <tr className="border-b border-[var(--color-line)] bg-mist/60 text-right text-xs text-black/55">
+              <th className="px-4 py-2.5 font-medium">العملة</th>
+              <th className="px-4 py-2.5 font-medium">إيرادات</th>
+              <th className="px-4 py-2.5 font-medium">مصروفات</th>
+              <th className="px-4 py-2.5 font-medium">صافي</th>
+              <th className="px-4 py-2.5 font-medium">ذمم مدينة</th>
+              <th className="px-4 py-2.5 font-medium">ذمم دائنة</th>
+              <th className="px-4 py-2.5 font-medium">مبيعات الشهر</th>
+              <th className="px-4 py-2.5 font-medium">مشتريات الشهر</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-line)]">
+            {rows.map((row) => (
+              <tr key={row.currency} className="hover:bg-mist/40">
+                <td className="px-4 py-3 font-semibold tabular-nums">{row.currency}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.revenue, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.expense, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.net_income, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.receivables, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.payables, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.month_sales, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.month_purchases, row.currency)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  )
+}
+
 export default function DashboardPage() {
   const { t } = useTranslation()
   const [days, setDays] = useState<7 | 30>(7)
@@ -108,8 +160,21 @@ export default function DashboardPage() {
   if (isLoading && !data) return <LoadingBlock label={t('common.loading')} />
   if (error || !data) return <p className="text-danger">تعذر تحميل البيانات.</p>
 
+  const showAllCurrencies = !currencyFilter
+  const byCurrency = data.by_currency || []
   const currency = data.currency || currencies.data?.base_currency || 'SYP'
   const baseCurrency = data.base_currency || currencies.data?.base_currency || 'SYP'
+  const base = data.base_totals || {
+    currency: baseCurrency,
+    revenue: data.revenue,
+    expense: data.expense,
+    net_income: data.net_income,
+    receivables: data.receivables ?? 0,
+    payables: data.payables ?? 0,
+    month_sales: data.month_sales ?? 0,
+    month_purchases: data.month_purchases ?? 0,
+  }
+
   const primary = [
     { label: 'إيرادات الفترة', value: formatMoney(data.revenue, currency), tone: 'success' as const },
     { label: 'مصروفات الفترة', value: formatMoney(data.expense, currency), tone: 'amber' as const },
@@ -123,9 +188,22 @@ export default function DashboardPage() {
     { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, currency) },
   ]
 
-  const currencyHint = currencyFilter
-    ? `عرض المبالغ بعملة ${currency}`
-    : `جميع العملات محوّلة إلى ${baseCurrency}`
+  const basePrimary = [
+    { label: 'إيرادات الفترة', value: formatMoney(base.revenue, baseCurrency), tone: 'success' as const },
+    { label: 'مصروفات الفترة', value: formatMoney(base.expense, baseCurrency), tone: 'amber' as const },
+    { label: 'صافي الربح', value: formatMoney(base.net_income, baseCurrency), tone: 'teal' as const },
+  ]
+
+  const baseSecondary = [
+    { label: 'ذمم مدينة', value: formatMoney(base.receivables, baseCurrency), hint: 'مستحق من العملاء' },
+    { label: 'ذمم دائنة', value: formatMoney(base.payables, baseCurrency), hint: 'مستحق للموردين' },
+    { label: 'مبيعات الشهر', value: formatMoney(base.month_sales, baseCurrency) },
+    { label: 'مشتريات الشهر', value: formatMoney(base.month_purchases, baseCurrency) },
+  ]
+
+  const currencyHint = showAllCurrencies
+    ? 'عرض الإحصائيات حسب كل عملة'
+    : `عرض المبالغ بعملة ${currency}`
 
   return (
     <div className={`space-y-8 ${isFetching ? 'opacity-90' : ''}`}>
@@ -191,21 +269,62 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        {primary.map((c) => (
-          <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
-        ))}
-      </section>
+      {showAllCurrencies ? (
+        <>
+          <CurrencyBreakdownTable rows={byCurrency} />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {secondary.map((c) => (
-          <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
-        ))}
-      </section>
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-black/70">ما يعادل بالليرة ({baseCurrency})</h2>
+              <p className="text-xs text-black/45">إجمالي محوّل للعملة الأساسية للمقارنة السريعة</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {basePrimary.map((c) => (
+                <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {baseSecondary.map((c) => (
+                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
+              ))}
+            </div>
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="grid gap-3 sm:grid-cols-3">
+            {primary.map((c) => (
+              <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+            ))}
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {secondary.map((c) => (
+              <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
+            ))}
+          </section>
+        </>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <DailyBarChart title={t('dashboard.dailySales')} data={data.daily_sales || []} currency={currency} />
-        <DailyBarChart title={t('dashboard.dailyPurchases')} data={data.daily_purchases || []} currency={currency} />
+        <DailyBarChart
+          title={
+            showAllCurrencies
+              ? `${t('dashboard.dailySales')} (${baseCurrency})`
+              : t('dashboard.dailySales')
+          }
+          data={data.daily_sales || []}
+          currency={showAllCurrencies ? baseCurrency : currency}
+        />
+        <DailyBarChart
+          title={
+            showAllCurrencies
+              ? `${t('dashboard.dailyPurchases')} (${baseCurrency})`
+              : t('dashboard.dailyPurchases')
+          }
+          data={data.daily_purchases || []}
+          currency={showAllCurrencies ? baseCurrency : currency}
+        />
       </section>
 
       <div className="grid gap-6 lg:grid-cols-5">

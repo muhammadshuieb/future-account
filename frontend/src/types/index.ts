@@ -45,6 +45,17 @@ export type JournalEntry = {
   creator?: { id: number; name: string }
 }
 
+export type DashboardCurrencyStats = {
+  currency: string
+  revenue: number
+  expense: number
+  net_income: number
+  receivables: number
+  payables: number
+  month_sales: number
+  month_purchases: number
+}
+
 export type DashboardSummary = {
   company_name: string
   accounts_count: number
@@ -62,6 +73,8 @@ export type DashboardSummary = {
   payables?: number
   month_sales?: number
   month_purchases?: number
+  base_totals?: DashboardCurrencyStats | null
+  by_currency?: DashboardCurrencyStats[] | null
   daily_sales?: { date: string; total: number; count: number }[]
   daily_purchases?: { date: string; total: number; count: number }[]
   customers_count?: number

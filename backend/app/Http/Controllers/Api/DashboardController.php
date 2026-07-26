@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Account;
 use App\Models\AppNotification;
+use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Product;
@@ -16,6 +17,7 @@ use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
 {
@@ -202,6 +204,21 @@ class DashboardController extends Controller
             ]);
         }
 
+        $baseTotals = [
+            'currency' => $baseCurrency,
+            'revenue' => round($revenue, 2),
+            'expense' => round($expense, 2),
+            'net_income' => round($revenue - $expense, 2),
+            'receivables' => round(max($receivables, 0), 2),
+            'payables' => round(max($payables, 0), 2),
+            'month_sales' => round($monthSales, 2),
+            'month_purchases' => round($monthPurchases, 2),
+        ];
+
+        $byCurrency = $currencyFilter === null
+            ? $this->buildByCurrency($branchId)
+            : null;
+
         return response()->json([
             'data' => [
                 'company_name' => Setting::getValue('company_name', 'Syna Co'),
@@ -209,17 +226,19 @@ class DashboardController extends Controller
                 'journal_entries_count' => JournalEntry::query()->count(),
                 'posted_entries_count' => JournalEntry::query()->where('status', 'posted')->count(),
                 'draft_entries_count' => $draftCount,
-                'revenue' => round($revenue, 2),
-                'expense' => round($expense, 2),
-                'net_income' => round($revenue - $expense, 2),
+                'revenue' => $baseTotals['revenue'],
+                'expense' => $baseTotals['expense'],
+                'net_income' => $baseTotals['net_income'],
                 'currency' => $displayCurrency,
                 'base_currency' => $baseCurrency,
                 'filter_branch_id' => $branchId,
                 'filter_currency' => $currencyFilter,
-                'receivables' => round(max($receivables, 0), 2),
-                'payables' => round(max($payables, 0), 2),
-                'month_sales' => round($monthSales, 2),
-                'month_purchases' => round($monthPurchases, 2),
+                'receivables' => $baseTotals['receivables'],
+                'payables' => $baseTotals['payables'],
+                'month_sales' => $baseTotals['month_sales'],
+                'month_purchases' => $baseTotals['month_purchases'],
+                'base_totals' => $currencyFilter === null ? $baseTotals : null,
+                'by_currency' => $byCurrency,
                 'daily_sales' => $dailySales,
                 'daily_purchases' => $dailyPurchases,
                 'customers_count' => Customer::query()->count(),
@@ -229,6 +248,107 @@ class DashboardController extends Controller
                 'alerts' => $alerts,
             ],
         ]);
+    }
+
+    /**
+     * Native-currency stats per currency when «كل العملات» is selected.
+     *
+     * @return list<array{
+     *   currency: string,
+     *   revenue: float,
+     *   expense: float,
+     *   net_income: float,
+     *   receivables: float,
+     *   payables: float,
+     *   month_sales: float,
+     *   month_purchases: float
+     * }>
+     */
+    protected function buildByCurrency(?int $branchId): array
+    {
+        $sales = $this->applyDocFilters(
+            SalesInvoice::query()->where('status', 'posted'),
+            $branchId,
+            null
+        )->get();
+
+        $purchases = $this->applyDocFilters(
+            PurchaseInvoice::query()->where('status', 'posted'),
+            $branchId,
+            null
+        )->get();
+
+        $month = now()->month;
+        $year = now()->year;
+
+        $activeCodes = Currency::query()
+            ->where('is_active', true)
+            ->pluck('code')
+            ->map(fn ($c) => strtoupper((string) $c));
+
+        $codes = collect()
+            ->merge($activeCodes)
+            ->merge($sales->pluck('currency')->map(fn ($c) => strtoupper((string) $c)))
+            ->merge($purchases->pluck('currency')->map(fn ($c) => strtoupper((string) $c)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'SYP'));
+        $codes = $codes->sort(function (string $a, string $b) use ($baseCurrency) {
+            if ($a === $baseCurrency) {
+                return -1;
+            }
+            if ($b === $baseCurrency) {
+                return 1;
+            }
+
+            return strcmp($a, $b);
+        })->values();
+
+        return $codes->map(function (string $code) use ($sales, $purchases, $month, $year) {
+            $salesFor = $this->filterByCurrency($sales, $code);
+            $purchasesFor = $this->filterByCurrency($purchases, $code);
+
+            $revenue = (float) $salesFor->sum(fn (SalesInvoice $i) => (float) $i->total);
+            $expense = (float) $purchasesFor->sum(fn (PurchaseInvoice $i) => (float) $i->total);
+            $receivables = (float) $salesFor->sum(
+                fn (SalesInvoice $i) => max(0, (float) $i->total - (float) $i->paid_amount)
+            );
+            $payables = (float) $purchasesFor->sum(
+                fn (PurchaseInvoice $i) => max(0, (float) $i->total - (float) $i->paid_amount)
+            );
+            $monthSales = (float) $salesFor
+                ->filter(fn (SalesInvoice $i) => (int) $i->invoice_date->month === $month
+                    && (int) $i->invoice_date->year === $year)
+                ->sum(fn (SalesInvoice $i) => (float) $i->total);
+            $monthPurchases = (float) $purchasesFor
+                ->filter(fn (PurchaseInvoice $i) => (int) $i->invoice_date->month === $month
+                    && (int) $i->invoice_date->year === $year)
+                ->sum(fn (PurchaseInvoice $i) => (float) $i->total);
+
+            return [
+                'currency' => $code,
+                'revenue' => round($revenue, 2),
+                'expense' => round($expense, 2),
+                'net_income' => round($revenue - $expense, 2),
+                'receivables' => round($receivables, 2),
+                'payables' => round($payables, 2),
+                'month_sales' => round($monthSales, 2),
+                'month_purchases' => round($monthPurchases, 2),
+            ];
+        })->all();
+    }
+
+    /**
+     * @param  Collection<int, SalesInvoice|PurchaseInvoice>  $rows
+     * @return Collection<int, SalesInvoice|PurchaseInvoice>
+     */
+    protected function filterByCurrency(Collection $rows, string $code): Collection
+    {
+        return $rows->filter(
+            fn (SalesInvoice|PurchaseInvoice $inv) => strtoupper((string) $inv->currency) === $code
+        )->values();
     }
 
     /**

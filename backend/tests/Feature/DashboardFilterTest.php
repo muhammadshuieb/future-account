@@ -82,10 +82,23 @@ class DashboardFilterTest extends TestCase
         $all->assertOk()
             ->assertJsonPath('data.currency', 'SYP')
             ->assertJsonPath('data.filter_branch_id', null)
-            ->assertJsonPath('data.filter_currency', null);
+            ->assertJsonPath('data.filter_currency', null)
+            ->assertJsonPath('data.base_totals.currency', 'SYP');
 
         $allMonthSales = (float) $all->json('data.month_sales');
         $this->assertEqualsWithDelta(31000.0, $allMonthSales, 0.01);
+        $this->assertEqualsWithDelta(31000.0, (float) $all->json('data.base_totals.month_sales'), 0.01);
+
+        $byCurrency = collect($all->json('data.by_currency'));
+        $this->assertNotEmpty($byCurrency);
+        $sypRow = $byCurrency->firstWhere('currency', 'SYP');
+        $usdRow = $byCurrency->firstWhere('currency', 'USD');
+        $this->assertNotNull($sypRow);
+        $this->assertNotNull($usdRow);
+        $this->assertEqualsWithDelta(1000.0, (float) $sypRow['month_sales'], 0.01);
+        $this->assertEqualsWithDelta(2.0, (float) $usdRow['month_sales'], 0.01);
+        $this->assertEqualsWithDelta(2.0, (float) $usdRow['revenue'], 0.01);
+        $this->assertEqualsWithDelta(2.0, (float) $usdRow['receivables'], 0.01);
 
         $byDam = $this->getJson('/api/dashboard/summary?days=7&branch_id='.$dam->id);
         $byDam->assertOk()->assertJsonPath('data.filter_branch_id', $dam->id);
@@ -99,7 +112,9 @@ class DashboardFilterTest extends TestCase
         $byUsd = $this->getJson('/api/dashboard/summary?days=7&currency=USD');
         $byUsd->assertOk()
             ->assertJsonPath('data.currency', 'USD')
-            ->assertJsonPath('data.filter_currency', 'USD');
+            ->assertJsonPath('data.filter_currency', 'USD')
+            ->assertJsonPath('data.by_currency', null)
+            ->assertJsonPath('data.base_totals', null);
         $this->assertEqualsWithDelta(2.0, (float) $byUsd->json('data.month_sales'), 0.01);
         $this->assertEqualsWithDelta(2.0, (float) $byUsd->json('data.revenue'), 0.01);
         $this->assertEqualsWithDelta(2.0, (float) $byUsd->json('data.receivables'), 0.01);
