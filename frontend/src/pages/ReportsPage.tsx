@@ -50,6 +50,7 @@ export default function ReportsPage() {
   const [from, setFrom] = useState(yearStartYmd)
   const [to, setTo] = useState(todayYmd)
   const [branchId, setBranchId] = useState('')
+  const [warehouseId, setWarehouseId] = useState('')
   const [customerId, setCustomerId] = useState('')
   const [supplierId, setSupplierId] = useState('')
   const [productId, setProductId] = useState('')
@@ -57,6 +58,11 @@ export default function ReportsPage() {
   const [accountId, setAccountId] = useState('')
 
   const branches = useQuery({ queryKey: ['branches'], queryFn: async () => (await api.get('/branches')).data.data })
+  const warehouses = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => (await api.get('/warehouses')).data.data,
+    enabled: tab === 'inventory' || tab === 'product-movement',
+  })
   const accounts = useQuery({
     queryKey: ['accounts'],
     queryFn: async () => (await api.get('/accounts')).data.data as { id: number; code: string; name: string; is_group: boolean }[],
@@ -93,7 +99,7 @@ export default function ReportsPage() {
   }, [tab, customerId, supplierId, productId, accountId, branchId])
 
   const report = useQuery({
-    queryKey: ['report', tab, from, to, branchId, customerId, supplierId, productId, accountId],
+    queryKey: ['report', tab, from, to, branchId, warehouseId, customerId, supplierId, productId, accountId],
     enabled: !!reportUrl,
     queryFn: async () => {
       const params: Record<string, string> = {}
@@ -109,6 +115,9 @@ export default function ReportsPage() {
       }
       if (branchId && tab !== 'customer-statement' && tab !== 'supplier-statement') {
         params.branch_id = branchId
+      }
+      if (warehouseId && (tab === 'inventory' || tab === 'product-movement')) {
+        params.warehouse_id = warehouseId
       }
       return (await api.get(reportUrl!, { params })).data.data
     },
@@ -167,6 +176,7 @@ export default function ReportsPage() {
                 to,
                 as_of: to,
                 branch_id: branchId || undefined,
+                warehouse_id: warehouseId || undefined,
                 customer_id: customerId || undefined,
                 supplier_id: supplierId || undefined,
                 product_id: productId || undefined,
@@ -218,6 +228,16 @@ export default function ReportsPage() {
               <option value="">{tab === 'branch-complete' ? 'اختر فرعاً' : t('common.allBranches')}</option>
               {(branches.data || []).map((b: { id: number; name: string }) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {(tab === 'inventory' || tab === 'product-movement') && (
+          <Field label={t('common.warehouse')}>
+            <select className={inputClass} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
+              <option value="">{t('common.allWarehouses')}</option>
+              {(warehouses.data || []).map((w: { id: number; name: string }) => (
+                <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
           </Field>
@@ -277,6 +297,7 @@ export default function ReportsPage() {
                 العملة الأساسية: {base}
                 {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
                 {branchId && ` · فرع محدد`}
+                {warehouseId && ` · مخزن محدد`}
               </p>
             </div>
             {/* Second in RTL → visual left: logo */}

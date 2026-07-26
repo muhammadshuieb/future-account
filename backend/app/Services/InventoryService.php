@@ -373,22 +373,120 @@ class InventoryService
         });
     }
 
-    public function lowStockAlerts(): array
+    /**
+     * Low-stock alerts scoped per warehouse (never mixes balances across warehouses).
+     *
+     * @return array<int, array{
+     *   id: int,
+     *   product_id: int,
+     *   sku: string,
+     *   name: string,
+     *   warehouse_id: int|null,
+     *   warehouse_name: string|null,
+     *   warehouse_code: string|null,
+     *   on_hand: float,
+     *   reorder_level: float
+     * }>
+     */
+    public function lowStockAlerts(?int $warehouseId = null): array
     {
-        return Product::query()
-            ->where('is_active', true)
-            ->withSum('stockLevels as on_hand', 'quantity')
+        $levels = StockLevel::query()
+            ->select('warehouse_id', 'product_id')
+            ->selectRaw('SUM(quantity) as on_hand')
+            ->when($warehouseId !== null, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->groupBy('warehouse_id', 'product_id')
             ->get()
-            ->filter(fn (Product $p) => (float) ($p->on_hand ?? 0) <= (float) $p->reorder_level)
-            ->map(fn (Product $p) => [
-                'id' => $p->id,
-                'sku' => $p->sku,
-                'name' => $p->name,
-                'on_hand' => (float) ($p->on_hand ?? 0),
-                'reorder_level' => (float) $p->reorder_level,
-            ])
-            ->values()
-            ->all();
+            ->keyBy(fn (StockLevel $row) => $row->warehouse_id.'-'.$row->product_id);
+
+        $products = Product::query()
+            ->where('is_active', true)
+            ->where('reorder_level', '>', 0)
+            ->get()
+            ->keyBy('id');
+
+        $warehouses = Warehouse::query()
+            ->when($warehouseId !== null, fn ($q) => $q->where('id', $warehouseId))
+            ->get()
+            ->keyBy('id');
+
+        $alerts = [];
+
+        foreach ($levels as $row) {
+            $product = $products->get($row->product_id);
+            if (! $product) {
+                continue;
+            }
+
+            $onHand = round((float) $row->on_hand, 3);
+            $reorder = (float) $product->reorder_level;
+            if ($onHand > $reorder) {
+                continue;
+            }
+
+            $warehouse = $warehouses->get($row->warehouse_id);
+            $alerts[] = [
+                'id' => (int) $product->id,
+                'product_id' => (int) $product->id,
+                'sku' => $product->sku,
+                'name' => $product->name,
+                'warehouse_id' => (int) $row->warehouse_id,
+                'warehouse_name' => $warehouse?->name,
+                'warehouse_code' => $warehouse?->code,
+                'on_hand' => $onHand,
+                'reorder_level' => $reorder,
+            ];
+        }
+
+        // Products with reorder > 0 but no stock row in the selected warehouse (or anywhere).
+        if ($warehouseId !== null) {
+            $presentProductIds = $levels->pluck('product_id')->map(fn ($id) => (int) $id)->all();
+            $warehouse = $warehouses->get($warehouseId);
+            foreach ($products as $product) {
+                if (in_array((int) $product->id, $presentProductIds, true)) {
+                    continue;
+                }
+                $alerts[] = [
+                    'id' => (int) $product->id,
+                    'product_id' => (int) $product->id,
+                    'sku' => $product->sku,
+                    'name' => $product->name,
+                    'warehouse_id' => $warehouseId,
+                    'warehouse_name' => $warehouse?->name,
+                    'warehouse_code' => $warehouse?->code,
+                    'on_hand' => 0.0,
+                    'reorder_level' => (float) $product->reorder_level,
+                ];
+            }
+        } else {
+            $presentProductIds = $levels->pluck('product_id')->unique()->map(fn ($id) => (int) $id)->all();
+            foreach ($products as $product) {
+                if (in_array((int) $product->id, $presentProductIds, true)) {
+                    continue;
+                }
+                $alerts[] = [
+                    'id' => (int) $product->id,
+                    'product_id' => (int) $product->id,
+                    'sku' => $product->sku,
+                    'name' => $product->name,
+                    'warehouse_id' => null,
+                    'warehouse_name' => null,
+                    'warehouse_code' => null,
+                    'on_hand' => 0.0,
+                    'reorder_level' => (float) $product->reorder_level,
+                ];
+            }
+        }
+
+        usort($alerts, function (array $a, array $b) {
+            $byWarehouse = strcmp((string) ($a['warehouse_name'] ?? ''), (string) ($b['warehouse_name'] ?? ''));
+            if ($byWarehouse !== 0) {
+                return $byWarehouse;
+            }
+
+            return strcmp($a['sku'], $b['sku']);
+        });
+
+        return array_values($alerts);
     }
 
     protected function resolveBatchKey(Product $product, ?string $batchNo): string

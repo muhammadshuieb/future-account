@@ -378,7 +378,7 @@ class ExcelExportService
             'cash-flow' => $this->sheetGenericReport($book, 'التدفقات النقدية', $this->reports->cashFlow($from, $to, $branchId ? (int) $branchId : null)),
             'sales' => $this->sheetSalesReport($book, $from, $to, $branchId),
             'purchases' => $this->sheetPurchasesReport($book, $from, $to, $branchId),
-            'inventory' => $this->sheetInventoryReport($book, $branchId),
+            'inventory' => $this->sheetInventoryReport($book, $request),
             'profit' => $this->sheetGenericReport($book, 'مجمل الربح', $this->reports->profitReport($from, $to, $branchId ? (int) $branchId : null)),
             'tax' => $this->sheetGenericReport($book, 'الضريبة', $this->reports->taxReport($from, $to, $branchId ? (int) $branchId : null)),
             'general-ledger' => $this->sheetGeneralLedger($book, $request),
@@ -745,9 +745,11 @@ class ExcelExportService
         ]);
     }
 
-    protected function sheetInventoryReport(ExcelWorkbook $book, mixed $branchId = null): void
+    protected function sheetInventoryReport(ExcelWorkbook $book, Request $request): void
     {
-        $data = $this->reports->inventoryReport($branchId ? (int) $branchId : null);
+        $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
+        $warehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+        $data = $this->reports->inventoryReport($branchId, $warehouseId);
         $this->sheetGenericReport($book, 'تقرير المخزون', $data);
     }
 
@@ -769,7 +771,14 @@ class ExcelExportService
             throw new \InvalidArgumentException('product_id مطلوب.');
         }
         $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
-        $data = $this->reports->productMovement($productId, $request->query('from'), $request->query('to'), $branchId);
+        $warehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+        $data = $this->reports->productMovement(
+            $productId,
+            $request->query('from'),
+            $request->query('to'),
+            $branchId,
+            $warehouseId,
+        );
         $this->sheetGenericReport($book, 'حركة صنف', $data);
     }
 

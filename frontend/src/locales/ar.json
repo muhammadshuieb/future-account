@@ -131,6 +131,7 @@
     "clearSearch": "مسح البحث",
     "noSearchResults": "لا توجد نتائج مطابقة",
     "allBranches": "كل الفروع",
+    "allWarehouses": "كل المخازن",
     "branch": "الفرع",
     "branchCompleteReport": "تقرير الفرع الشامل"
   },
@@ -164,9 +165,9 @@
     "convertToInvoice": "تحويل لفاتورة",
     "eInvoice": "فاتورة إلكترونية",
     "creditLimitExceeded": "تجاوز حد الائتمان للعميل",
-    "stockRemaining": "المتبقي في المخزن: {{qty}}",
-    "stockRemainingIn": "المتبقي: {{qty}} في {{warehouse}}",
-    "stockRemainingBatch": "المتبقي: {{qty}} في {{warehouse}} (دفعة {{batch}})",
+    "stockRemaining": "رصيد المخزن: {{qty}}",
+    "stockRemainingIn": "رصيد المخزن: {{qty}}",
+    "stockRemainingBatch": "رصيد المخزن: {{qty}} (دفعة {{batch}})",
     "stockLocation": "موقع المخزون",
     "useBatch": "استخدام",
     "noStockInWarehouse": "لا يوجد رصيد في هذا المخزن",
@@ -216,7 +217,8 @@
     "newCount": "جرد جديد",
     "postCount": "ترحيل الفروقات",
     "trackBatch": "تتبع الدفعات",
-    "trackSerial": "تتبع التسلسلي"
+    "trackSerial": "تتبع التسلسلي",
+    "warehouseBalance": "رصيد المخزن"
   },
   "reports": {
     "generalLedger": "دفتر الأستاذ العام",

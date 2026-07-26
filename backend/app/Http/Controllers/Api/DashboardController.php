@@ -12,7 +12,6 @@ use App\Models\Product;
 use App\Models\PurchaseInvoice;
 use App\Models\SalesInvoice;
 use App\Models\Setting;
-use App\Models\StockLevel;
 use App\Models\Supplier;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -80,18 +79,22 @@ class DashboardController extends Controller
             $currencyFilter
         )->get()->sum(fn (PurchaseInvoice $inv) => $this->unpaidAmount($inv, $currencyFilter));
 
-        $lowStockQuery = StockLevel::query()
-            ->join('products', 'products.id', '=', 'stock_levels.product_id')
-            ->whereColumn('stock_levels.quantity', '<=', 'products.reorder_level')
-            ->where('products.reorder_level', '>', 0);
-
+        $lowStockAlerts = app(\App\Services\InventoryService::class)->lowStockAlerts();
         if ($branchId !== null) {
-            $lowStockQuery
-                ->join('warehouses', 'warehouses.id', '=', 'stock_levels.warehouse_id')
-                ->where('warehouses.branch_id', $branchId);
+            $branchWarehouseIds = \App\Models\Warehouse::query()
+                ->where('branch_id', $branchId)
+                ->pluck('id')
+                ->all();
+            $lowStockAlerts = array_values(array_filter(
+                $lowStockAlerts,
+                fn (array $row) => $row['warehouse_id'] !== null && in_array((int) $row['warehouse_id'], $branchWarehouseIds, true),
+            ));
         }
-
-        $lowStock = $lowStockQuery->count();
+        $lowStock = count($lowStockAlerts);
+        $lowStockWarehouseNames = array_values(array_unique(array_filter(array_map(
+            fn (array $row) => $row['warehouse_name'] ?? null,
+            $lowStockAlerts,
+        ))));
 
         $monthSales = $this->sumDocumentAmounts(
             $this->applyDocFilters(
@@ -158,12 +161,17 @@ class DashboardController extends Controller
 
         $alerts = [];
         if ($lowStock > 0) {
+            $warehouseHint = count($lowStockWarehouseNames) > 0
+                ? ' ('.implode('، ', array_slice($lowStockWarehouseNames, 0, 3))
+                    .(count($lowStockWarehouseNames) > 3 ? '…' : '').')'
+                : '';
             $alerts[] = [
                 'type' => 'warning',
                 'code' => 'low_stock',
                 'title' => 'تنبيه مخزون',
-                'body' => "{$lowStock} صنف تحت حد إعادة الطلب",
+                'body' => "{$lowStock} تنبيه تحت حد إعادة الطلب{$warehouseHint}",
                 'href' => '/warehouse?tab=alerts',
+                'warehouse_names' => $lowStockWarehouseNames,
             ];
         }
         if ($receivables > 0) {

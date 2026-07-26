@@ -67,11 +67,12 @@ class InventoryController extends ApiController
         return $this->ok($this->inventory->createManualMovement($data, $request->user())->load(['warehouse', 'product']), 201);
     }
 
-    public function alerts(): JsonResponse
+    public function alerts(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        $warehouseId = $request->filled('warehouse_id') ? $request->integer('warehouse_id') : null;
 
-        return $this->ok($this->inventory->lowStockAlerts());
+        return $this->ok($this->inventory->lowStockAlerts($warehouseId));
     }
 
     public function transfers(Request $request): JsonResponse

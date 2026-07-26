@@ -15,6 +15,11 @@ class ReportController extends ApiController
         return $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
     }
 
+    protected function warehouseId(Request $request): ?int
+    {
+        return $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+    }
+
     public function trialBalance(Request $request): JsonResponse
     {
         $this->authorizePermission('reports.view');
@@ -69,7 +74,7 @@ class ReportController extends ApiController
     {
         $this->authorizePermission('reports.view');
 
-        return $this->ok($this->reports->inventoryReport($this->branchId($request)));
+        return $this->ok($this->reports->inventoryReport($this->branchId($request), $this->warehouseId($request)));
     }
 
     public function profit(Request $request): JsonResponse
@@ -95,6 +100,7 @@ class ReportController extends ApiController
             $request->query('from'),
             $request->query('to'),
             $this->branchId($request),
+            $this->warehouseId($request),
         ));
     }
 

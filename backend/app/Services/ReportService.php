@@ -202,11 +202,23 @@ class ReportService
         ];
     }
 
-    public function inventoryReport(?int $branchId = null): array
+    public function inventoryReport(?int $branchId = null, ?int $warehouseId = null): array
     {
-        $warehouseIds = $branchId
-            ? Warehouse::query()->where('branch_id', $branchId)->pluck('id')
-            : null;
+        $warehouseIds = null;
+        if ($warehouseId !== null) {
+            $warehouseIds = collect([$warehouseId]);
+            if ($branchId !== null) {
+                $belongs = Warehouse::query()
+                    ->where('id', $warehouseId)
+                    ->where('branch_id', $branchId)
+                    ->exists();
+                if (! $belongs) {
+                    $warehouseIds = collect([]);
+                }
+            }
+        } elseif ($branchId !== null) {
+            $warehouseIds = Warehouse::query()->where('branch_id', $branchId)->pluck('id');
+        }
 
         $products = Product::query()
             ->withSum(['stockLevels as on_hand' => function ($q) use ($warehouseIds) {
@@ -226,18 +238,24 @@ class ReportService
                 'value' => round((float) ($p->on_hand ?? 0) * (float) $p->cost_price, 2),
                 'reorder_level' => (float) $p->reorder_level,
             ])
-            ->when($branchId, fn ($c) => $c->filter(fn ($r) => abs($r['on_hand']) > 0.0001)->values())
+            ->when($branchId || $warehouseId, fn ($c) => $c->filter(fn ($r) => abs($r['on_hand']) > 0.0001)->values())
             ->values();
 
         return [
             'branch_id' => $branchId,
+            'warehouse_id' => $warehouseId,
             'rows' => $products,
             'total_value' => round($products->sum('value'), 2),
         ];
     }
 
-    public function productMovement(int $productId, ?string $from = null, ?string $to = null, ?int $branchId = null): array
-    {
+    public function productMovement(
+        int $productId,
+        ?string $from = null,
+        ?string $to = null,
+        ?int $branchId = null,
+        ?int $warehouseId = null,
+    ): array {
         $from = $from ?: now()->startOfMonth()->toDateString();
         $to = $to ?: now()->toDateString();
 
@@ -245,7 +263,8 @@ class ReportService
             ->where('product_id', $productId)
             ->whereDate('movement_date', '>=', $from)
             ->whereDate('movement_date', '<=', $to)
-            ->when($branchId, fn ($q) => $q->whereHas('warehouse', fn ($wq) => $wq->where('branch_id', $branchId)))
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->when($branchId && ! $warehouseId, fn ($q) => $q->whereHas('warehouse', fn ($wq) => $wq->where('branch_id', $branchId)))
             ->with('warehouse:id,name,code,branch_id')
             ->orderBy('movement_date')
             ->get();
@@ -254,6 +273,7 @@ class ReportService
             'from' => $from,
             'to' => $to,
             'branch_id' => $branchId,
+            'warehouse_id' => $warehouseId,
             'rows' => $rows,
         ];
     }

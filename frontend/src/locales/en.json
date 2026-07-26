@@ -131,6 +131,7 @@
     "clearSearch": "Clear search",
     "noSearchResults": "No matching results",
     "allBranches": "All branches",
+    "allWarehouses": "All warehouses",
     "branch": "Branch",
     "branchCompleteReport": "Complete branch report"
   },
@@ -164,9 +165,9 @@
     "convertToInvoice": "Convert to Invoice",
     "eInvoice": "E-Invoice",
     "creditLimitExceeded": "Customer credit limit exceeded",
-    "stockRemaining": "Remaining in warehouse: {{qty}}",
-    "stockRemainingIn": "Available: {{qty}} in {{warehouse}}",
-    "stockRemainingBatch": "Available: {{qty}} in {{warehouse}} (batch {{batch}})",
+    "stockRemaining": "Warehouse balance: {{qty}}",
+    "stockRemainingIn": "Warehouse balance: {{qty}}",
+    "stockRemainingBatch": "Warehouse balance: {{qty}} (batch {{batch}})",
     "stockLocation": "Stock location",
     "useBatch": "Use",
     "noStockInWarehouse": "No stock in this warehouse",
@@ -216,7 +217,8 @@
     "newCount": "New Count",
     "postCount": "Post Variances",
     "trackBatch": "Track Batches",
-    "trackSerial": "Track Serials"
+    "trackSerial": "Track Serials",
+    "warehouseBalance": "Warehouse balance"
   },
   "reports": {
     "generalLedger": "General Ledger",

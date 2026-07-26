@@ -369,7 +369,7 @@ export default function PurchasesPage() {
   const supplierFields = <T extends { supplier_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
     <>
       <Field label={t('common.supplier')}><select className={inputClass} value={state.supplier_id} onChange={(e) => setState({ ...state, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })}><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
+      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
     </>
   )
 

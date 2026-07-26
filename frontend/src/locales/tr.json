@@ -130,6 +130,7 @@
     "clearSearch": "Aramayı temizle",
     "noSearchResults": "Eşleşen sonuç yok",
     "allBranches": "Tüm şubeler",
+    "allWarehouses": "Tüm depolar",
     "branch": "Şube",
     "branchCompleteReport": "Kapsamlı şube raporu"
   },
@@ -163,9 +164,9 @@
     "convertToInvoice": "Faturaya Dönüştür",
     "eInvoice": "E-Fatura",
     "creditLimitExceeded": "Müşteri kredi limiti aşıldı",
-    "stockRemaining": "Depoda kalan: {{qty}}",
-    "stockRemainingIn": "Kalan: {{qty}} — {{warehouse}}",
-    "stockRemainingBatch": "Kalan: {{qty}} — {{warehouse}} (parti {{batch}})",
+    "stockRemaining": "Depo bakiyesi: {{qty}}",
+    "stockRemainingIn": "Depo bakiyesi: {{qty}}",
+    "stockRemainingBatch": "Depo bakiyesi: {{qty}} (parti {{batch}})",
     "stockLocation": "Stok konumu",
     "useBatch": "Kullan",
     "noStockInWarehouse": "Bu depoda stok yok",
@@ -215,7 +216,8 @@
     "newCount": "Yeni Sayım",
     "postCount": "Farkları Kaydet",
     "trackBatch": "Parti Takibi",
-    "trackSerial": "Seri Takibi"
+    "trackSerial": "Seri Takibi",
+    "warehouseBalance": "Depo bakiyesi"
   },
   "reports": {
     "generalLedger": "Genel Defter",

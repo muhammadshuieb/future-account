@@ -498,6 +498,7 @@ export default function SalesPage() {
               setState({ ...state, warehouse_id: warehouseId })
               onWarehouseChange?.(warehouseId, state.product_id)
             }}
+            required
           >
             <option value="">—</option>
             {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
@@ -802,14 +803,13 @@ export default function SalesPage() {
 
 function StockAvailabilityHint({ stockInfo }: { stockInfo: StockInfo }) {
   const { t } = useTranslation()
-  const warehouseLabel = stockInfo.warehouse_name || t('common.warehouse')
 
   return (
     <div className="mt-1 space-y-1 text-xs text-black/55">
       <p>
         {t('sales.stockRemainingIn', {
           qty: formatQuantity(stockInfo.available_qty),
-          warehouse: warehouseLabel,
+          warehouse: stockInfo.warehouse_name || t('common.warehouse'),
         })}
       </p>
       {stockInfo.breakdown.length === 0 && (

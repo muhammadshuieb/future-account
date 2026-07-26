@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
@@ -95,6 +95,7 @@ export default function WarehousePage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
   const search = useListSearch()
+  const [filterWarehouseId, setFilterWarehouseId] = useState('')
 
   const warehouses = useQuery({
     queryKey: ['warehouses', tab === 'warehouses' ? search.debouncedQ : ''],
@@ -112,14 +113,20 @@ export default function WarehousePage() {
     queryKey: ['units', tab === 'units' ? search.debouncedQ : ''],
     queryFn: async () => (await api.get('/units', { params: tab === 'units' ? search.params : {} })).data.data,
   })
+  const warehouseFilterParams = useMemo(() => {
+    const params: Record<string, string> = { ...search.params }
+    if (filterWarehouseId) params.warehouse_id = filterWarehouseId
+    return params
+  }, [search.params, filterWarehouseId])
+
   const stock = useQuery({
-    queryKey: ['stock-levels', search.debouncedQ],
-    queryFn: async () => (await api.get('/stock-levels', { params: search.params })).data.data,
+    queryKey: ['stock-levels', search.debouncedQ, filterWarehouseId],
+    queryFn: async () => (await api.get('/stock-levels', { params: warehouseFilterParams })).data.data,
     enabled: tab === 'stock',
   })
   const movements = useQuery({
-    queryKey: ['stock-movements', search.debouncedQ],
-    queryFn: async () => (await api.get('/stock-movements', { params: search.params })).data.data,
+    queryKey: ['stock-movements', search.debouncedQ, filterWarehouseId],
+    queryFn: async () => (await api.get('/stock-movements', { params: warehouseFilterParams })).data.data,
     enabled: tab === 'movements',
   })
   const transfers = useQuery({
@@ -128,8 +135,8 @@ export default function WarehousePage() {
     enabled: tab === 'transfers',
   })
   const alerts = useQuery({
-    queryKey: ['stock-alerts', search.debouncedQ],
-    queryFn: async () => (await api.get('/stock-alerts', { params: search.params })).data.data,
+    queryKey: ['stock-alerts', search.debouncedQ, filterWarehouseId],
+    queryFn: async () => (await api.get('/stock-alerts', { params: warehouseFilterParams })).data.data,
     enabled: tab === 'alerts',
   })
   const counts = useQuery({
@@ -219,7 +226,7 @@ export default function WarehousePage() {
     }
   }
 
-  const productRows = (products.data || []) as {
+  const productRows = ((products.data || []) as {
     id: number
     sku: string
     name: string
@@ -233,7 +240,23 @@ export default function WarehousePage() {
     track_serial?: boolean
     on_hand?: number
     stock_locations?: StockLocation[]
-  }[]
+  }[]).map((p) => {
+    if (!filterWarehouseId) return p
+    const locs = (p.stock_locations || []).filter((loc) => String(loc.warehouse_id) === filterWarehouseId)
+    const onHand = locs.reduce((sum, loc) => sum + Number(loc.quantity || 0), 0)
+    return { ...p, stock_locations: locs, on_hand: onHand }
+  })
+
+  const warehouseFilterControl = ['products', 'stock', 'movements', 'alerts'].includes(tab) ? (
+    <Field label={t('common.warehouse')}>
+      <select className={inputClass} value={filterWarehouseId} onChange={(e) => setFilterWarehouseId(e.target.value)}>
+        <option value="">{t('common.allWarehouses')}</option>
+        {(warehouses.data || []).map((w: { id: number; name: string }) => (
+          <option key={w.id} value={w.id}>{w.name}</option>
+        ))}
+      </select>
+    </Field>
+  ) : null
 
   const saveWh = useMutation({
     mutationFn: () => {
@@ -384,9 +407,13 @@ export default function WarehousePage() {
         subtitle="مستودعات، أصناف، حركات، تحويلات، وتنبيهات إعادة الطلب"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {warehouseFilterControl}
             <ListSearchInput value={search.q} onChange={search.setQ} />
             {['alerts', 'counts'].includes(tab) ? null : (
-              <ExcelExportButton path={`/exports/${excelModuleForWarehouseTab(tab)}`} />
+              <ExcelExportButton
+                path={`/exports/${excelModuleForWarehouseTab(tab)}`}
+                params={filterWarehouseId && ['stock', 'movements'].includes(tab) ? { warehouse_id: filterWarehouseId } : undefined}
+              />
             )}
             {canAdd ? <Button variant="primary" onClick={openCreate}>إضافة</Button> : null}
           </div>
@@ -476,7 +503,7 @@ export default function WarehousePage() {
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
+              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>{filterWarehouseId ? t('warehouse.warehouseBalance') : t('common.balance')}</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
               <tbody>
                 {productRows.map((p) => (
                   <tr
@@ -608,10 +635,10 @@ export default function WarehousePage() {
         <Panel>
           <table className="w-full text-sm">
             <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">نوع</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة/تسلسلي</th></tr>
+              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">نوع</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة/تسلسلي</th></tr>
             </thead>
             <tbody>
-              {(movements.data || []).map((m: { id: number; movement_number: string; type: string; quantity: number; batch_no?: string; serial_no?: string; product?: { name: string } }) => (
+              {(movements.data || []).map((m: { id: number; movement_number: string; type: string; quantity: number; batch_no?: string; serial_no?: string; warehouse?: { name: string }; product?: { name: string } }) => (
                 <tr
                   key={m.id}
                   className="row-clickable border-t border-black/5"
@@ -619,6 +646,7 @@ export default function WarehousePage() {
                   tabIndex={0}
                 >
                   <td className="px-4 py-3 font-mono text-xs">{m.movement_number}</td>
+                  <td className="px-4 py-3">{m.warehouse?.name || '—'}</td>
                   <td className="px-4 py-3">{m.type}</td>
                   <td className="px-4 py-3">{m.product?.name}</td>
                   <td className="px-4 py-3 tabular-nums">{formatQuantity(m.quantity)}</td>
@@ -691,11 +719,12 @@ export default function WarehousePage() {
         <Panel>
           <table className="w-full text-sm">
             <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">SKU</th><th className="px-4 py-3">الصنف</th><th className="px-4 py-3">الرصيد</th><th className="px-4 py-3">حد الطلب</th></tr>
+              <tr><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">SKU</th><th className="px-4 py-3">الصنف</th><th className="px-4 py-3">{t('warehouse.warehouseBalance')}</th><th className="px-4 py-3">حد الطلب</th></tr>
             </thead>
             <tbody>
-              {(alerts.data || []).map((a: { id: number; sku: string; name: string; on_hand: number; reorder_level: number }) => (
-                <tr key={a.id} className="border-t border-black/5">
+              {(alerts.data || []).map((a: { id: number; sku: string; name: string; on_hand: number; reorder_level: number; warehouse_id?: number | null; warehouse_name?: string | null }, idx: number) => (
+                <tr key={`${a.warehouse_id ?? 'none'}-${a.id}-${idx}`} className="border-t border-black/5">
+                  <td className="px-4 py-3">{a.warehouse_name || t('common.allWarehouses')}</td>
                   <td className="px-4 py-3 font-mono">{a.sku}</td>
                   <td className="px-4 py-3">{a.name}</td>
                   <td className="px-4 py-3 text-danger tabular-nums">{formatQuantity(a.on_hand)}</td>
@@ -703,7 +732,7 @@ export default function WarehousePage() {
                 </tr>
               ))}
               {(alerts.data || []).length === 0 && (
-                <tr><td className="px-4 py-6 text-black/50" colSpan={4}>لا توجد تنبيهات حالياً</td></tr>
+                <tr><td className="px-4 py-6 text-black/50" colSpan={5}>لا توجد تنبيهات حالياً</td></tr>
               )}
             </tbody>
           </table>

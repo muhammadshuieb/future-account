@@ -29,7 +29,7 @@ class SalesInvoiceController extends ApiController
         $data = $request->validate([
             'invoice_date' => ['required', 'date'],
             'customer_id' => ['required', 'exists:customers,id'],
-            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'warehouse_id' => ['required', 'exists:warehouses,id'],
             'cash_box_id' => ['nullable', 'exists:cash_boxes,id'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'currency' => ['nullable', 'string', 'max:8'],
