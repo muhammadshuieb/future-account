@@ -27,7 +27,7 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
     enabled: !!user,
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string },
   })
-  const base = currencies.data?.base_currency || 'SYP'
+  const base = currencies.data?.base_currency || 'USD'
 
   const statement = useQuery({
     queryKey: ['partner-statement-print', kind, partnerId, from, to],

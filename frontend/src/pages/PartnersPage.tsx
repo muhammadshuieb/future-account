@@ -41,7 +41,7 @@ export default function PartnersPage() {
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string },
   })
-  const base = currencies.data?.base_currency || 'SYP'
+  const base = currencies.data?.base_currency || 'USD'
 
   const statement = useQuery({
     queryKey: ['statement', tab, statementId, from, to],

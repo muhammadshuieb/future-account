@@ -84,8 +84,8 @@ class CashService
             ]);
         }
 
-        $sourceCurrency = strtoupper((string) ($data['source_currency'] ?? $data['from_currency'] ?? $source->currency ?? 'SYP'));
-        $targetCurrency = strtoupper((string) ($data['target_currency'] ?? $data['to_currency'] ?? $target->currency ?? 'SYP'));
+        $sourceCurrency = strtoupper((string) ($data['source_currency'] ?? $data['from_currency'] ?? $source->currency ?? 'USD'));
+        $targetCurrency = strtoupper((string) ($data['target_currency'] ?? $data['to_currency'] ?? $target->currency ?? 'USD'));
 
         if ($sourceCurrency === $targetCurrency) {
             throw ValidationException::withMessages([
@@ -93,8 +93,8 @@ class CashService
             ]);
         }
 
-        $sourceBoxCurrency = strtoupper((string) ($source->currency ?: 'SYP'));
-        $targetBoxCurrency = strtoupper((string) ($target->currency ?: 'SYP'));
+        $sourceBoxCurrency = strtoupper((string) ($source->currency ?: 'USD'));
+        $targetBoxCurrency = strtoupper((string) ($target->currency ?: 'USD'));
 
         if ($sourceBoxCurrency !== $sourceCurrency) {
             throw ValidationException::withMessages([
@@ -302,7 +302,7 @@ class CashService
      */
     public function cashBoxCurrencyBalance(CashBox $box): float
     {
-        $currency = strtoupper((string) ($box->currency ?: 'SYP'));
+        $currency = strtoupper((string) ($box->currency ?: 'USD'));
         $base = $this->currencies->baseCurrency();
 
         $in = (float) CurrencyExchange::query()

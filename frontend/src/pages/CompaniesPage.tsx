@@ -27,7 +27,7 @@ type BranchRow = {
   company?: { name: string }
 }
 
-const emptyCo = { code: '', name: '', name_en: '', tax_number: '', currency: 'SYP' }
+const emptyCo = { code: '', name: '', name_en: '', tax_number: '', currency: 'USD' }
 const emptyBr = { company_id: '', code: '', name: '', city: '', address: '', is_main: false }
 
 export default function CompaniesPage() {
@@ -72,7 +72,7 @@ export default function CompaniesPage() {
       name: c.name,
       name_en: c.name_en || '',
       tax_number: c.tax_number || '',
-      currency: c.currency || 'SYP',
+      currency: c.currency || 'USD',
     })
     setModalOpen(true)
   }

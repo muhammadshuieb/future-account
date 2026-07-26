@@ -27,7 +27,7 @@ class ErpDemoSeeder extends Seeder
                 'name' => 'شركة ساينا',
                 'name_en' => 'Syna Co',
                 'tax_number' => '300000000000003',
-                'currency' => 'SYP',
+                'currency' => 'USD',
                 'is_active' => true,
             ]
         );
@@ -235,6 +235,6 @@ class ErpDemoSeeder extends Seeder
         if ($mainCashId) {
             Setting::setValue('default_cash_box_id', (string) $mainCashId, 'cash', 'string', 'الصندوق الرئيسي الافتراضي');
         }
-        Setting::setValue('currency', 'SYP', 'finance', 'string', 'العملة الأساسية');
+        Setting::setValue('currency', 'USD', 'finance', 'string', 'العملة الأساسية');
     }
 }

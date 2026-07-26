@@ -44,7 +44,7 @@ class CashBoxController extends ApiController
             'is_default' => ['boolean'],
         ]);
 
-        $data['currency'] = strtoupper($data['currency'] ?? 'SYP');
+        $data['currency'] = strtoupper($data['currency'] ?? 'USD');
 
         if (! empty($data['is_default'])) {
             CashBox::query()->where('is_default', true)->update(['is_default' => false]);

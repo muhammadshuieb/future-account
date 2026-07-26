@@ -12,7 +12,7 @@ class CurrencyService
 {
     public function baseCurrency(): string
     {
-        return strtoupper((string) Setting::getValue('currency', 'SYP'));
+        return strtoupper((string) Setting::getValue('currency', 'USD'));
     }
 
     public function supportedCodes(): array
@@ -113,10 +113,11 @@ class CurrencyService
 
     public function ensureSeeded(): void
     {
+        // USD is the system base; SYP and TRY are secondary.
         $defaults = [
+            ['code' => 'USD', 'name' => 'الدولار الأمريكي', 'name_en' => 'US Dollar', 'symbol' => '$', 'decimal_places' => 2],
             ['code' => 'SYP', 'name' => 'الليرة السورية', 'name_en' => 'Syrian Pound', 'symbol' => 'ل.س', 'decimal_places' => 2],
             ['code' => 'TRY', 'name' => 'الليرة التركية', 'name_en' => 'Turkish Lira', 'symbol' => '₺', 'decimal_places' => 2],
-            ['code' => 'USD', 'name' => 'الدولار الأمريكي', 'name_en' => 'US Dollar', 'symbol' => '$', 'decimal_places' => 2],
         ];
 
         foreach ($defaults as $row) {
@@ -129,14 +130,17 @@ class CurrencyService
         $date = ($date ?? now())->toDateString();
         $this->ensureSeeded();
 
-        // Rates expressed as: 1 FROM = rate TO (base SYP)
+        // Rates: 1 FROM = rate TO. Base is USD (1 USD = 1 base).
+        // SYP/TRY are quoted relative to USD (demo: 1 USD = 15000 SYP, 1 USD ≈ 33.333 TRY).
+        $usdToSyp = 15000;
+        $usdToTry = round(15000 / 450, 8);
         $rows = [
-            ['from_currency' => 'USD', 'to_currency' => 'SYP', 'rate' => 15000],
+            ['from_currency' => 'USD', 'to_currency' => 'SYP', 'rate' => $usdToSyp],
+            ['from_currency' => 'SYP', 'to_currency' => 'USD', 'rate' => round(1 / $usdToSyp, 8)],
+            ['from_currency' => 'USD', 'to_currency' => 'TRY', 'rate' => $usdToTry],
+            ['from_currency' => 'TRY', 'to_currency' => 'USD', 'rate' => round(1 / $usdToTry, 8)],
             ['from_currency' => 'TRY', 'to_currency' => 'SYP', 'rate' => 450],
-            ['from_currency' => 'SYP', 'to_currency' => 'USD', 'rate' => round(1 / 15000, 8)],
             ['from_currency' => 'SYP', 'to_currency' => 'TRY', 'rate' => round(1 / 450, 8)],
-            ['from_currency' => 'USD', 'to_currency' => 'TRY', 'rate' => round(15000 / 450, 8)],
-            ['from_currency' => 'TRY', 'to_currency' => 'USD', 'rate' => round(450 / 15000, 8)],
         ];
 
         foreach ($rows as $row) {

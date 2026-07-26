@@ -461,13 +461,13 @@ export default function SettingsPage() {
                 {setting.key === 'currency' ? (
                   <select
                     className={inputClass}
-                    value={values[setting.key] ?? 'SYP'}
+                    value={values[setting.key] ?? 'USD'}
                     onChange={(e) => setValue(setting.key, e.target.value)}
                   >
                     {(currencies.data?.currencies || [
+                      { code: 'USD', name: 'الدولار الأمريكي' },
                       { code: 'SYP', name: 'الليرة السورية' },
                       { code: 'TRY', name: 'الليرة التركية' },
-                      { code: 'USD', name: 'الدولار الأمريكي' },
                     ]).map((c) => (
                       <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
                     ))}
@@ -538,7 +538,7 @@ export default function SettingsPage() {
           <Panel>
             <div className="border-b border-[var(--color-line)] px-4 py-3">
               <h2 className="font-semibold">{t('settings.supportedCurrencies')}</h2>
-              <p className="text-xs text-black/45">{t('settings.baseCurrency')}: {currencies.data?.base_currency || 'SYP'}</p>
+              <p className="text-xs text-black/45">{t('settings.baseCurrency')}: {currencies.data?.base_currency || 'USD'}</p>
             </div>
             <ul className="divide-y divide-[var(--color-line)]">
               {(currencies.data?.currencies || []).map((c) => (

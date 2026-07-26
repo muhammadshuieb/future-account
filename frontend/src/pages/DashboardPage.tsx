@@ -137,9 +137,9 @@ export default function DashboardPage() {
   const currencyOptions = activeCurrencies.length
     ? activeCurrencies
     : [
+        { code: 'USD', name: 'دولار أمريكي' },
         { code: 'SYP', name: 'ليرة سورية' },
         { code: 'TRY', name: 'ليرة تركية' },
-        { code: 'USD', name: 'دولار أمريكي' },
       ]
 
   const { data, isLoading, error, isFetching } = useQuery({
@@ -162,8 +162,8 @@ export default function DashboardPage() {
 
   const showAllCurrencies = !currencyFilter
   const byCurrency = data.by_currency || []
-  const currency = data.currency || currencies.data?.base_currency || 'SYP'
-  const baseCurrency = data.base_currency || currencies.data?.base_currency || 'SYP'
+  const currency = data.currency || currencies.data?.base_currency || 'USD'
+  const baseCurrency = data.base_currency || currencies.data?.base_currency || 'USD'
   const base = data.base_totals || {
     currency: baseCurrency,
     revenue: data.revenue,

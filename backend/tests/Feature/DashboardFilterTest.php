@@ -80,10 +80,10 @@ class DashboardFilterTest extends TestCase
 
         $all = $this->getJson('/api/dashboard/summary?days=7');
         $all->assertOk()
-            ->assertJsonPath('data.currency', 'SYP')
+            ->assertJsonPath('data.currency', 'USD')
             ->assertJsonPath('data.filter_branch_id', null)
             ->assertJsonPath('data.filter_currency', null)
-            ->assertJsonPath('data.base_totals.currency', 'SYP');
+            ->assertJsonPath('data.base_totals.currency', 'USD');
 
         $allMonthSales = (float) $all->json('data.month_sales');
         $this->assertEqualsWithDelta(31000.0, $allMonthSales, 0.01);

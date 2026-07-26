@@ -173,7 +173,7 @@ export function SalesInvoicePrintView({
         )}
         <p>
           <span className="text-black/55">{t('common.currency')}: </span>
-          {invoice.currency || 'SYP'}
+          {invoice.currency || 'USD'}
         </p>
         {invoice.payment_type && (
           <p>
@@ -237,7 +237,7 @@ export function SalesInvoicePrintView({
           </p>
         )}
         <p className="text-base font-bold">
-          {t('common.total')} ({invoice.currency || 'SYP'}):{' '}
+          {t('common.total')} ({invoice.currency || 'USD'}):{' '}
           <span className="tabular-nums">{invoice.total}</span>
         </p>
       </div>
@@ -270,7 +270,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         )}
         <p>
           <span className="text-black/55">{t('common.currency')}: </span>
-          {invoice.currency || 'SYP'}
+          {invoice.currency || 'USD'}
         </p>
         {invoice.payment_type && (
           <p>
@@ -329,7 +329,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
           </p>
         )}
         <p className="text-base font-bold">
-          {t('common.total')} ({invoice.currency || 'SYP'}):{' '}
+          {t('common.total')} ({invoice.currency || 'USD'}):{' '}
           <span className="tabular-nums">{invoice.total}</span>
         </p>
       </div>

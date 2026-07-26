@@ -81,7 +81,7 @@ export default function ReportsPage() {
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string },
   })
-  const base = currencies.data?.base_currency || 'SYP'
+  const base = currencies.data?.base_currency || 'USD'
 
   const reportUrl = useMemo(() => {
     if (tab === 'branch-complete') return branchId ? '/reports/branch-complete' : null

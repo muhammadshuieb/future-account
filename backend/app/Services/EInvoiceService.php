@@ -28,7 +28,7 @@ class EInvoiceService
 
         $companyName = Setting::getValue('company_name', 'Syna Co');
         $taxNumber = Setting::getValue('tax_number', '');
-        $baseCurrency = Setting::getValue('currency', 'SYP');
+        $baseCurrency = Setting::getValue('currency', 'USD');
 
         $taxBreakdown = [];
         $lines = [];

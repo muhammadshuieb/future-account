@@ -51,7 +51,7 @@ export function statementTypeLabel(type: string): string {
 export function StatementPrintView({
   data,
   kind,
-  currency = 'SYP',
+  currency = 'USD',
   documentLabel,
 }: {
   data: PartnerStatementData

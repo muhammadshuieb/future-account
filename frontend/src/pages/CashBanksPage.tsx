@@ -60,7 +60,7 @@ type Reconciliation = {
   bank?: { name: string }
 }
 
-const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'SYP' }
+const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD' }
 const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
 const emptyTr = {
   transfer_date: todayYmd(),
@@ -73,8 +73,8 @@ const emptyTr = {
 }
 const emptyEx = {
   exchange_date: todayYmd(),
-  source_currency: 'SYP',
-  target_currency: 'USD',
+  source_currency: 'USD',
+  target_currency: 'SYP',
   source_cash_box_id: '',
   target_cash_box_id: '',
   source_amount: '',
@@ -170,24 +170,24 @@ export default function CashBanksPage() {
   const exchangeRows = listOrEmpty(exchanges.data)
   const reconcileRows = listOrEmpty(reconciliations.data)
   const currencyList = listOrEmpty(currencies.data)
-  const baseCurrency = 'SYP'
+  const baseCurrency = 'USD'
   const fromList = trForm.from_type === 'cash_box' ? boxRows : bankRows
   const toList = trForm.to_type === 'cash_box' ? boxRows : bankRows
 
-  const sourceCur = (exForm.source_currency || 'SYP').toUpperCase()
+  const sourceCur = (exForm.source_currency || 'USD').toUpperCase()
   const targetCur = (exForm.target_currency || 'USD').toUpperCase()
-  const sourceBoxes = boxRows.filter((b) => (b.currency || 'SYP').toUpperCase() === sourceCur)
+  const sourceBoxes = boxRows.filter((b) => (b.currency || 'USD').toUpperCase() === sourceCur)
   const targetBoxes = boxRows.filter(
-    (b) => (b.currency || 'SYP').toUpperCase() === targetCur && String(b.id) !== String(exForm.source_cash_box_id),
+    (b) => (b.currency || 'USD').toUpperCase() === targetCur && String(b.id) !== String(exForm.source_cash_box_id),
   )
   const currencyOptions = useMemo(() => {
     const active = currencyList.filter((c) => c.is_active)
     if (active.length) return active
     if (currencyList.length) return currencyList
     return [
-      { id: 1, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 1 },
-      { id: 2, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
-      { id: 3, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 0 },
+      { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
+      { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
+      { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
     ] as CurrencyOption[]
   }, [currencyList])
 
@@ -264,7 +264,7 @@ export default function CashBanksPage() {
       const payload = {
         ...boxForm,
         opening_balance: Number(boxForm.opening_balance),
-        currency: boxForm.currency || 'SYP',
+        currency: boxForm.currency || 'USD',
         is_active: true,
       }
       if (editingId) return api.put(`/cash-boxes/${editingId}`, payload)
@@ -464,7 +464,7 @@ export default function CashBanksPage() {
                         code: b.code,
                         name: b.name,
                         opening_balance: String(b.opening_balance),
-                        currency: b.currency || 'SYP',
+                        currency: b.currency || 'USD',
                       })
                       setModalOpen(true)
                     }}
@@ -472,9 +472,9 @@ export default function CashBanksPage() {
                   >
                     <td className="px-4 py-3 font-mono">{b.code}</td>
                     <td className="px-4 py-3">{b.name}</td>
-                    <td className="px-4 py-3 font-mono">{b.currency || 'SYP'}</td>
-                    <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance, b.currency || 'SYP')}</td>
-                    <td className="px-4 py-3">{formatMoney(b.opening_balance, b.currency || 'SYP')}</td>
+                    <td className="px-4 py-3 font-mono">{b.currency || 'USD'}</td>
+                    <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance, b.currency || 'USD')}</td>
+                    <td className="px-4 py-3">{formatMoney(b.opening_balance, b.currency || 'USD')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -650,8 +650,8 @@ export default function CashBanksPage() {
           <Field label="العملة">
             <select className={inputClass} value={boxForm.currency} onChange={(e) => setBoxForm({ ...boxForm, currency: e.target.value })}>
               {(currencyList.length ? currencyList : [
-                { id: 1, code: 'SYP', name: 'ليرة سورية', is_active: true },
-                { id: 2, code: 'USD', name: 'دولار', is_active: true },
+                { id: 1, code: 'USD', name: 'دولار', is_active: true },
+                { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
                 { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
               ]).map((c) => (
                 <option key={c.code} value={c.code}>{c.code} — {c.name}</option>

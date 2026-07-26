@@ -208,10 +208,10 @@ export function formatQuantity(value: number | string | null | undefined): strin
   return quantityFormatter.format(n)
 }
 
-export function formatMoney(value: number | string | null | undefined, currency = 'SYP') {
+export function formatMoney(value: number | string | null | undefined, currency = 'USD') {
   const n = typeof value === 'number' ? value : Number(value ?? 0)
   const safe = Number.isFinite(n) ? n : 0
-  const code = currency || 'SYP'
+  const code = currency || 'USD'
   try {
     return new Intl.NumberFormat(NUMBER_LOCALE, {
       style: 'currency',

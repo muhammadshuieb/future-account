@@ -31,7 +31,7 @@ class DashboardController extends Controller
             $currencyFilter = null;
         }
 
-        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'SYP'));
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
         $displayCurrency = $currencyFilter ?: $baseCurrency;
         $hasDocFilters = $branchId !== null || $currencyFilter !== null;
 
@@ -294,7 +294,7 @@ class DashboardController extends Controller
             ->unique()
             ->values();
 
-        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'SYP'));
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
         $codes = $codes->sort(function (string $a, string $b) use ($baseCurrency) {
             if ($a === $baseCurrency) {
                 return -1;

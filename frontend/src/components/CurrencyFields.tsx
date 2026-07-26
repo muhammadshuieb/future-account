@@ -35,7 +35,7 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
   state,
   setState,
   currencies,
-  baseCurrency = 'SYP',
+  baseCurrency = 'USD',
   showBasePreview,
   documentTotal,
 }: {
@@ -53,9 +53,9 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
     : currencies.length
       ? currencies
       : [
-          { id: 1, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 1 },
-          { id: 2, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
-          { id: 3, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 0 },
+          { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
+          { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
+          { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
         ]
   const rate = Number(state.exchange_rate) || 0
   const isBase = state.currency === baseCurrency
@@ -100,14 +100,14 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
 }
 
 /**
- * Payment/receipt FX: amount in selected currency + amount in base (SYP),
+ * Payment/receipt FX: amount in selected currency + amount in base (USD),
  * with live bidirectional conversion via exchange rate.
  */
 export function PaymentCurrencyFields<T extends PaymentFxState>({
   state,
   setState,
   currencies,
-  baseCurrency = 'SYP',
+  baseCurrency = 'USD',
 }: {
   state: T
   setState: (next: T | ((prev: T) => T)) => void
@@ -121,9 +121,9 @@ export function PaymentCurrencyFields<T extends PaymentFxState>({
     : currencies.length
       ? currencies
       : [
-          { id: 1, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 1 },
-          { id: 2, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
-          { id: 3, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 0 },
+          { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
+          { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
+          { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
         ]
   const isBase = state.currency === baseCurrency
   const rate = Number(state.exchange_rate) || 0

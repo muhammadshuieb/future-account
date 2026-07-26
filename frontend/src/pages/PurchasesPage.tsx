@@ -83,9 +83,9 @@ export default function PurchasesPage() {
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string; currencies: CurrencyOption[] },
   })
   const currencyList = currencies.data?.currencies || []
-  const baseCurrency = currencies.data?.base_currency || 'SYP'
+  const baseCurrency = currencies.data?.base_currency || 'USD'
 
-  const base = { supplier_id: '', warehouse_id: '', product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '1' }
+  const base = { supplier_id: '', warehouse_id: '', product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '', currency: 'USD', exchange_rate: '1' }
 
   const [req, setReq] = useState({ request_date: todayYmd(), required_date: '', ...base })
   const [po, setPo] = useState({ order_date: todayYmd(), ...base })
@@ -107,7 +107,7 @@ export default function PurchasesPage() {
     unit_cost: '',
     batch_no: '',
     serial_no: '',
-    currency: 'SYP',
+    currency: 'USD',
     exchange_rate: '1',
     status: 'posted',
   })
@@ -118,7 +118,7 @@ export default function PurchasesPage() {
     cash_box_id: '',
     amount: '',
     base_amount: '',
-    currency: 'SYP',
+    currency: 'USD',
     exchange_rate: '1',
     method: 'cash',
     status: 'posted',
@@ -361,7 +361,7 @@ export default function PurchasesPage() {
       unit_cost: String(line.unit_cost || ''),
       batch_no: line.batch_no || '',
       serial_no: line.serial_no || '',
-      currency: data.currency || 'SYP',
+      currency: data.currency || 'USD',
       exchange_rate: String(data.exchange_rate || ''),
     })
   }, [detail.data, modal])
@@ -469,7 +469,7 @@ export default function PurchasesPage() {
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r, r.status !== 'converted')}>
                     <td className="font-mono text-xs">{r.request_number}</td>
                     <td>{r.supplier?.name || '—'}</td>
-                    <td>{r.currency || 'SYP'}</td>
+                    <td>{r.currency || 'USD'}</td>
                     <td>{r.total}</td>
                     <td>{documentStatusLabel(r.status)}</td>
                     <td className="space-x-2 space-x-reverse">
@@ -494,7 +494,7 @@ export default function PurchasesPage() {
                   <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.supplier?.name}</td>
-                    <td>{o.currency || 'SYP'}</td>
+                    <td>{o.currency || 'USD'}</td>
                     <td>{o.total}</td>
                     <td>{documentStatusLabel(o.status)}</td>
                     <td className="space-x-2 space-x-reverse">
@@ -525,7 +525,7 @@ export default function PurchasesPage() {
                     </td>
                     <td>{i.supplier?.name}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
-                    <td>{i.currency || 'SYP'}</td>
+                    <td>{i.currency || 'USD'}</td>
                     <td>{i.total}</td>
                     <td>{i.tax_amount ?? 0}</td>
                     <td>{i.paid_amount ?? 0}</td>
@@ -561,7 +561,7 @@ export default function PurchasesPage() {
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
                     <td className="font-mono text-xs">{r.return_number}</td>
                     <td>{r.supplier?.name}</td>
-                    <td>{r.currency || 'SYP'}</td>
+                    <td>{r.currency || 'USD'}</td>
                     <td>{r.total}</td>
                     <td>{documentStatusLabel(r.status)}</td>
                     <td>
@@ -585,7 +585,7 @@ export default function PurchasesPage() {
                   <tr key={p.id} className="cursor-pointer" onClick={() => openRow(p)}>
                     <td className="font-mono text-xs">{p.payment_number}</td>
                     <td>{p.supplier?.name}</td>
-                    <td>{p.currency || 'SYP'}</td>
+                    <td>{p.currency || 'USD'}</td>
                     <td>{p.amount}</td>
                     <td>{documentStatusLabel(p.status)}</td>
                     <td>
