@@ -190,7 +190,11 @@ export default function SalesPage() {
     }
   }
 
-  const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'receipts', 'stock-levels'] })
+  const invalidateSales = () => {
+    for (const key of ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'receipts', 'stock-levels', 'cash-boxes'] as const) {
+      void qc.invalidateQueries({ queryKey: [key] })
+    }
+  }
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null); setPendingAttachment(null) }
 
   const salesDeletePath = (rowTab: string, id: number) => {
@@ -351,7 +355,13 @@ export default function SalesPage() {
       exchange_rate: rc.exchange_rate ? Number(rc.exchange_rate) : undefined,
       base_amount: rc.base_amount ? Number(rc.base_amount) : undefined,
     }),
-    onSuccess: () => { msg.setMessage(t('sales.receiptSaved')); void qc.invalidateQueries({ queryKey: ['receipts', 'sales-invoices'] }); closeModal() },
+    onSuccess: () => {
+      msg.setMessage(t('sales.receiptSaved'))
+      for (const key of ['receipts', 'sales-invoices', 'cash-boxes'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 

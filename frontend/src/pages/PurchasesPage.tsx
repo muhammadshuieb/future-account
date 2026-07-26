@@ -124,7 +124,11 @@ export default function PurchasesPage() {
     status: 'posted',
   })
 
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels'] })
+  const invalidate = () => {
+    for (const key of ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels', 'cash-boxes'] as const) {
+      void qc.invalidateQueries({ queryKey: [key] })
+    }
+  }
   const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setPendingAttachment(null) }
 
   useEffect(() => {
@@ -281,7 +285,13 @@ export default function PurchasesPage() {
       exchange_rate: pay.exchange_rate ? Number(pay.exchange_rate) : undefined,
       base_amount: pay.base_amount ? Number(pay.base_amount) : undefined,
     }),
-    onSuccess: () => { msg.setMessage(t('purchases.paymentPosted')); void qc.invalidateQueries({ queryKey: ['supplier-payments', 'purchase-invoices'] }); closeModal() },
+    onSuccess: () => {
+      msg.setMessage(t('purchases.paymentPosted'))
+      for (const key of ['supplier-payments', 'purchase-invoices', 'cash-boxes'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 

@@ -284,7 +284,13 @@ export default function CashBanksPage() {
   })
   const saveTr = useMutation({
     mutationFn: () => api.post('/cash-transfers', { ...trForm, from_id: Number(trForm.from_id), to_id: Number(trForm.to_id), amount: Number(trForm.amount) }),
-    onSuccess: () => { msg.setMessage('تم ترحيل التحويل'); closeModal(); void qc.invalidateQueries({ queryKey: ['cash-transfers'] }) },
+    onSuccess: () => {
+      msg.setMessage('تم ترحيل التحويل')
+      closeModal()
+      for (const key of ['cash-transfers', 'cash-boxes', 'banks'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+    },
     onError: msg.fromErr,
   })
   const sourceBox = sourceBoxes.find((b) => String(b.id) === String(exForm.source_cash_box_id))

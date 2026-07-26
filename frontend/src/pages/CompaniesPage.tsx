@@ -117,7 +117,8 @@ export default function CompaniesPage() {
     onSuccess: () => {
       msg.setMessage(t('companies.branchSaved'))
       closeModal()
-      void qc.invalidateQueries({ queryKey: ['branches', 'companies'] })
+      void qc.invalidateQueries({ queryKey: ['branches'] })
+      void qc.invalidateQueries({ queryKey: ['companies'] })
     },
     onError: msg.fromErr,
   })

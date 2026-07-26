@@ -310,7 +310,13 @@ export default function WarehousePage() {
         batch_no: mvForm.batch_no || undefined,
         serial_no: mvForm.serial_no || undefined,
       }),
-    onSuccess: () => { msg.setMessage('تم تسجيل الحركة'); closeModal(); void qc.invalidateQueries({ queryKey: ['stock-levels', 'stock-movements', 'stock-alerts'] }) },
+    onSuccess: () => {
+      msg.setMessage('تم تسجيل الحركة')
+      closeModal()
+      for (const key of ['stock-levels', 'stock-movements', 'stock-alerts'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+    },
     onError: msg.fromErr,
   })
 
@@ -326,7 +332,13 @@ export default function WarehousePage() {
           serial_no: cntForm.serial_no || undefined,
         }],
       }),
-    onSuccess: () => { msg.setMessage('تم حفظ الجرد'); closeModal(); void qc.invalidateQueries({ queryKey: ['inventory-counts', 'stock-levels'] }) },
+    onSuccess: () => {
+      msg.setMessage('تم حفظ الجرد')
+      closeModal()
+      for (const key of ['inventory-counts', 'stock-levels'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+    },
     onError: msg.fromErr,
   })
 
@@ -334,7 +346,9 @@ export default function WarehousePage() {
     mutationFn: (id: number) => api.post(`/inventory-counts/${id}/post`),
     onSuccess: () => {
       msg.setMessage('تم ترحيل فروقات الجرد')
-      void qc.invalidateQueries({ queryKey: ['inventory-counts', 'stock-levels', 'stock-movements'] })
+      for (const key of ['inventory-counts', 'stock-levels', 'stock-movements'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
     },
     onError: msg.fromErr,
   })
@@ -353,7 +367,13 @@ export default function WarehousePage() {
           serial_no: trForm.serial_no || undefined,
         }],
       }),
-    onSuccess: () => { msg.setMessage('تم التحويل'); closeModal(); void qc.invalidateQueries({ queryKey: ['warehouse-transfers', 'stock-levels'] }) },
+    onSuccess: () => {
+      msg.setMessage('تم التحويل')
+      closeModal()
+      for (const key of ['warehouse-transfers', 'stock-levels'] as const) {
+        void qc.invalidateQueries({ queryKey: [key] })
+      }
+    },
     onError: msg.fromErr,
   })
 
