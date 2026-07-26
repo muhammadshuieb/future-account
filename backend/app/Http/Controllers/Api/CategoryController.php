@@ -3,16 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Category;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CategoryController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        $query = Category::query()->with('parent')->orderBy('name');
+        ListSearch::apply($query, $request, ['name']);
 
-        return $this->ok(Category::query()->with('parent')->orderBy('name')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

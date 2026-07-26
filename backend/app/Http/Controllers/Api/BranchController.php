@@ -3,16 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Branch;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BranchController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('settings.manage');
+        $query = Branch::query()->with('company')->orderBy('code');
+        ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'city', 'address'], [
+            'company' => ['name', 'code'],
+        ]);
 
-        return $this->ok(Branch::query()->with('company')->orderBy('code')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

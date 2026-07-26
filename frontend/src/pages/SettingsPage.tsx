@@ -8,7 +8,8 @@ import { permissionLabel, roleLabel } from '@/lib/rbacLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import type { Setting } from '@/types'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { Button, EmptyState, Field, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, LoadingBlock, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 const SETTINGS_TABS = ['general', 'currencies', 'backup', 'whatsapp', 'barcode', 'users'] as const
 
@@ -64,6 +65,7 @@ export default function SettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({})
   const msg = useFormMessage()
   const backupFileInputRef = useRef<HTMLInputElement>(null)
+  const search = useListSearch()
 
   const { data: settings = [], isLoading } = useQuery({
     queryKey: ['settings'],
@@ -157,8 +159,8 @@ export default function SettingsPage() {
   })
 
   const usersAdmin = useQuery({
-    queryKey: ['admin-users'],
-    queryFn: async () => (await api.get('/users')).data.data as {
+    queryKey: ['admin-users', search.debouncedQ],
+    queryFn: async () => (await api.get('/users', { params: search.params })).data.data as {
       id: number
       name: string
       first_name?: string
@@ -427,7 +429,12 @@ export default function SettingsPage() {
       <PageHeader
         title={t('nav.settings')}
         subtitle={t('settings.subtitle')}
-        actions={tab === 'users' ? <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm); setUserModal('create') }}>{t('common.add')}</Button> : undefined}
+        actions={tab === 'users' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
+            <Button variant="primary" onClick={() => { setEditingUserId(null); setUserForm(emptyUserForm); setUserModal('create') }}>{t('common.add')}</Button>
+          </div>
+        ) : undefined}
       />
       <Tabs
         tabs={[
@@ -1000,6 +1007,9 @@ export default function SettingsPage() {
       {tab === 'users' && (
         <Panel>
             <div className="border-b border-[var(--color-line)] px-5 py-3"><h2 className="font-semibold">{t('settings.users')}</h2></div>
+            {search.debouncedQ && !(usersAdmin.data || []).length ? (
+              <EmptyState title={t('common.noSearchResults')} />
+            ) : null}
             <table className="data-table text-sm">
               <thead>
                 <tr>

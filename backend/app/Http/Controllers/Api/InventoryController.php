@@ -7,6 +7,7 @@ use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\WarehouseTransfer;
 use App\Services\InventoryService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -21,6 +22,10 @@ class InventoryController extends ApiController
         if ($request->filled('warehouse_id')) {
             $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
+        ListSearch::apply($query, $request, ['batch_no'], [
+            'product' => ['name', 'sku', 'barcode'],
+            'warehouse' => ['name', 'code'],
+        ]);
 
         return $this->ok($query->get());
     }
@@ -35,6 +40,10 @@ class InventoryController extends ApiController
         if ($request->filled('product_id')) {
             $query->where('product_id', $request->integer('product_id'));
         }
+        ListSearch::apply($query, $request, ['reference', 'notes', 'type', 'batch_no', 'serial_no'], [
+            'product' => ['name', 'sku', 'barcode'],
+            'warehouse' => ['name', 'code'],
+        ]);
 
         return $this->ok($query->limit(200)->get());
     }
@@ -65,11 +74,16 @@ class InventoryController extends ApiController
         return $this->ok($this->inventory->lowStockAlerts());
     }
 
-    public function transfers(): JsonResponse
+    public function transfers(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        $query = WarehouseTransfer::query()->with(['fromWarehouse', 'toWarehouse', 'lines.product'])->latest('id');
+        ListSearch::apply($query, $request, ['transfer_number', 'notes', 'status'], [
+            'fromWarehouse' => ['name', 'code'],
+            'toWarehouse' => ['name', 'code'],
+        ]);
 
-        return $this->ok(WarehouseTransfer::query()->with(['fromWarehouse', 'toWarehouse', 'lines.product'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function storeTransfer(Request $request): JsonResponse
@@ -98,11 +112,15 @@ class InventoryController extends ApiController
         return $this->ok($this->inventory->postTransfer($warehouseTransfer, request()->user()));
     }
 
-    public function counts(): JsonResponse
+    public function counts(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        $query = InventoryCount::query()->with(['warehouse', 'lines.product'])->latest('id');
+        ListSearch::apply($query, $request, ['count_number', 'notes', 'status'], [
+            'warehouse' => ['name', 'code'],
+        ]);
 
-        return $this->ok(InventoryCount::query()->with(['warehouse', 'lines.product'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function storeCount(Request $request): JsonResponse

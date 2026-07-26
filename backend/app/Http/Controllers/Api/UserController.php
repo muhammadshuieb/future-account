@@ -3,17 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\User;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class UserController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('users.manage');
 
-        $users = User::query()->with('roles')->orderBy('name')->get()->map(fn (User $u) => $this->userPayload($u));
+        $query = User::query()->with('roles')->orderBy('name');
+        ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name']);
+        $users = $query->get()->map(fn (User $u) => $this->userPayload($u));
 
         return $this->ok($users);
     }

@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAttachments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PurchaseInvoice extends Model
 {
+    use HasAttachments;
+
     protected $fillable = [
-        'invoice_number', 'invoice_date', 'supplier_id', 'warehouse_id', 'branch_id',
-        'purchase_order_id', 'status', 'currency', 'exchange_rate', 'base_amount',
+        'invoice_number', 'invoice_date', 'supplier_id', 'warehouse_id', 'cash_box_id', 'branch_id',
+        'purchase_order_id', 'status', 'payment_type', 'currency', 'exchange_rate', 'base_amount',
         'subtotal', 'tax_amount', 'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
@@ -32,6 +35,7 @@ class PurchaseInvoice extends Model
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
     public function purchaseOrder(): BelongsTo { return $this->belongsTo(PurchaseOrder::class); }
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
+    public function cashBox(): BelongsTo { return $this->belongsTo(CashBox::class); }
     public function lines(): HasMany { return $this->hasMany(PurchaseInvoiceLine::class); }
     public function payments(): HasMany { return $this->hasMany(SupplierPayment::class); }
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }

@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAttachments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Receipt extends Model
 {
+    use HasAttachments;
+
     protected $fillable = [
         'receipt_number', 'receipt_date', 'customer_id', 'sales_invoice_id',
         'cash_box_id', 'bank_id', 'method', 'amount', 'currency', 'exchange_rate',

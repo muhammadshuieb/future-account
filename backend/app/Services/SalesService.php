@@ -30,8 +30,11 @@ class SalesService
         return DB::transaction(function () use ($data, $lines, $user) {
             [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
 
+            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
+
             if (($data['status'] ?? 'draft') === 'posted') {
-                $this->assertCustomerCreditLimit((int) $data['customer_id'], $total);
+                // Credit limit applies to the unpaid remainder.
+                $this->assertCustomerCreditLimit((int) $data['customer_id'], max(0, $total - $intendedPaid));
             }
 
             $fx = $this->currencies->resolveDocumentFx(
@@ -49,15 +52,18 @@ class SalesService
                 'invoice_date' => $data['invoice_date'],
                 'customer_id' => $data['customer_id'],
                 'warehouse_id' => $warehouseId,
+                'cash_box_id' => $cashBoxId,
                 'branch_id' => $data['branch_id'] ?? null,
                 'sales_order_id' => $data['sales_order_id'] ?? null,
                 'status' => 'draft',
+                'payment_type' => $paymentType,
                 'currency' => $fx['currency'],
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
                 'tax_amount' => $tax,
                 'total' => $total,
+                'paid_amount' => 0,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $user->id,
             ]);
@@ -67,20 +73,25 @@ class SalesService
             }
 
             if (($data['status'] ?? 'draft') === 'posted') {
-                return $this->postInvoice($invoice, $user);
+                return $this->postInvoice($invoice, $user, $intendedPaid);
             }
 
-            return $invoice->load(['lines.product', 'customer', 'warehouse']);
+            // Persist intended paid for draft partials/cash until posting.
+            if (in_array($paymentType, ['cash', 'partial'], true)) {
+                $invoice->update(['paid_amount' => $intendedPaid]);
+            }
+
+            return $invoice->load(['lines.product', 'customer', 'warehouse', 'cashBox', 'attachments']);
         });
     }
 
-    public function postInvoice(SalesInvoice $invoice, User $user): SalesInvoice
+    public function postInvoice(SalesInvoice $invoice, User $user, ?float $intendedPaidOverride = null): SalesInvoice
     {
         if ($invoice->status === 'posted') {
             throw ValidationException::withMessages(['status' => ['الفاتورة مرحّلة مسبقاً.']]);
         }
 
-        return DB::transaction(function () use ($invoice, $user) {
+        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
             $invoice->load(['lines.product', 'customer']);
 
             if ($invoice->lines->isEmpty()) {
@@ -91,7 +102,20 @@ class SalesService
                 throw ValidationException::withMessages(['warehouse_id' => ['يجب تحديد المخزن قبل الترحيل.']]);
             }
 
-            $this->assertCustomerCreditLimit((int) $invoice->customer_id, (float) $invoice->total);
+            $paymentType = $invoice->payment_type ?: 'credit';
+            $intendedPaid = $intendedPaidOverride;
+            if ($intendedPaid === null) {
+                $intendedPaid = match ($paymentType) {
+                    'cash' => (float) $invoice->total,
+                    'partial' => (float) $invoice->paid_amount,
+                    default => 0.0,
+                };
+            }
+
+            // Reset paid_amount before auto-receipt increments it.
+            $invoice->update(['paid_amount' => 0]);
+
+            $this->assertCustomerCreditLimit((int) $invoice->customer_id, max(0, (float) $invoice->total - $intendedPaid));
 
             $customer = $invoice->customer;
             $arAccount = $customer->account_id
@@ -177,10 +201,73 @@ class SalesService
                 'posted_at' => now(),
             ]);
 
+            if ($intendedPaid > 0) {
+                if (! $invoice->cash_box_id) {
+                    throw ValidationException::withMessages([
+                        'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+                    ]);
+                }
+
+                $this->createReceipt([
+                    'receipt_date' => $invoice->invoice_date->toDateString(),
+                    'customer_id' => $invoice->customer_id,
+                    'sales_invoice_id' => $invoice->id,
+                    'cash_box_id' => $invoice->cash_box_id,
+                    'method' => 'cash',
+                    'amount' => $intendedPaid,
+                    'currency' => $invoice->currency,
+                    'exchange_rate' => $invoice->exchange_rate,
+                    'status' => 'posted',
+                    'notes' => 'تحصيل تلقائي لفاتورة '.$invoice->invoice_number,
+                ], $user);
+            }
+
             $this->audit->log($user, 'sales_invoice.posted', $invoice);
 
-            return $invoice->fresh(['lines.product', 'customer', 'warehouse', 'journalEntry']);
+            return $invoice->fresh(['lines.product', 'customer', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
+    }
+
+    /**
+     * @return array{0: string, 1: float, 2: ?int}
+     */
+    protected function normalizePaymentTerms(array $data, float $total): array
+    {
+        $paymentType = strtolower((string) ($data['payment_type'] ?? 'credit'));
+        if (! in_array($paymentType, ['cash', 'credit', 'partial'], true)) {
+            throw ValidationException::withMessages(['payment_type' => ['نوع الدفع غير صالح.']]);
+        }
+
+        $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
+            ? (int) $data['cash_box_id']
+            : null;
+
+        $intendedPaid = match ($paymentType) {
+            'cash' => $total,
+            'partial' => round((float) ($data['paid_amount'] ?? 0), 2),
+            default => 0.0,
+        };
+
+        if ($paymentType === 'partial') {
+            if ($intendedPaid <= 0 || $intendedPaid >= $total) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => ['دفعة من المبلغ يجب أن تكون أكبر من صفر وأقل من إجمالي الفاتورة.'],
+                ]);
+            }
+        }
+
+        if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+            ]);
+        }
+
+        return [$paymentType, $intendedPaid, $cashBoxId];
+    }
+
+    public function customerBalance(Customer $customer): float
+    {
+        return (float) $this->customerStatement($customer)['balance'];
     }
 
     public function createReturn(array $data, array $lines, User $user): SalesReturn

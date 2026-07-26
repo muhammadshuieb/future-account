@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class JournalEntry extends Model
 {
     protected $fillable = [
+        'branch_id',
         'entry_number',
         'entry_date',
         'description',
@@ -30,6 +31,11 @@ class JournalEntry extends Model
     public function details(): HasMany
     {
         return $this->hasMany(JournalDetail::class)->orderBy('line_order');
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function creator(): BelongsTo

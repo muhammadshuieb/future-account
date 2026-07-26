@@ -29,6 +29,8 @@ class PurchaseService
         return DB::transaction(function () use ($data, $lines, $user) {
             [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines);
 
+            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
+
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? null,
@@ -41,15 +43,18 @@ class PurchaseService
                 'invoice_date' => $data['invoice_date'],
                 'supplier_id' => $data['supplier_id'],
                 'warehouse_id' => $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null),
+                'cash_box_id' => $cashBoxId,
                 'branch_id' => $data['branch_id'] ?? null,
                 'purchase_order_id' => $data['purchase_order_id'] ?? null,
                 'status' => 'draft',
+                'payment_type' => $paymentType,
                 'currency' => $fx['currency'],
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
                 'tax_amount' => $tax,
                 'total' => $total,
+                'paid_amount' => in_array($paymentType, ['cash', 'partial'], true) ? $intendedPaid : 0,
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $user->id,
             ]);
@@ -59,31 +64,44 @@ class PurchaseService
             }
 
             if (($data['status'] ?? 'draft') === 'posted') {
-                return $this->postInvoice($invoice, $user);
+                return $this->postInvoice($invoice, $user, $intendedPaid);
             }
 
-            return $invoice->load(['lines.product', 'supplier', 'warehouse']);
+            return $invoice->load(['lines.product', 'supplier', 'warehouse', 'cashBox', 'attachments']);
         });
     }
 
-    public function postInvoice(PurchaseInvoice $invoice, User $user): PurchaseInvoice
+    public function postInvoice(PurchaseInvoice $invoice, User $user, ?float $intendedPaidOverride = null): PurchaseInvoice
     {
         if ($invoice->status === 'posted') {
             throw ValidationException::withMessages(['status' => ['فاتورة المشتريات مرحّلة مسبقاً.']]);
         }
 
-        return DB::transaction(function () use ($invoice, $user) {
+        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
             $invoice->load(['lines.product', 'supplier']);
 
             if (! $invoice->warehouse_id) {
                 throw ValidationException::withMessages(['warehouse_id' => ['يجب تحديد المخزن قبل الترحيل.']]);
             }
 
+            $paymentType = $invoice->payment_type ?: 'credit';
+            $intendedPaid = $intendedPaidOverride;
+            if ($intendedPaid === null) {
+                $intendedPaid = match ($paymentType) {
+                    'cash' => (float) $invoice->total,
+                    'partial' => (float) $invoice->paid_amount,
+                    default => 0.0,
+                };
+            }
+
+            $invoice->update(['paid_amount' => 0]);
+
             $ap = $invoice->supplier->account_id
                 ? Account::query()->findOrFail($invoice->supplier->account_id)
                 : Account::query()->where('code', '2101')->firstOrFail();
             $inventory = Account::query()->where('code', '1104')->firstOrFail();
-            $vat = Account::query()->where('code', '2102')->firstOrFail();
+            $vatInput = Account::query()->where('code', '1106')->first()
+                ?? Account::query()->where('code', '2102')->firstOrFail();
 
             $rate = (float) ($invoice->exchange_rate ?: 1);
             $baseSubtotal = round((float) $invoice->subtotal * $rate, 2);
@@ -95,8 +113,7 @@ class PurchaseService
             ];
 
             if ($baseTax > 0) {
-                // Input VAT simplified as debit to VAT (offset against payable in full ERP)
-                $glLines[] = ['account_id' => $vat->id, 'debit' => $baseTax, 'credit' => 0];
+                $glLines[] = ['account_id' => $vatInput->id, 'debit' => $baseTax, 'credit' => 0];
             }
 
             $glLines[] = ['account_id' => $ap->id, 'debit' => 0, 'credit' => $baseTotal];
@@ -137,10 +154,73 @@ class PurchaseService
                 'posted_at' => now(),
             ]);
 
+            if ($intendedPaid > 0) {
+                if (! $invoice->cash_box_id) {
+                    throw ValidationException::withMessages([
+                        'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+                    ]);
+                }
+
+                $this->createPayment([
+                    'payment_date' => $invoice->invoice_date->toDateString(),
+                    'supplier_id' => $invoice->supplier_id,
+                    'purchase_invoice_id' => $invoice->id,
+                    'cash_box_id' => $invoice->cash_box_id,
+                    'method' => 'cash',
+                    'amount' => $intendedPaid,
+                    'currency' => $invoice->currency,
+                    'exchange_rate' => $invoice->exchange_rate,
+                    'status' => 'posted',
+                    'notes' => 'صرف تلقائي لفاتورة '.$invoice->invoice_number,
+                ], $user);
+            }
+
             $this->audit->log($user, 'purchase_invoice.posted', $invoice);
 
-            return $invoice->fresh(['lines.product', 'supplier', 'warehouse', 'journalEntry']);
+            return $invoice->fresh(['lines.product', 'supplier', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
+    }
+
+    /**
+     * @return array{0: string, 1: float, 2: ?int}
+     */
+    protected function normalizePaymentTerms(array $data, float $total): array
+    {
+        $paymentType = strtolower((string) ($data['payment_type'] ?? 'credit'));
+        if (! in_array($paymentType, ['cash', 'credit', 'partial'], true)) {
+            throw ValidationException::withMessages(['payment_type' => ['نوع الدفع غير صالح.']]);
+        }
+
+        $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
+            ? (int) $data['cash_box_id']
+            : null;
+
+        $intendedPaid = match ($paymentType) {
+            'cash' => $total,
+            'partial' => round((float) ($data['paid_amount'] ?? 0), 2),
+            default => 0.0,
+        };
+
+        if ($paymentType === 'partial') {
+            if ($intendedPaid <= 0 || $intendedPaid >= $total) {
+                throw ValidationException::withMessages([
+                    'paid_amount' => ['دفعة من المبلغ يجب أن تكون أكبر من صفر وأقل من إجمالي الفاتورة.'],
+                ]);
+            }
+        }
+
+        if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+            ]);
+        }
+
+        return [$paymentType, $intendedPaid, $cashBoxId];
+    }
+
+    public function supplierBalance(Supplier $supplier): float
+    {
+        return (float) $this->supplierStatement($supplier)['balance'];
     }
 
     public function createReturn(array $data, array $lines, User $user): PurchaseReturn

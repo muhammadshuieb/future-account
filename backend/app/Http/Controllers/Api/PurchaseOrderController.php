@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PurchaseOrder;
 use App\Services\PurchaseService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class PurchaseOrderController extends ApiController
 {
     public function __construct(protected PurchaseService $purchases) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('purchases.view');
+        $query = PurchaseOrder::query()->with(['supplier', 'warehouse', 'request'])->latest('id');
+        ListSearch::apply($query, $request, ['order_number', 'notes', 'currency', 'total', 'status'], [
+            'supplier' => ['name', 'code'],
+        ]);
 
-        return $this->ok(PurchaseOrder::query()->with(['supplier', 'warehouse', 'request'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

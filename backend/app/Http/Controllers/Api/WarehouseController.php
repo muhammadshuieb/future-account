@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Warehouse;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -12,10 +13,7 @@ class WarehouseController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = Warehouse::query()->with('branch')->orderBy('code');
-        if ($request->filled('search')) {
-            $s = $request->string('search');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
-        }
+        ListSearch::apply($query, $request, ['name', 'code', 'location', 'notes']);
 
         return $this->ok($query->get());
     }

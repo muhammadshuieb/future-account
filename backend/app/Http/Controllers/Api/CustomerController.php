@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Customer;
 use App\Services\SalesService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,12 +16,15 @@ class CustomerController extends ApiController
     {
         $this->authorizePermission('customers.view');
         $query = Customer::query()->with('branch')->orderBy('code');
-        if ($request->filled('search')) {
-            $s = $request->string('search');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
-        }
+        ListSearch::apply($query, $request, ['name', 'code', 'phone', 'email', 'tax_number', 'notes']);
 
-        return $this->ok($query->get());
+        $rows = $query->get()->map(function (Customer $customer) {
+            $customer->setAttribute('balance', $this->sales->customerBalance($customer));
+
+            return $customer;
+        });
+
+        return $this->ok($rows);
     }
 
     public function store(Request $request): JsonResponse
@@ -46,6 +50,8 @@ class CustomerController extends ApiController
     public function show(Customer $customer): JsonResponse
     {
         $this->authorizePermission('customers.view');
+
+        $customer->setAttribute('balance', $this->sales->customerBalance($customer));
 
         return $this->ok($customer->load('branch'));
     }

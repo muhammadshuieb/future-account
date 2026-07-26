@@ -88,6 +88,9 @@ until php -r "try { new PDO('pgsql:host='.getenv('DB_HOST').';port='.(getenv('DB
 done
 echo "PostgreSQL is ready."
 
+mkdir -p storage/app/attachments storage/app/backups storage/app/public storage/framework/{cache,sessions,views} storage/logs
+chmod -R ug+rwx storage bootstrap/cache || true
+
 php artisan config:clear --no-ansi || true
 php artisan migrate --force --no-ansi
 

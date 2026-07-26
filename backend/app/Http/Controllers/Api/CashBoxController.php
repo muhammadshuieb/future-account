@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\CashBox;
 use App\Services\CashService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class CashBoxController extends ApiController
 {
     public function __construct(protected CashService $cash) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.view');
 
-        $boxes = CashBox::query()->with(['branch', 'account'])->orderBy('code')->get()
+        $query = CashBox::query()->with(['branch', 'account'])->orderBy('code');
+        ListSearch::apply($query, $request, ['name', 'code', 'currency'], [
+            'branch' => ['name', 'code'],
+        ]);
+        $boxes = $query->get()
             ->map(function (CashBox $box) {
                 $box->setAttribute('balance', $this->cash->cashBoxCurrencyBalance($box));
 

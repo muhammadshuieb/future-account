@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { formatDateTimeLocal } from '@/lib/dates'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { EmptyState, LoadingBlock, PageHeader, Panel } from '@/components/ui'
+import { EmptyState, ListSearchInput, LoadingBlock, PageHeader, Panel } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 type AuditRow = {
   id: number
@@ -39,9 +40,10 @@ function actionKey(action: string): string {
 
 export default function AuditLogPage() {
   const { t } = useTranslation()
+  const search = useListSearch()
   const logs = useQuery({
-    queryKey: ['audit-logs'],
-    queryFn: async () => (await api.get('/audit-logs')).data.data as AuditRow[],
+    queryKey: ['audit-logs', search.debouncedQ],
+    queryFn: async () => (await api.get('/audit-logs', { params: search.params })).data.data as AuditRow[],
   })
 
   if (logs.isLoading) return <LoadingBlock />
@@ -53,8 +55,14 @@ export default function AuditLogPage() {
       <PageHeader
         title={t('audit.title')}
         subtitle={t('audit.subtitle')}
-        actions={<ExcelExportButton path="/exports/audit-logs" />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
+            <ExcelExportButton path="/exports/audit-logs" />
+          </div>
+        }
       />
+      {search.debouncedQ && rows.length === 0 ? <EmptyState title={t('common.noSearchResults')} /> : null}
       <Panel>
         <div className="table-wrap">
           <table className="data-table">

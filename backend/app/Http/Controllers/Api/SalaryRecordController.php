@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Employee;
 use App\Models\SalaryRecord;
 use App\Services\JournalEntryService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -13,11 +14,15 @@ class SalaryRecordController extends ApiController
 {
     public function __construct(protected JournalEntryService $journals) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('hr.view');
+        $query = SalaryRecord::query()->with('employee')->latest('id');
+        ListSearch::apply($query, $request, ['period', 'status', 'notes'], [
+            'employee' => ['name', 'employee_number'],
+        ]);
 
-        return $this->ok(SalaryRecord::query()->with('employee')->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

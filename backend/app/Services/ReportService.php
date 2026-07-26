@@ -3,16 +3,20 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\Branch;
+use App\Models\CashBox;
 use App\Models\JournalDetail;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
 use App\Models\SalesInvoice;
+use App\Models\StockLevel;
 use App\Models\StockMovement;
-use Illuminate\Support\Facades\DB;
+use App\Models\Warehouse;
+use Illuminate\Database\Eloquent\Builder;
 
 class ReportService
 {
-    public function trialBalance(?string $asOf = null): array
+    public function trialBalance(?string $asOf = null, ?int $branchId = null): array
     {
         $asOf = $asOf ?: now()->toDateString();
 
@@ -20,11 +24,12 @@ class ReportService
             ->where('is_group', false)
             ->orderBy('code')
             ->get()
-            ->map(function (Account $account) use ($asOf) {
+            ->map(function (Account $account) use ($asOf, $branchId) {
                 $agg = JournalDetail::query()
                     ->where('account_id', $account->id)
-                    ->whereHas('journalEntry', function ($q) use ($asOf) {
+                    ->whereHas('journalEntry', function ($q) use ($asOf, $branchId) {
                         $q->where('status', 'posted')->whereDate('entry_date', '<=', $asOf);
+                        $this->scopeJournalBranch($q, $branchId);
                     })
                     ->selectRaw('COALESCE(SUM(debit),0) as debit, COALESCE(SUM(credit),0) as credit')
                     ->first();
@@ -51,33 +56,35 @@ class ReportService
 
         return [
             'as_of' => $asOf,
+            'branch_id' => $branchId,
             'rows' => $rows,
             'total_debit' => round(collect($rows)->sum('debit'), 2),
             'total_credit' => round(collect($rows)->sum('credit'), 2),
         ];
     }
 
-    public function incomeStatement(?string $from = null, ?string $to = null): array
+    public function incomeStatement(?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
         $from = $from ?: now()->startOfYear()->toDateString();
         $to = $to ?: now()->toDateString();
 
-        $revenue = $this->sumByType('revenue', $from, $to);
-        $expense = $this->sumByType('expense', $from, $to);
+        $revenue = $this->sumByType('revenue', $from, $to, $branchId);
+        $expense = $this->sumByType('expense', $from, $to, $branchId);
 
         return [
             'from' => $from,
             'to' => $to,
+            'branch_id' => $branchId,
             'revenue' => $revenue,
             'expense' => $expense,
             'net_income' => round($revenue['total'] - $expense['total'], 2),
         ];
     }
 
-    public function balanceSheet(?string $asOf = null): array
+    public function balanceSheet(?string $asOf = null, ?int $branchId = null): array
     {
         $asOf = $asOf ?: now()->toDateString();
-        $tb = $this->trialBalance($asOf);
+        $tb = $this->trialBalance($asOf, $branchId);
 
         $group = fn (string $type) => collect($tb['rows'])->where('type', $type)->values()->all();
 
@@ -85,10 +92,11 @@ class ReportService
         $liabilities = $group('liability');
         $equity = $group('equity');
 
-        $income = $this->incomeStatement(now()->startOfYear()->toDateString(), $asOf);
+        $income = $this->incomeStatement(now()->startOfYear()->toDateString(), $asOf, $branchId);
 
         return [
             'as_of' => $asOf,
+            'branch_id' => $branchId,
             'assets' => $assets,
             'liabilities' => $liabilities,
             'equity' => $equity,
@@ -99,7 +107,7 @@ class ReportService
         ];
     }
 
-    public function cashFlow(?string $from = null, ?string $to = null): array
+    public function cashFlow(?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
         $from = $from ?: now()->startOfYear()->toDateString();
         $to = $to ?: now()->toDateString();
@@ -108,12 +116,13 @@ class ReportService
 
         $movements = JournalDetail::query()
             ->whereIn('account_id', $cashAccounts)
-            ->whereHas('journalEntry', function ($q) use ($from, $to) {
+            ->whereHas('journalEntry', function ($q) use ($from, $to, $branchId) {
                 $q->where('status', 'posted')
                     ->whereDate('entry_date', '>=', $from)
                     ->whereDate('entry_date', '<=', $to);
+                $this->scopeJournalBranch($q, $branchId);
             })
-            ->with('journalEntry:id,entry_number,entry_date,description')
+            ->with('journalEntry:id,entry_number,entry_date,description,branch_id')
             ->orderBy('id')
             ->get()
             ->map(fn (JournalDetail $d) => [
@@ -127,6 +136,7 @@ class ReportService
         return [
             'from' => $from,
             'to' => $to,
+            'branch_id' => $branchId,
             'rows' => $movements,
             'total_inflow' => round($movements->sum('inflow'), 2),
             'total_outflow' => round($movements->sum('outflow'), 2),
@@ -192,10 +202,18 @@ class ReportService
         ];
     }
 
-    public function inventoryReport(): array
+    public function inventoryReport(?int $branchId = null): array
     {
+        $warehouseIds = $branchId
+            ? Warehouse::query()->where('branch_id', $branchId)->pluck('id')
+            : null;
+
         $products = Product::query()
-            ->withSum('stockLevels as on_hand', 'quantity')
+            ->withSum(['stockLevels as on_hand' => function ($q) use ($warehouseIds) {
+                if ($warehouseIds !== null) {
+                    $q->whereIn('warehouse_id', $warehouseIds);
+                }
+            }], 'quantity')
             ->with(['category:id,name', 'unit:id,name,symbol'])
             ->orderBy('sku')
             ->get()
@@ -207,15 +225,18 @@ class ReportService
                 'cost_price' => (float) $p->cost_price,
                 'value' => round((float) ($p->on_hand ?? 0) * (float) $p->cost_price, 2),
                 'reorder_level' => (float) $p->reorder_level,
-            ]);
+            ])
+            ->when($branchId, fn ($c) => $c->filter(fn ($r) => abs($r['on_hand']) > 0.0001)->values())
+            ->values();
 
         return [
+            'branch_id' => $branchId,
             'rows' => $products,
             'total_value' => round($products->sum('value'), 2),
         ];
     }
 
-    public function productMovement(int $productId, ?string $from = null, ?string $to = null): array
+    public function productMovement(int $productId, ?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
         $from = $from ?: now()->startOfMonth()->toDateString();
         $to = $to ?: now()->toDateString();
@@ -224,14 +245,20 @@ class ReportService
             ->where('product_id', $productId)
             ->whereDate('movement_date', '>=', $from)
             ->whereDate('movement_date', '<=', $to)
-            ->with('warehouse:id,name,code')
+            ->when($branchId, fn ($q) => $q->whereHas('warehouse', fn ($wq) => $wq->where('branch_id', $branchId)))
+            ->with('warehouse:id,name,code,branch_id')
             ->orderBy('movement_date')
             ->get();
 
-        return ['from' => $from, 'to' => $to, 'rows' => $rows];
+        return [
+            'from' => $from,
+            'to' => $to,
+            'branch_id' => $branchId,
+            'rows' => $rows,
+        ];
     }
 
-    public function taxReport(?string $from = null, ?string $to = null): array
+    public function taxReport(?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
         $from = $from ?: now()->startOfMonth()->toDateString();
         $to = $to ?: now()->toDateString();
@@ -240,17 +267,20 @@ class ReportService
             ->where('status', 'posted')
             ->whereDate('invoice_date', '>=', $from)
             ->whereDate('invoice_date', '<=', $to)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->sum('tax_amount');
 
         $purchaseTax = (float) PurchaseInvoice::query()
             ->where('status', 'posted')
             ->whereDate('invoice_date', '>=', $from)
             ->whereDate('invoice_date', '<=', $to)
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->sum('tax_amount');
 
         return [
             'from' => $from,
             'to' => $to,
+            'branch_id' => $branchId,
             'output_vat' => round($salesTax, 2),
             'input_vat' => round($purchaseTax, 2),
             'net_vat' => round($salesTax - $purchaseTax, 2),
@@ -258,7 +288,7 @@ class ReportService
         ];
     }
 
-    public function generalLedger(int $accountId, ?string $from = null, ?string $to = null): array
+    public function generalLedger(int $accountId, ?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
         $from = $from ?: now()->startOfYear()->toDateString();
         $to = $to ?: now()->toDateString();
@@ -266,7 +296,10 @@ class ReportService
 
         $openingAgg = JournalDetail::query()
             ->where('account_id', $accountId)
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->whereDate('entry_date', '<', $from))
+            ->whereHas('journalEntry', function ($q) use ($from, $branchId) {
+                $q->where('status', 'posted')->whereDate('entry_date', '<', $from);
+                $this->scopeJournalBranch($q, $branchId);
+            })
             ->selectRaw('COALESCE(SUM(debit),0) as debit, COALESCE(SUM(credit),0) as credit')
             ->first();
 
@@ -277,9 +310,12 @@ class ReportService
             : $openingCredit - $openingDebit;
 
         $details = JournalDetail::query()
-            ->with(['journalEntry:id,entry_number,entry_date,description,status'])
+            ->with(['journalEntry:id,entry_number,entry_date,description,status,branch_id'])
             ->where('account_id', $accountId)
-            ->whereHas('journalEntry', fn ($q) => $q->where('status', 'posted')->whereBetween('entry_date', [$from, $to]))
+            ->whereHas('journalEntry', function ($q) use ($from, $to, $branchId) {
+                $q->where('status', 'posted')->whereBetween('entry_date', [$from, $to]);
+                $this->scopeJournalBranch($q, $branchId);
+            })
             ->join('journal_entries', 'journal_details.journal_entry_id', '=', 'journal_entries.id')
             ->orderBy('journal_entries.entry_date')
             ->orderBy('journal_entries.id')
@@ -315,48 +351,143 @@ class ReportService
             ],
             'from' => $from,
             'to' => $to,
+            'branch_id' => $branchId,
             'opening_balance' => round($openingBalance, 2),
             'closing_balance' => round($running, 2),
             'rows' => $rows,
         ];
     }
 
-    public function profitReport(?string $from = null, ?string $to = null): array
+    public function profitReport(?string $from = null, ?string $to = null, ?int $branchId = null): array
     {
-        $sales = $this->salesReport($from, $to);
+        $sales = $this->salesReport($from, $to, $branchId);
+        $from = $sales['from'];
+        $to = $sales['to'];
+
         $cogs = JournalDetail::query()
             ->whereHas('account', fn ($q) => $q->where('code', '5101'))
-            ->whereHas('journalEntry', function ($q) use ($from, $to) {
-                $from = $from ?: now()->startOfMonth()->toDateString();
-                $to = $to ?: now()->toDateString();
+            ->whereHas('journalEntry', function ($q) use ($from, $to, $branchId) {
                 $q->where('status', 'posted')
                     ->whereDate('entry_date', '>=', $from)
                     ->whereDate('entry_date', '<=', $to);
+                $this->scopeJournalBranch($q, $branchId);
             })
             ->sum('debit');
 
         $gross = round($sales['total'] - (float) $cogs, 2);
 
         return [
-            'from' => $sales['from'],
-            'to' => $sales['to'],
+            'from' => $from,
+            'to' => $to,
+            'branch_id' => $branchId,
             'sales' => $sales['total'],
             'cogs' => round((float) $cogs, 2),
             'gross_profit' => $gross,
         ];
     }
 
-    protected function sumByType(string $type, string $from, string $to): array
+    /**
+     * Complete branch report: key operational figures for one branch and period.
+     */
+    public function branchCompleteReport(int $branchId, ?string $from = null, ?string $to = null): array
+    {
+        $from = $from ?: now()->startOfMonth()->toDateString();
+        $to = $to ?: now()->toDateString();
+        $branch = Branch::query()->findOrFail($branchId);
+
+        $sales = $this->salesReport($from, $to, $branchId);
+        $purchases = $this->purchaseReport($from, $to, $branchId);
+        $profit = $this->profitReport($from, $to, $branchId);
+        $inventory = $this->inventoryReport($branchId);
+        $tax = $this->taxReport($from, $to, $branchId);
+
+        $receivables = (float) SalesInvoice::query()
+            ->where('status', 'posted')
+            ->where('branch_id', $branchId)
+            ->whereDate('invoice_date', '<=', $to)
+            ->selectRaw('COALESCE(SUM(COALESCE(base_amount, total) - COALESCE(paid_amount, 0) * COALESCE(exchange_rate, 1)), 0) as bal')
+            ->value('bal');
+
+        // Prefer document-currency unpaid converted roughly via remaining * exchange when base unpaid not tracked.
+        $receivablesAlt = (float) SalesInvoice::query()
+            ->where('status', 'posted')
+            ->where('branch_id', $branchId)
+            ->whereDate('invoice_date', '<=', $to)
+            ->get()
+            ->sum(fn ($i) => max(0, ((float) ($i->base_amount ?: $i->total)) - ((float) $i->paid_amount * (float) ($i->exchange_rate ?: 1))));
+
+        $payables = (float) PurchaseInvoice::query()
+            ->where('status', 'posted')
+            ->where('branch_id', $branchId)
+            ->whereDate('invoice_date', '<=', $to)
+            ->get()
+            ->sum(fn ($i) => max(0, ((float) ($i->base_amount ?: $i->total)) - ((float) $i->paid_amount * (float) ($i->exchange_rate ?: 1))));
+
+        $cashBoxes = CashBox::query()
+            ->where('branch_id', $branchId)
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'currency']);
+
+        $warehouseIds = Warehouse::query()->where('branch_id', $branchId)->pluck('id');
+        $stockRows = StockLevel::query()
+            ->whereIn('warehouse_id', $warehouseIds)
+            ->with('product:id,cost_price')
+            ->get();
+        $stockValue = round($stockRows->sum(fn ($l) => (float) $l->quantity * (float) ($l->product?->cost_price ?? 0)), 2);
+
+        return [
+            'branch' => [
+                'id' => $branch->id,
+                'code' => $branch->code,
+                'name' => $branch->name,
+            ],
+            'from' => $from,
+            'to' => $to,
+            'sales' => [
+                'count' => $sales['count'],
+                'total' => $sales['total'],
+            ],
+            'purchases' => [
+                'count' => $purchases['count'],
+                'total' => $purchases['total'],
+            ],
+            'profit' => [
+                'sales' => $profit['sales'],
+                'cogs' => $profit['cogs'],
+                'gross_profit' => $profit['gross_profit'],
+            ],
+            'receivables' => round($receivablesAlt ?: $receivables, 2),
+            'payables' => round($payables, 2),
+            'cash_boxes' => $cashBoxes,
+            'stock_value' => $stockValue ?: $inventory['total_value'],
+            'inventory_total_value' => $inventory['total_value'],
+            'tax' => [
+                'output_vat' => $tax['output_vat'],
+                'input_vat' => $tax['input_vat'],
+                'net_vat' => $tax['net_vat'],
+            ],
+        ];
+    }
+
+    protected function scopeJournalBranch(Builder $q, ?int $branchId): void
+    {
+        if ($branchId) {
+            $q->where('branch_id', $branchId);
+        }
+    }
+
+    protected function sumByType(string $type, string $from, string $to, ?int $branchId = null): array
     {
         $accounts = Account::query()->where('type', $type)->where('is_group', false)->orderBy('code')->get();
 
-        $rows = $accounts->map(function (Account $account) use ($from, $to) {
+        $rows = $accounts->map(function (Account $account) use ($from, $to, $branchId) {
             $agg = JournalDetail::query()
                 ->where('account_id', $account->id)
-                ->whereHas('journalEntry', function ($q) use ($from, $to) {
+                ->whereHas('journalEntry', function ($q) use ($from, $to, $branchId) {
                     $q->where('status', 'posted')
                         ->whereDate('entry_date', '>=', $from)
                         ->whereDate('entry_date', '<=', $to);
+                    $this->scopeJournalBranch($q, $branchId);
                 })
                 ->selectRaw('COALESCE(SUM(debit),0) as debit, COALESCE(SUM(credit),0) as credit')
                 ->first();

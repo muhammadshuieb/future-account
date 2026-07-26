@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Attendance;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,6 +16,9 @@ class AttendanceController extends ApiController
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->integer('employee_id'));
         }
+        ListSearch::apply($query, $request, ['status', 'notes'], [
+            'employee' => ['name', 'employee_number'],
+        ]);
 
         return $this->ok($query->limit(200)->get());
     }

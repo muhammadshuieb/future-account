@@ -4,7 +4,8 @@ import api from '@/lib/api'
 import { monthYm, todayYmd } from '@/lib/dates'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForHrTab } from '@/lib/excelExport'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 const emptyEmp = { employee_number: '', name: '', job_title: '', basic_salary: '0' }
 const emptyAtt = { employee_id: '', attendance_date: todayYmd(), status: 'present', check_in: '09:00', check_out: '17:00' }
@@ -18,11 +19,27 @@ export default function HrPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
+  const search = useListSearch()
 
-  const employees = useQuery({ queryKey: ['employees'], queryFn: async () => (await api.get('/employees')).data.data })
-  const attendances = useQuery({ queryKey: ['attendances'], queryFn: async () => (await api.get('/attendances')).data.data, enabled: tab === 'attendance' })
-  const leaves = useQuery({ queryKey: ['leave-requests'], queryFn: async () => (await api.get('/leave-requests')).data.data, enabled: tab === 'leaves' })
-  const salaries = useQuery({ queryKey: ['salary-records'], queryFn: async () => (await api.get('/salary-records')).data.data, enabled: tab === 'salaries' })
+  const employees = useQuery({
+    queryKey: ['employees', tab === 'employees' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/employees', { params: tab === 'employees' ? search.params : {} })).data.data,
+  })
+  const attendances = useQuery({
+    queryKey: ['attendances', search.debouncedQ],
+    queryFn: async () => (await api.get('/attendances', { params: search.params })).data.data,
+    enabled: tab === 'attendance',
+  })
+  const leaves = useQuery({
+    queryKey: ['leave-requests', search.debouncedQ],
+    queryFn: async () => (await api.get('/leave-requests', { params: search.params })).data.data,
+    enabled: tab === 'leaves',
+  })
+  const salaries = useQuery({
+    queryKey: ['salary-records', search.debouncedQ],
+    queryFn: async () => (await api.get('/salary-records', { params: search.params })).data.data,
+    enabled: tab === 'salaries',
+  })
 
   const [emp, setEmp] = useState(emptyEmp)
   const [att, setAtt] = useState(emptyAtt)
@@ -81,6 +98,7 @@ export default function HrPage() {
         subtitle="موظفون، حضور، إجازات، وسجلات رواتب"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path={`/exports/${excelModuleForHrTab(tab)}`} />
             <Button variant="primary" onClick={openCreate}>إضافة</Button>
           </div>
@@ -97,6 +115,19 @@ export default function HrPage() {
         onChange={(id) => { setTab(id); closeModal() }}
       />
       <Msg message={msg.message} error={msg.error} />
+
+      {search.debouncedQ && tab === 'employees' && !(employees.data || []).length ? (
+        <EmptyState title="لا توجد نتائج مطابقة" />
+      ) : null}
+      {search.debouncedQ && tab === 'attendance' && !(attendances.data || []).length ? (
+        <EmptyState title="لا توجد نتائج مطابقة" />
+      ) : null}
+      {search.debouncedQ && tab === 'leaves' && !(leaves.data || []).length ? (
+        <EmptyState title="لا توجد نتائج مطابقة" />
+      ) : null}
+      {search.debouncedQ && tab === 'salaries' && !(salaries.data || []).length ? (
+        <EmptyState title="لا توجد نتائج مطابقة" />
+      ) : null}
 
       {tab === 'employees' && (
         <Panel>

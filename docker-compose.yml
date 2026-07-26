@@ -56,6 +56,7 @@ services:
       - "8000:8000"
     volumes:
       - future_account_backups:/var/www/html/storage/app/backups
+      - future_account_attachments:/var/www/html/storage/app/attachments
 
   frontend:
     build:
@@ -73,3 +74,4 @@ services:
 volumes:
   future_account_pgdata:
   future_account_backups:
+  future_account_attachments:

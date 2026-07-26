@@ -204,10 +204,10 @@ class ExcelExportService
             ])->all());
 
         $book->addSheet('فواتير المبيعات', [
-            'المعرف', 'الرقم', 'التاريخ', 'العميل', 'الحالة', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الفرع',
+            'المعرف', 'الرقم', 'التاريخ', 'العميل', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الفرع',
         ], SalesInvoice::query()->with('customer')->orderBy('id')->get()->map(fn (SalesInvoice $i) => [
             $i->id, $i->invoice_number, optional($i->invoice_date)?->format('Y-m-d'), $i->customer?->name,
-            $i->status, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount, $i->branch_id,
+            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount, $i->branch_id,
         ])->all());
 
         $book->addSheet('بنود فواتير المبيعات', [
@@ -217,10 +217,10 @@ class ExcelExportService
         ])->all());
 
         $book->addSheet('فواتير المشتريات', [
-            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع',
+            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع',
         ], PurchaseInvoice::query()->with('supplier')->orderBy('id')->get()->map(fn (PurchaseInvoice $i) => [
             $i->id, $i->invoice_number, optional($i->invoice_date)?->format('Y-m-d'), $i->supplier?->name,
-            $i->status, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount,
+            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount,
         ])->all());
 
         $book->addSheet('بنود فواتير المشتريات', [
@@ -372,19 +372,20 @@ class ExcelExportService
         $branchId = $request->query('branch_id');
 
         match ($type) {
-            'trial-balance' => $this->sheetTrialBalance($book, $asOf),
-            'income-statement' => $this->sheetIncomeStatement($book, $from, $to),
-            'balance-sheet' => $this->sheetBalanceSheet($book, $asOf),
-            'cash-flow' => $this->sheetGenericReport($book, 'التدفقات النقدية', $this->reports->cashFlow($from, $to)),
+            'trial-balance' => $this->sheetTrialBalance($book, $asOf, $branchId),
+            'income-statement' => $this->sheetIncomeStatement($book, $from, $to, $branchId),
+            'balance-sheet' => $this->sheetBalanceSheet($book, $asOf, $branchId),
+            'cash-flow' => $this->sheetGenericReport($book, 'التدفقات النقدية', $this->reports->cashFlow($from, $to, $branchId ? (int) $branchId : null)),
             'sales' => $this->sheetSalesReport($book, $from, $to, $branchId),
             'purchases' => $this->sheetPurchasesReport($book, $from, $to, $branchId),
-            'inventory' => $this->sheetInventoryReport($book),
-            'profit' => $this->sheetGenericReport($book, 'مجمل الربح', $this->reports->profitReport($from, $to)),
-            'tax' => $this->sheetGenericReport($book, 'الضريبة', $this->reports->taxReport($from, $to)),
+            'inventory' => $this->sheetInventoryReport($book, $branchId),
+            'profit' => $this->sheetGenericReport($book, 'مجمل الربح', $this->reports->profitReport($from, $to, $branchId ? (int) $branchId : null)),
+            'tax' => $this->sheetGenericReport($book, 'الضريبة', $this->reports->taxReport($from, $to, $branchId ? (int) $branchId : null)),
             'general-ledger' => $this->sheetGeneralLedger($book, $request),
             'product-movement' => $this->sheetProductMovement($book, $request),
             'customer-statement' => $this->sheetPartnerStatement($book, 'customer', (int) $request->query('customer_id'), $from, $to),
             'supplier-statement' => $this->sheetPartnerStatement($book, 'supplier', (int) $request->query('supplier_id'), $from, $to),
+            'branch-complete' => $this->sheetBranchComplete($book, $request),
             default => throw new \InvalidArgumentException('تقرير غير معروف: '.$type),
         };
     }
@@ -422,10 +423,10 @@ class ExcelExportService
             $q->where('currency', $request->query('currency'));
         }
         $book->addSheet('فواتير المبيعات', [
-            'الرقم', 'التاريخ', 'العميل', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
+            'الرقم', 'التاريخ', 'العميل', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
         ], $q->get()->map(fn ($r) => [
             $r->invoice_number, optional($r->invoice_date)?->format('Y-m-d'), $r->customer?->name,
-            $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
+            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
         ])->all());
     }
 
@@ -483,10 +484,10 @@ class ExcelExportService
             $q->where('currency', $request->query('currency'));
         }
         $book->addSheet('فواتير المشتريات', [
-            'الرقم', 'التاريخ', 'المورد', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
+            'الرقم', 'التاريخ', 'المورد', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
         ], $q->get()->map(fn ($r) => [
             $r->invoice_number, optional($r->invoice_date)?->format('Y-m-d'), $r->supplier?->name,
-            $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
+            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
         ])->all());
     }
 
@@ -666,18 +667,18 @@ class ExcelExportService
             ])->all());
     }
 
-    protected function sheetTrialBalance(ExcelWorkbook $book, ?string $asOf): void
+    protected function sheetTrialBalance(ExcelWorkbook $book, ?string $asOf, mixed $branchId = null): void
     {
-        $data = $this->reports->trialBalance($asOf);
+        $data = $this->reports->trialBalance($asOf, $branchId ? (int) $branchId : null);
         $book->addSheet('ميزان المراجعة', ['الرمز', 'الحساب', 'النوع', 'مدين', 'دائن', 'الرصيد'],
             collect($data['rows'])->map(fn ($r) => [
                 $r['code'], $r['name'], $r['type'], $r['debit'], $r['credit'], $r['balance'],
             ])->all());
     }
 
-    protected function sheetIncomeStatement(ExcelWorkbook $book, ?string $from, ?string $to): void
+    protected function sheetIncomeStatement(ExcelWorkbook $book, ?string $from, ?string $to, mixed $branchId = null): void
     {
-        $data = $this->reports->incomeStatement($from, $to);
+        $data = $this->reports->incomeStatement($from, $to, $branchId ? (int) $branchId : null);
         $rows = [];
         foreach (($data['revenue']['rows'] ?? []) as $a) {
             $rows[] = ['إيراد', $a['code'] ?? '', $a['name'] ?? '', $a['amount'] ?? 0];
@@ -689,9 +690,9 @@ class ExcelExportService
         $book->addSheet('قائمة الدخل', ['القسم', 'الرمز', 'الحساب', 'المبلغ'], $rows);
     }
 
-    protected function sheetBalanceSheet(ExcelWorkbook $book, ?string $asOf): void
+    protected function sheetBalanceSheet(ExcelWorkbook $book, ?string $asOf, mixed $branchId = null): void
     {
-        $data = $this->reports->balanceSheet($asOf);
+        $data = $this->reports->balanceSheet($asOf, $branchId ? (int) $branchId : null);
         $rows = [];
         foreach (['assets' => 'أصول', 'liabilities' => 'خصوم', 'equity' => 'حقوق ملكية'] as $key => $label) {
             foreach ($data[$key] ?? [] as $r) {
@@ -744,9 +745,9 @@ class ExcelExportService
         ]);
     }
 
-    protected function sheetInventoryReport(ExcelWorkbook $book): void
+    protected function sheetInventoryReport(ExcelWorkbook $book, mixed $branchId = null): void
     {
-        $data = $this->reports->inventoryReport();
+        $data = $this->reports->inventoryReport($branchId ? (int) $branchId : null);
         $this->sheetGenericReport($book, 'تقرير المخزون', $data);
     }
 
@@ -756,7 +757,8 @@ class ExcelExportService
         if ($accountId <= 0) {
             throw new \InvalidArgumentException('account_id مطلوب.');
         }
-        $data = $this->reports->generalLedger($accountId, $request->query('from'), $request->query('to'));
+        $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
+        $data = $this->reports->generalLedger($accountId, $request->query('from'), $request->query('to'), $branchId);
         $this->sheetGenericReport($book, 'دفتر الأستاذ', $data);
     }
 
@@ -766,8 +768,34 @@ class ExcelExportService
         if ($productId <= 0) {
             throw new \InvalidArgumentException('product_id مطلوب.');
         }
-        $data = $this->reports->productMovement($productId, $request->query('from'), $request->query('to'));
+        $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
+        $data = $this->reports->productMovement($productId, $request->query('from'), $request->query('to'), $branchId);
         $this->sheetGenericReport($book, 'حركة صنف', $data);
+    }
+
+    protected function sheetBranchComplete(ExcelWorkbook $book, Request $request): void
+    {
+        $branchId = (int) $request->query('branch_id');
+        if ($branchId <= 0) {
+            throw new \InvalidArgumentException('branch_id مطلوب.');
+        }
+        $data = $this->reports->branchCompleteReport($branchId, $request->query('from'), $request->query('to'));
+        $book->addSheet('تقرير الفرع الشامل', ['البند', 'القيمة'], [
+            ['الفرع', ($data['branch']['code'] ?? '').' — '.($data['branch']['name'] ?? '')],
+            ['من', $data['from'] ?? ''],
+            ['إلى', $data['to'] ?? ''],
+            ['عدد فواتير المبيعات', $data['sales']['count'] ?? 0],
+            ['إجمالي المبيعات', $data['sales']['total'] ?? 0],
+            ['عدد فواتير المشتريات', $data['purchases']['count'] ?? 0],
+            ['إجمالي المشتريات', $data['purchases']['total'] ?? 0],
+            ['مجمل الربح', $data['profit']['gross_profit'] ?? 0],
+            ['الذمم المدينة', $data['receivables'] ?? 0],
+            ['الذمم الدائنة', $data['payables'] ?? 0],
+            ['قيمة المخزون', $data['stock_value'] ?? 0],
+            ['ضريبة المخرجات', $data['tax']['output_vat'] ?? 0],
+            ['ضريبة المدخلات', $data['tax']['input_vat'] ?? 0],
+            ['صافي الضريبة', $data['tax']['net_vat'] ?? 0],
+        ]);
     }
 
     protected function sheetPartnerStatement(ExcelWorkbook $book, string $kind, int $id, ?string $from, ?string $to): void

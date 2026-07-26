@@ -9,9 +9,10 @@ import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForPartnersTab } from '@/lib/excelExport'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
-type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean }
+type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean; balance?: number }
 
 const PARTNER_TABS = ['customers', 'suppliers'] as const
 const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' }
@@ -26,9 +27,16 @@ export default function PartnersPage() {
   const [form, setForm] = useState(emptyForm)
   const qc = useQueryClient()
   const msg = useFormMessage()
+  const search = useListSearch()
 
-  const customers = useQuery({ queryKey: ['customers'], queryFn: async () => (await api.get('/customers')).data.data as PartnerRow[] })
-  const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: async () => (await api.get('/suppliers')).data.data as PartnerRow[] })
+  const customers = useQuery({
+    queryKey: ['customers', search.debouncedQ],
+    queryFn: async () => (await api.get('/customers', { params: search.params })).data.data as PartnerRow[],
+  })
+  const suppliers = useQuery({
+    queryKey: ['suppliers', search.debouncedQ],
+    queryFn: async () => (await api.get('/suppliers', { params: search.params })).data.data as PartnerRow[],
+  })
   const currencies = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string },
@@ -43,6 +51,22 @@ export default function PartnersPage() {
   })
 
   const rows = tab === 'customers' ? customers.data : suppliers.data
+  const totalBalance = (rows || []).reduce((sum, r) => sum + (Number(r.balance) || 0), 0)
+
+  function balanceLabel(balance: number) {
+    const abs = Math.abs(balance)
+    if (tab === 'customers') {
+      // positive = customer owes us (عليه)
+      if (balance > 0.009) return `${formatMoney(abs, base)} — عليه`
+      if (balance < -0.009) return `${formatMoney(abs, base)} — له`
+      return formatMoney(0, base)
+    }
+    // suppliers: positive = we owe them (له علينا / عليه لنا depending on convention)
+    // statement: invoices increase credit balance (we owe), payments reduce
+    if (balance > 0.009) return `${formatMoney(abs, base)} — له`
+    if (balance < -0.009) return `${formatMoney(abs, base)} — عليه`
+    return formatMoney(0, base)
+  }
 
   function openCreate() {
     setEditingId(null)
@@ -97,6 +121,7 @@ export default function PartnersPage() {
         subtitle="بطاقات الاتصال، حدود الائتمان، وكشوف الحساب"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path={`/exports/${excelModuleForPartnersTab(tab)}`} />
             <Button variant="primary" onClick={openCreate}>إضافة</Button>
           </div>
@@ -113,13 +138,20 @@ export default function PartnersPage() {
       />
       <Msg message={msg.message} error={msg.error} />
 
+      {search.debouncedQ && !(rows || []).length ? <EmptyState title="لا توجد نتائج مطابقة" /> : null}
+
       <Panel>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 px-4 py-3 text-sm">
+          <span className="text-black/60">إجمالي الأرصدة</span>
+          <strong className="tabular-nums">{balanceLabel(totalBalance)}</strong>
+        </div>
         <table className="w-full text-sm">
           <thead className="bg-mist text-right text-black/60">
             <tr>
               <th className="px-4 py-3">رمز</th>
               <th className="px-4 py-3">الاسم</th>
               <th className="px-4 py-3">هاتف</th>
+              <th className="px-4 py-3">الرصيد</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -136,6 +168,7 @@ export default function PartnersPage() {
                 <td className="px-4 py-3 font-mono">{r.code}</td>
                 <td className="px-4 py-3">{r.name}</td>
                 <td className="px-4 py-3">{r.phone || '—'}</td>
+                <td className="px-4 py-3 tabular-nums font-medium">{balanceLabel(Number(r.balance) || 0)}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -179,8 +212,10 @@ export default function PartnersPage() {
         <Panel>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
             <div className="font-semibold">
-              كشف حساب — الرصيد الختامي:{' '}
-              {statement.data ? formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base) : '…'}
+              كشف حساب — الرصيد الحالي:{' '}
+              {statement.data
+                ? balanceLabel(Number(statement.data.closing_balance ?? statement.data.balance) || 0)
+                : '…'}
             </div>
             <div className="print-hide flex flex-wrap items-center gap-2">
               <ExcelExportButton

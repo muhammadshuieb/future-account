@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Receipt;
 use App\Services\SalesService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class ReceiptController extends ApiController
 {
     public function __construct(protected SalesService $sales) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
+        $query = Receipt::query()->with(['customer', 'invoice'])->latest('id');
+        ListSearch::apply($query, $request, ['receipt_number', 'notes', 'currency', 'amount', 'status'], [
+            'customer' => ['name', 'code'],
+        ]);
 
-        return $this->ok(Receipt::query()->with(['customer', 'invoice'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

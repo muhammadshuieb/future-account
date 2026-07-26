@@ -17,10 +17,7 @@ class EmployeeController extends ApiController
     {
         $this->authorizePermission('hr.view');
         $query = Employee::query()->with('branch')->orderBy('employee_number');
-        if ($request->filled('search')) {
-            $s = $request->string('search');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('employee_number', 'like', "%{$s}%"));
-        }
+        \App\Support\ListSearch::apply($query, $request, ['name', 'employee_number', 'phone', 'email', 'job_title']);
 
         return $this->ok($query->get());
     }

@@ -9,10 +9,13 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
+import PaymentTypeFields, { paymentTypeLabel } from '@/components/PaymentTypeFields'
+import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
 
@@ -56,15 +59,35 @@ export default function SalesPage() {
   const [tab, setTab] = useQueryTab(SALES_TABS, 'invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
+  const search = useListSearch()
   const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
 
-  const quotes = useQuery({ queryKey: ['sales-quotes'], queryFn: async () => (await api.get('/sales-quotes')).data.data, enabled: tab === 'quotes' })
-  const orders = useQuery({ queryKey: ['sales-orders'], queryFn: async () => (await api.get('/sales-orders')).data.data, enabled: tab === 'orders' })
-  const invoices = useQuery({ queryKey: ['sales-invoices'], queryFn: async () => (await api.get('/sales-invoices')).data.data })
-  const returns = useQuery({ queryKey: ['sales-returns'], queryFn: async () => (await api.get('/sales-returns')).data.data, enabled: tab === 'returns' })
-  const receipts = useQuery({ queryKey: ['receipts'], queryFn: async () => (await api.get('/receipts')).data.data, enabled: tab === 'receipts' })
+  const quotes = useQuery({
+    queryKey: ['sales-quotes', search.debouncedQ],
+    queryFn: async () => (await api.get('/sales-quotes', { params: search.params })).data.data,
+    enabled: tab === 'quotes',
+  })
+  const orders = useQuery({
+    queryKey: ['sales-orders', search.debouncedQ],
+    queryFn: async () => (await api.get('/sales-orders', { params: search.params })).data.data,
+    enabled: tab === 'orders',
+  })
+  const invoices = useQuery({
+    queryKey: ['sales-invoices', search.debouncedQ],
+    queryFn: async () => (await api.get('/sales-invoices', { params: search.params })).data.data,
+  })
+  const returns = useQuery({
+    queryKey: ['sales-returns', search.debouncedQ],
+    queryFn: async () => (await api.get('/sales-returns', { params: search.params })).data.data,
+    enabled: tab === 'returns',
+  })
+  const receipts = useQuery({
+    queryKey: ['receipts', search.debouncedQ],
+    queryFn: async () => (await api.get('/receipts', { params: search.params })).data.data,
+    enabled: tab === 'receipts',
+  })
   const customers = useQuery({ queryKey: ['customers'], queryFn: async () => (await api.get('/customers')).data.data })
   const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data as ProductRow[] })
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
@@ -72,7 +95,12 @@ export default function SalesPage() {
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
   const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
-  const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'receipts' })
+  const cashBoxes = useQuery({
+    queryKey: ['cash-boxes'],
+    queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string }[],
+    enabled: tab === 'receipts' || tab === 'invoices',
+  })
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
   const currencies = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string; currencies: CurrencyOption[] },
@@ -84,7 +112,14 @@ export default function SalesPage() {
 
   const [quote, setQuote] = useState({ quote_date: todayYmd(), valid_until: '', ...emptyLine })
   const [order, setOrder] = useState({ order_date: todayYmd(), ...emptyLine })
-  const [inv, setInv] = useState({ invoice_date: todayYmd(), status: 'posted', ...emptyLine })
+  const [inv, setInv] = useState({
+    invoice_date: todayYmd(),
+    status: 'posted',
+    payment_type: 'credit',
+    paid_amount: '',
+    cash_box_id: '',
+    ...emptyLine,
+  })
   const [ret, setRet] = useState({
     return_date: todayYmd(),
     customer_id: '',
@@ -157,7 +192,7 @@ export default function SalesPage() {
   }
 
   const invalidateSales = () => void qc.invalidateQueries({ queryKey: ['sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns', 'receipts', 'stock-levels'] })
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null) }
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null); setPendingAttachment(null) }
 
   const salesDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'quotes') return `/sales-quotes/${id}`
@@ -235,18 +270,33 @@ export default function SalesPage() {
   })
 
   const saveInv = useMutation({
-    mutationFn: () => api.post('/sales-invoices', {
-      invoice_date: inv.invoice_date,
-      customer_id: Number(inv.customer_id),
-      warehouse_id: Number(inv.warehouse_id),
-      currency: inv.currency,
-      exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
-      status: inv.status,
-      lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no, defaultTaxRate)],
-    }),
-    onSuccess: () => { msg.setMessage(t('sales.invoicePosted')); invalidateSales(); closeModal() },
+    mutationFn: async () => {
+      const lineSub = (Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0)
+      const taxAmt = taxEnabled ? round2(lineSub * defaultTaxRate / 100) : 0
+      const estTotal = round2(lineSub + taxAmt)
+      const res = await api.post('/sales-invoices', {
+        invoice_date: inv.invoice_date,
+        customer_id: Number(inv.customer_id),
+        warehouse_id: Number(inv.warehouse_id),
+        cash_box_id: inv.cash_box_id ? Number(inv.cash_box_id) : null,
+        currency: inv.currency,
+        exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
+        payment_type: inv.payment_type || 'credit',
+        paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
+        status: inv.status,
+        lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no, defaultTaxRate)],
+      })
+      const id = res.data?.data?.id as number | undefined
+      if (id && pendingAttachment) await uploadAttachment('sales_invoice', id, pendingAttachment)
+      return { res, estTotal }
+    },
+    onSuccess: () => { msg.setMessage(t('sales.invoicePosted')); setPendingAttachment(null); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
+
+  function round2(n: number) {
+    return Math.round(n * 100) / 100
+  }
 
   const saveRet = useMutation({
     mutationFn: () => api.post('/sales-returns', {
@@ -498,7 +548,22 @@ export default function SalesPage() {
             <p><b>{t('common.exchangeRate')}:</b> {String(data.exchange_rate)}</p>
           )}
           <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')} {String(data.currency || baseCurrency)}</p>
+          {data.payment_type && (
+            <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), t)}</p>
+          )}
+          {data.paid_amount != null && data.invoice_number && (
+            <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {t('common.remainingAmount')}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
+          )}
+          {data.tax_amount != null && Number(data.tax_amount) > 0 && (
+            <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
+          )}
         </div>
+        {tab === 'invoices' && selectedId && (
+          <AttachmentPanel attachableType="sales_invoice" attachableId={selectedId} />
+        )}
+        {tab === 'receipts' && selectedId && (
+          <AttachmentPanel attachableType="receipt" attachableId={selectedId} />
+        )}
         {lines.length > 0 && (
           <div className="table-wrap">
             <table className="data-table">
@@ -542,6 +607,7 @@ export default function SalesPage() {
         subtitle={t('sales.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path={`/exports/${excelModuleForSalesTab(tab)}`} />
             <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
           </div>
@@ -550,6 +616,15 @@ export default function SalesPage() {
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       <Msg message={msg.message} error={msg.error} />
 
+      {search.debouncedQ && !(
+        (tab === 'quotes' && (quotes.data || []).length) ||
+        (tab === 'orders' && (orders.data || []).length) ||
+        (tab === 'invoices' && (invoices.data || []).length) ||
+        (tab === 'returns' && (returns.data || []).length) ||
+        (tab === 'receipts' && (receipts.data || []).length)
+      ) && !quotes.isLoading && !orders.isLoading && !invoices.isLoading && !returns.isLoading && !receipts.isLoading ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
       {tab === 'quotes' && (
         <Panel>
             <div className="table-wrap">
@@ -608,14 +683,21 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; customer?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; attachments_count?: number; customer?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
-                    <td className="font-mono text-xs">{i.invoice_number}</td>
+                    <td className="font-mono text-xs">
+                      <span className="inline-flex items-center gap-1">
+                        {i.invoice_number}
+                        <AttachmentIcon count={i.attachments_count} />
+                      </span>
+                    </td>
                     <td>{i.customer?.name}</td>
+                    <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'SYP'}</td>
                     <td className="tabular-nums">{i.total}</td>
+                    <td className="tabular-nums">{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
@@ -715,7 +797,7 @@ export default function SalesPage() {
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label={t('common.validUntil')}><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}<DocumentCurrencyFields state={quote} setState={setQuote} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}<DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}
-            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0)} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}</>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0))} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0)))} /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
             {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
           </form>

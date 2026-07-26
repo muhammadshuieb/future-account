@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import type { Account } from '@/types'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { Button, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
+import { Button, EmptyState, ListSearchInput, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 const typeLabels: Record<Account['type'], string> = {
   asset: 'أصول',
@@ -27,7 +28,7 @@ const emptyForm = {
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState('')
+  const search = useListSearch()
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -35,9 +36,9 @@ export default function AccountsPage() {
   const [error, setError] = useState('')
 
   const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['accounts', search],
+    queryKey: ['accounts', search.debouncedQ],
     queryFn: async () => {
-      const res = await api.get('/accounts', { params: { search: search || undefined } })
+      const res = await api.get('/accounts', { params: search.params })
       return res.data.data as Account[]
     },
   })
@@ -114,12 +115,7 @@ export default function AccountsPage() {
         actions={
           <>
             <ExcelExportButton path="/exports/accounts" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="بحث بالرمز أو الاسم..."
-              className="w-64 rounded-lg border border-black/10 bg-white px-3 py-2 outline-none ring-teal focus:ring-2"
-            />
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <Button variant="primary" onClick={openCreate}>إضافة</Button>
           </>
         }
@@ -145,7 +141,9 @@ export default function AccountsPage() {
             )}
             {!isLoading && accounts.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-black/45">لا توجد حسابات</td>
+                <td colSpan={4} className="px-4 py-8 text-center text-black/45">
+                  {search.debouncedQ ? 'لا توجد نتائج مطابقة' : 'لا توجد حسابات'}
+                </td>
               </tr>
             )}
             {accounts.map((account) => (

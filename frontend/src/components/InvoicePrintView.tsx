@@ -11,6 +11,8 @@ export type SalesInvoicePrintData = {
   total: number
   tax_amount: number
   subtotal: number
+  paid_amount?: number
+  payment_type?: string
   currency?: string
   customer?: { name: string; tax_number?: string; phone?: string }
   lines?: {
@@ -29,6 +31,8 @@ export type PurchaseInvoicePrintData = {
   total: number
   tax_amount?: number
   subtotal?: number
+  paid_amount?: number
+  payment_type?: string
   currency?: string
   supplier?: { name: string; tax_number?: string; phone?: string }
   lines?: {
@@ -171,6 +175,18 @@ export function SalesInvoicePrintView({
           <span className="text-black/55">{t('common.currency')}: </span>
           {invoice.currency || 'SYP'}
         </p>
+        {invoice.payment_type && (
+          <p>
+            <span className="text-black/55">{t('common.paymentType')}: </span>
+            {invoice.payment_type === 'cash' ? t('common.paymentCash') : invoice.payment_type === 'partial' ? t('common.paymentPartial') : t('common.paymentCredit')}
+          </p>
+        )}
+        {invoice.paid_amount != null && (
+          <p>
+            <span className="text-black/55">{t('common.paidAmount')}: </span>
+            <span className="tabular-nums">{invoice.paid_amount} / {invoice.total}</span>
+          </p>
+        )}
       </div>
 
       <table className="data-table">
@@ -254,6 +270,24 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
           <span className="text-black/55">{t('common.currency')}: </span>
           {invoice.currency || 'SYP'}
         </p>
+        {invoice.payment_type && (
+          <p>
+            <span className="text-black/55">{t('common.paymentType')}: </span>
+            {invoice.payment_type === 'cash' ? t('common.paymentCash') : invoice.payment_type === 'partial' ? t('common.paymentPartial') : t('common.paymentCredit')}
+          </p>
+        )}
+        {invoice.paid_amount != null && (
+          <p>
+            <span className="text-black/55">{t('common.paidAmount')}: </span>
+            <span className="tabular-nums">{invoice.paid_amount} / {invoice.total}</span>
+          </p>
+        )}
+        {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.tax')}: </span>
+            <span className="tabular-nums">{invoice.tax_amount}</span>
+          </p>
+        )}
       </div>
 
       <table className="data-table">

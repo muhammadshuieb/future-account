@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\CashTransfer;
 use App\Services\CashService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,13 @@ class CashTransferController extends ApiController
 {
     public function __construct(protected CashService $cash) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.view');
+        $query = CashTransfer::query()->latest('id');
+        ListSearch::apply($query, $request, ['transfer_number', 'notes', 'amount', 'status', 'from_type', 'to_type']);
 
-        return $this->ok(CashTransfer::query()->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

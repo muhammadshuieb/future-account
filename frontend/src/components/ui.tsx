@@ -117,6 +117,43 @@ export function EmptyState({ title, description }: { title: string; description?
   )
 }
 
+/** Debounced-friendly search box with clear button for list pages. */
+export function ListSearchInput({
+  value,
+  onChange,
+  placeholder,
+  className = '',
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className={`relative ${className}`}>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? t('common.searchPlaceholder')}
+        aria-label={t('common.search')}
+        className={`${inputClass} w-56 pe-8 sm:w-64`}
+      />
+      {value ? (
+        <button
+          type="button"
+          className="absolute end-2 top-1/2 -translate-y-1/2 text-black/40 hover:text-ink"
+          onClick={() => onChange('')}
+          aria-label={t('common.clearSearch')}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 export function LoadingBlock({ label }: { label?: string }) {
   const { t } = useTranslation()
   return (

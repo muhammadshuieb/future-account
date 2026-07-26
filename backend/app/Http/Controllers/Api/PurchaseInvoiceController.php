@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PurchaseInvoice;
 use App\Services\PurchaseService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class PurchaseInvoiceController extends ApiController
 {
     public function __construct(protected PurchaseService $purchases) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('purchases.view');
+        $query = PurchaseInvoice::query()->with(['supplier', 'warehouse'])->withCount('attachments')->latest('id');
+        ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
+            'supplier' => ['name', 'code'],
+        ]);
 
-        return $this->ok(PurchaseInvoice::query()->with(['supplier', 'warehouse'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse
@@ -25,9 +30,12 @@ class PurchaseInvoiceController extends ApiController
             'invoice_date' => ['required', 'date'],
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'cash_box_id' => ['nullable', 'exists:cash_boxes,id'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'currency' => ['nullable', 'string', 'max:8'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
+            'payment_type' => ['nullable', 'in:cash,credit,partial'],
+            'paid_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],
@@ -46,7 +54,7 @@ class PurchaseInvoiceController extends ApiController
     {
         $this->authorizePermission('purchases.view');
 
-        return $this->ok($purchaseInvoice->load(['supplier', 'warehouse', 'lines.product', 'journalEntry']));
+        return $this->ok($purchaseInvoice->load(['supplier', 'warehouse', 'cashBox', 'lines.product', 'journalEntry', 'attachments']));
     }
 
     public function post(PurchaseInvoice $purchaseInvoice): JsonResponse

@@ -16,6 +16,7 @@ use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\WarehouseTransferLine;
 use App\Services\InventoryService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -37,9 +38,8 @@ class ProductController extends ApiController
             ->orderBy('sku');
         if ($request->filled('barcode')) {
             $query->where('barcode', $request->string('barcode'));
-        } elseif ($request->filled('search')) {
-            $s = $request->string('search');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('sku', 'like', "%{$s}%")->orWhere('barcode', 'like', "%{$s}%"));
+        } else {
+        ListSearch::apply($query, $request, ['name', 'sku', 'barcode']);
         }
 
         $products = $query->get()->map(function (Product $product) {

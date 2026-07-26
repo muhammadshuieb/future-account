@@ -5,7 +5,8 @@ import { todayYmd } from '@/lib/dates'
 import type { Account, JournalEntry } from '@/types'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { Button, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
+import { Button, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 type LineDraft = {
   account_id: string
@@ -28,11 +29,12 @@ export default function JournalEntriesPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewOnly, setViewOnly] = useState(false)
   const [loadingEntry, setLoadingEntry] = useState(false)
+  const search = useListSearch()
 
   const { data: entriesData, isLoading } = useQuery({
-    queryKey: ['journal-entries'],
+    queryKey: ['journal-entries', search.debouncedQ],
     queryFn: async () => {
-      const res = await api.get('/journal-entries')
+      const res = await api.get('/journal-entries', { params: search.params })
       return res.data as { data: JournalEntry[] }
     },
   })
@@ -160,6 +162,7 @@ export default function JournalEntriesPage() {
         subtitle="قيد مزدوج — مجموع المدين يجب أن يساوي مجموع الدائن"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path="/exports/journal-entries" />
             <Button variant="primary" onClick={openCreate}>إضافة</Button>
           </div>

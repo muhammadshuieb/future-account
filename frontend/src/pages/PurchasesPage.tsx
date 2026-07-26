@@ -8,10 +8,13 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
+import PaymentTypeFields, { paymentTypeLabel } from '@/components/PaymentTypeFields'
+import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
 
@@ -31,15 +34,35 @@ export default function PurchasesPage() {
   const [tab, setTab] = useState('invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
+  const search = useListSearch()
   const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
 
-  const requests = useQuery({ queryKey: ['purchase-requests'], queryFn: async () => (await api.get('/purchase-requests')).data.data, enabled: tab === 'requests' })
-  const orders = useQuery({ queryKey: ['purchase-orders'], queryFn: async () => (await api.get('/purchase-orders')).data.data, enabled: tab === 'orders' })
-  const invoices = useQuery({ queryKey: ['purchase-invoices'], queryFn: async () => (await api.get('/purchase-invoices')).data.data })
-  const returns = useQuery({ queryKey: ['purchase-returns'], queryFn: async () => (await api.get('/purchase-returns')).data.data, enabled: tab === 'returns' })
-  const payments = useQuery({ queryKey: ['supplier-payments'], queryFn: async () => (await api.get('/supplier-payments')).data.data, enabled: tab === 'payments' })
+  const requests = useQuery({
+    queryKey: ['purchase-requests', search.debouncedQ],
+    queryFn: async () => (await api.get('/purchase-requests', { params: search.params })).data.data,
+    enabled: tab === 'requests',
+  })
+  const orders = useQuery({
+    queryKey: ['purchase-orders', search.debouncedQ],
+    queryFn: async () => (await api.get('/purchase-orders', { params: search.params })).data.data,
+    enabled: tab === 'orders',
+  })
+  const invoices = useQuery({
+    queryKey: ['purchase-invoices', search.debouncedQ],
+    queryFn: async () => (await api.get('/purchase-invoices', { params: search.params })).data.data,
+  })
+  const returns = useQuery({
+    queryKey: ['purchase-returns', search.debouncedQ],
+    queryFn: async () => (await api.get('/purchase-returns', { params: search.params })).data.data,
+    enabled: tab === 'returns',
+  })
+  const payments = useQuery({
+    queryKey: ['supplier-payments', search.debouncedQ],
+    queryFn: async () => (await api.get('/supplier-payments', { params: search.params })).data.data,
+    enabled: tab === 'payments',
+  })
   const suppliers = useQuery({ queryKey: ['suppliers'], queryFn: async () => (await api.get('/suppliers')).data.data })
   const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data as ProductRow[] })
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
@@ -47,7 +70,14 @@ export default function PurchasesPage() {
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
   const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
-  const cashBoxes = useQuery({ queryKey: ['cash-boxes'], queryFn: async () => (await api.get('/cash-boxes')).data.data, enabled: tab === 'payments' })
+  const [applyPurchaseTax, setApplyPurchaseTax] = useState(true)
+  const [purchaseTaxRate, setPurchaseTaxRate] = useState('')
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
+  const cashBoxes = useQuery({
+    queryKey: ['cash-boxes'],
+    queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string }[],
+    enabled: tab === 'payments' || tab === 'invoices',
+  })
   const currencies = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string; currencies: CurrencyOption[] },
@@ -59,7 +89,14 @@ export default function PurchasesPage() {
 
   const [req, setReq] = useState({ request_date: todayYmd(), required_date: '', ...base })
   const [po, setPo] = useState({ order_date: todayYmd(), ...base })
-  const [inv, setInv] = useState({ invoice_date: todayYmd(), status: 'posted', ...base })
+  const [inv, setInv] = useState({
+    invoice_date: todayYmd(),
+    status: 'posted',
+    payment_type: 'credit',
+    paid_amount: '',
+    cash_box_id: '',
+    ...base,
+  })
   const [ret, setRet] = useState({
     return_date: todayYmd(),
     supplier_id: '',
@@ -88,7 +125,17 @@ export default function PurchasesPage() {
   })
 
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels'] })
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null) }
+  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setPendingAttachment(null) }
+
+  useEffect(() => {
+    if (taxEnabled && !purchaseTaxRate) setPurchaseTaxRate(String(defaultTaxRate))
+  }, [taxEnabled, defaultTaxRate, purchaseTaxRate])
+
+  const effectiveTaxRate = taxEnabled && applyPurchaseTax ? (Number(purchaseTaxRate) || defaultTaxRate) : 0
+
+  function round2(n: number) {
+    return Math.round(n * 100) / 100
+  }
 
   const purchaseDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'requests') return `/purchase-requests/${id}`
@@ -159,16 +206,24 @@ export default function PurchasesPage() {
   })
 
   const saveInv = useMutation({
-    mutationFn: () => api.post('/purchase-invoices', {
-      invoice_date: inv.invoice_date,
-      supplier_id: Number(inv.supplier_id),
-      warehouse_id: Number(inv.warehouse_id),
-      currency: inv.currency,
-      exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
-      status: inv.status,
-      lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, defaultTaxRate)],
-    }),
-    onSuccess: () => { msg.setMessage(t('purchases.invoicePosted')); invalidate(); closeModal() },
+    mutationFn: async () => {
+      const res = await api.post('/purchase-invoices', {
+        invoice_date: inv.invoice_date,
+        supplier_id: Number(inv.supplier_id),
+        warehouse_id: Number(inv.warehouse_id),
+        cash_box_id: inv.cash_box_id ? Number(inv.cash_box_id) : null,
+        currency: inv.currency,
+        exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
+        payment_type: inv.payment_type || 'credit',
+        paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
+        status: inv.status,
+        lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, effectiveTaxRate)],
+      })
+      const id = res.data?.data?.id as number | undefined
+      if (id && pendingAttachment) await uploadAttachment('purchase_invoice', id, pendingAttachment)
+      return res
+    },
+    onSuccess: () => { msg.setMessage(t('purchases.invoicePosted')); setPendingAttachment(null); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -303,8 +358,22 @@ export default function PurchasesPage() {
   const summary = (data: Record<string, any>) => {
     if (tab === 'invoices' && data.invoice_number) {
       return (
-        <div className="rounded-lg border border-black/10 bg-white p-4">
-          <PurchaseInvoicePrintView invoice={data as PurchaseInvoicePrintData} />
+        <div className="space-y-3">
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            {data.payment_type && (
+              <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), t)}</p>
+            )}
+            {data.paid_amount != null && (
+              <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {t('common.remainingAmount')}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
+            )}
+            {data.tax_amount != null && Number(data.tax_amount) > 0 && (
+              <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
+            )}
+          </div>
+          <div className="rounded-lg border border-black/10 bg-white p-4">
+            <PurchaseInvoicePrintView invoice={data as PurchaseInvoicePrintData} />
+          </div>
+          {selectedId && <AttachmentPanel attachableType="purchase_invoice" attachableId={selectedId} />}
         </div>
       )
     }
@@ -320,6 +389,9 @@ export default function PurchasesPage() {
           )}
           <p><b>{t('common.total')}:</b> {data.total || data.amount || '—'} {data.currency || baseCurrency}</p>
         </div>
+        {tab === 'payments' && selectedId && (
+          <AttachmentPanel attachableType="supplier_payment" attachableId={selectedId} />
+        )}
         {(data.items || data.lines)?.length > 0 && (
           <div className="table-wrap">
             <table className="data-table">
@@ -361,6 +433,7 @@ export default function PurchasesPage() {
         subtitle={t('purchases.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path={`/exports/${excelModuleForPurchasesTab(tab)}`} />
             <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
           </div>
@@ -422,14 +495,22 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.tax')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; status: string; currency?: string; supplier?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; tax_amount?: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
-                    <td className="font-mono text-xs">{i.invoice_number}</td>
+                    <td className="font-mono text-xs">
+                      <span className="inline-flex items-center gap-1">
+                        {i.invoice_number}
+                        <AttachmentIcon count={i.attachments_count} />
+                      </span>
+                    </td>
                     <td>{i.supplier?.name}</td>
+                    <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'SYP'}</td>
                     <td>{i.total}</td>
+                    <td>{i.tax_amount ?? 0}</td>
+                    <td>{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
@@ -523,7 +604,7 @@ export default function PurchasesPage() {
         {modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
-          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0)} />{productFields(inv, setInv)}</>}
+          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} />{productFields(inv, setInv)}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
           {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
           {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
         </form>}

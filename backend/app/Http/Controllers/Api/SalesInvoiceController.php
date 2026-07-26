@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\SalesInvoice;
 use App\Services\SalesService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class SalesInvoiceController extends ApiController
 {
     public function __construct(protected SalesService $sales) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
+        $query = SalesInvoice::query()->with(['customer', 'warehouse'])->withCount('attachments')->latest('id');
+        ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
+            'customer' => ['name', 'code'],
+        ]);
 
-        return $this->ok(SalesInvoice::query()->with(['customer', 'warehouse'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse
@@ -25,9 +30,12 @@ class SalesInvoiceController extends ApiController
             'invoice_date' => ['required', 'date'],
             'customer_id' => ['required', 'exists:customers,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'cash_box_id' => ['nullable', 'exists:cash_boxes,id'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'currency' => ['nullable', 'string', 'max:8'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
+            'payment_type' => ['nullable', 'in:cash,credit,partial'],
+            'paid_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],
@@ -46,7 +54,7 @@ class SalesInvoiceController extends ApiController
     {
         $this->authorizePermission('sales.view');
 
-        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'lines.product', 'journalEntry']));
+        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'cashBox', 'lines.product', 'journalEntry', 'attachments']));
     }
 
     public function post(SalesInvoice $salesInvoice): JsonResponse

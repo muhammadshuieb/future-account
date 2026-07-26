@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\CurrencyExchange;
 use App\Services\CashService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,16 +12,19 @@ class CurrencyExchangeController extends ApiController
 {
     public function __construct(protected CashService $cash) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.view');
+        $query = CurrencyExchange::query()
+            ->with(['sourceCashBox', 'targetCashBox', 'journalEntry', 'creator'])
+            ->withCount('attachments')
+            ->latest('id');
+        ListSearch::apply($query, $request, ['exchange_number', 'notes', 'source_currency', 'target_currency', 'status', 'source_amount', 'target_amount'], [
+            'sourceCashBox' => ['name', 'code'],
+            'targetCashBox' => ['name', 'code'],
+        ]);
 
-        return $this->ok(
-            CurrencyExchange::query()
-                ->with(['sourceCashBox', 'targetCashBox', 'journalEntry', 'creator'])
-                ->latest('id')
-                ->get()
-        );
+        return $this->ok($query->get());
     }
 
     public function show(CurrencyExchange $currencyExchange): JsonResponse
@@ -28,7 +32,7 @@ class CurrencyExchangeController extends ApiController
         $this->authorizePermission('cash.view');
 
         return $this->ok(
-            $currencyExchange->load(['sourceCashBox', 'targetCashBox', 'journalEntry.details.account', 'creator'])
+            $currencyExchange->load(['sourceCashBox', 'targetCashBox', 'journalEntry.details.account', 'creator', 'attachments'])
         );
     }
 

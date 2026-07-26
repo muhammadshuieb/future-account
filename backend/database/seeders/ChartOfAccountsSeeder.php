@@ -17,6 +17,7 @@ class ChartOfAccountsSeeder extends Seeder
                     ['code' => '1103', 'name' => 'العملاء', 'name_en' => 'Accounts Receivable', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1104', 'name' => 'المخزون', 'name_en' => 'Inventory', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1105', 'name' => 'صندوق العملات الأجنبية', 'name_en' => 'Foreign Currency Cash', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1106', 'name' => 'ضريبة مشتريات (مدخلات)', 'name_en' => 'VAT Input', 'type' => 'asset', 'nature' => 'debit'],
                 ]],
                 ['code' => '12', 'name' => 'الأصول الثابتة', 'name_en' => 'Fixed Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
                     ['code' => '1201', 'name' => 'الأثاث والمعدات', 'name_en' => 'Furniture & Equipment', 'type' => 'asset', 'nature' => 'debit'],

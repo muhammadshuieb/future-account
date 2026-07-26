@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AccountController;
+use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
@@ -106,6 +107,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notifications', [NotificationController::class, 'index']);
     Route::post('notifications/{notification}/read', [NotificationController::class, 'markRead']);
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+
+    Route::get('attachments', [AttachmentController::class, 'index']);
+    Route::post('attachments', [AttachmentController::class, 'store']);
+    Route::get('attachments/{attachment}/download', [AttachmentController::class, 'download']);
+    Route::delete('attachments/{attachment}', [AttachmentController::class, 'destroy']);
 
     // Phase 2 — Inventory
     Route::apiResource('warehouses', WarehouseController::class);
@@ -215,6 +221,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('tax', [ReportController::class, 'tax']);
         Route::get('general-ledger', [ReportController::class, 'generalLedger']);
         Route::get('product-movement/{product}', [ReportController::class, 'productMovement']);
+        Route::get('branch-complete', [ReportController::class, 'branchComplete']);
     });
 
     // Phase 5 — HR

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\SupplierPayment;
 use App\Services\PurchaseService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class SupplierPaymentController extends ApiController
 {
     public function __construct(protected PurchaseService $purchases) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('purchases.view');
+        $query = SupplierPayment::query()->with(['supplier', 'invoice'])->latest('id');
+        ListSearch::apply($query, $request, ['payment_number', 'notes', 'currency', 'amount', 'status'], [
+            'supplier' => ['name', 'code'],
+        ]);
 
-        return $this->ok(SupplierPayment::query()->with(['supplier', 'invoice'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

@@ -6,6 +6,7 @@ import {
   Button,
   EmptyState,
   Field,
+  ListSearchInput,
   LoadingBlock,
   Modal,
   Msg,
@@ -19,7 +20,10 @@ import {
 } from '@/components/ui'
 import type { CurrencyOption } from '@/components/CurrencyFields'
 import ExcelExportButton from '@/components/ExcelExportButton'
+import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import { excelModuleForCashTab } from '@/lib/excelExport'
+import { useTranslation } from 'react-i18next'
+import { useListSearch } from '@/lib/useListSearch'
 
 type CashBox = {
   id: number
@@ -44,6 +48,7 @@ type CurrencyExchange = {
   exchange_rate: number
   status: string
   notes?: string | null
+  attachments_count?: number
   source_cash_box?: CashBox
   target_cash_box?: CashBox
 }
@@ -115,44 +120,47 @@ function sourcePerTarget(sourceCur: string, targetCur: string, currencies: Curre
 }
 
 export default function CashBanksPage() {
+  const { t } = useTranslation()
   const [tab, setTab] = useState('boxes')
   const qc = useQueryClient()
   const msg = useFormMessage()
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
+  const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
 
   const [boxForm, setBoxForm] = useState(emptyBox)
   const [bankForm, setBankForm] = useState(emptyBank)
   const [trForm, setTrForm] = useState(emptyTr)
   const [exForm, setExForm] = useState(emptyEx)
   const [recForm, setRecForm] = useState(emptyRec)
+  const search = useListSearch()
 
   const boxes = useQuery({
-    queryKey: ['cash-boxes'],
-    queryFn: async () => (await api.get('/cash-boxes')).data.data as CashBox[],
+    queryKey: ['cash-boxes', tab === 'boxes' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/cash-boxes', { params: tab === 'boxes' ? search.params : {} })).data.data as CashBox[],
   })
   const banks = useQuery({
-    queryKey: ['banks'],
-    queryFn: async () => (await api.get('/banks')).data.data as Bank[],
+    queryKey: ['banks', tab === 'banks' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/banks', { params: tab === 'banks' ? search.params : {} })).data.data as Bank[],
   })
   const currencies = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as CurrencyOption[],
   })
   const transfers = useQuery({
-    queryKey: ['cash-transfers'],
-    queryFn: async () => (await api.get('/cash-transfers')).data.data as Transfer[],
+    queryKey: ['cash-transfers', search.debouncedQ],
+    queryFn: async () => (await api.get('/cash-transfers', { params: search.params })).data.data as Transfer[],
     enabled: tab === 'transfers',
   })
   const exchanges = useQuery({
-    queryKey: ['currency-exchanges'],
-    queryFn: async () => (await api.get('/currency-exchanges')).data.data as CurrencyExchange[],
+    queryKey: ['currency-exchanges', search.debouncedQ],
+    queryFn: async () => (await api.get('/currency-exchanges', { params: search.params })).data.data as CurrencyExchange[],
     enabled: tab === 'exchange',
   })
   const reconciliations = useQuery({
-    queryKey: ['bank-reconciliations'],
-    queryFn: async () => (await api.get('/bank-reconciliations')).data.data as Reconciliation[],
+    queryKey: ['bank-reconciliations', search.debouncedQ],
+    queryFn: async () => (await api.get('/bank-reconciliations', { params: search.params })).data.data as Reconciliation[],
     enabled: tab === 'reconcile',
   })
 
@@ -236,11 +244,13 @@ export default function CashBanksPage() {
     setModalOpen(false)
     setEditingId(null)
     setViewRow(null)
+    setPendingAttachment(null)
   }
 
   function openCreate() {
     setEditingId(null)
     setViewRow(null)
+    setPendingAttachment(null)
     if (tab === 'boxes') setBoxForm(emptyBox)
     if (tab === 'banks') setBankForm(emptyBank)
     if (tab === 'transfers') setTrForm(emptyTr)
@@ -277,23 +287,41 @@ export default function CashBanksPage() {
     onSuccess: () => { msg.setMessage('تم ترحيل التحويل'); closeModal(); void qc.invalidateQueries({ queryKey: ['cash-transfers'] }) },
     onError: msg.fromErr,
   })
+  const sourceBox = sourceBoxes.find((b) => String(b.id) === String(exForm.source_cash_box_id))
+  const targetBox = targetBoxes.find((b) => String(b.id) === String(exForm.target_cash_box_id))
+  const sourceAvailable = sourceBox?.balance != null ? Number(sourceBox.balance) : null
+  const targetAvailable = targetBox?.balance != null ? Number(targetBox.balance) : null
+  const sourceAmt = Number(exForm.source_amount) || 0
+  const exceedsSource = sourceAvailable != null && sourceAmt > sourceAvailable + 0.0001
+
   const saveEx = useMutation({
-    mutationFn: () => api.post('/currency-exchanges', {
-      exchange_date: exForm.exchange_date,
-      source_cash_box_id: Number(exForm.source_cash_box_id),
-      target_cash_box_id: Number(exForm.target_cash_box_id),
-      source_currency: sourceCur,
-      target_currency: targetCur,
-      from_currency: sourceCur,
-      to_currency: targetCur,
-      source_amount: Number(exForm.source_amount),
-      target_amount: Number(exForm.target_amount),
-      exchange_rate: Number(exForm.exchange_rate),
-      notes: exForm.notes || null,
-      status: exForm.status,
-    }),
+    mutationFn: async () => {
+      if (exceedsSource) {
+        throw { response: { data: { message: `المبلغ يتجاوز الرصيد المتاح (${fmtLatn(sourceAvailable || 0)} ${sourceCur})` } } }
+      }
+      const res = await api.post('/currency-exchanges', {
+        exchange_date: exForm.exchange_date,
+        source_cash_box_id: Number(exForm.source_cash_box_id),
+        target_cash_box_id: Number(exForm.target_cash_box_id),
+        source_currency: sourceCur,
+        target_currency: targetCur,
+        from_currency: sourceCur,
+        to_currency: targetCur,
+        source_amount: Number(exForm.source_amount),
+        target_amount: Number(exForm.target_amount),
+        exchange_rate: Number(exForm.exchange_rate),
+        notes: exForm.notes || null,
+        status: exForm.status,
+      })
+      const id = res.data?.data?.id as number | undefined
+      if (id && pendingAttachment) {
+        await uploadAttachment('currency_exchange', id, pendingAttachment)
+      }
+      return res
+    },
     onSuccess: () => {
       msg.setMessage('تم ترحيل صرف العملة')
+      setPendingAttachment(null)
       closeModal()
       void qc.invalidateQueries({ queryKey: ['currency-exchanges'] })
       void qc.invalidateQueries({ queryKey: ['cash-boxes'] })
@@ -361,6 +389,7 @@ export default function CashBanksPage() {
         subtitle="صناديق نقدية، حسابات بنكية، تحويلات، صرف عملة، وتسوية كشف حساب"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             {tab !== 'reconcile' ? <ExcelExportButton path={`/exports/${excelModuleForCashTab(tab)}`} /> : null}
             <Button variant="primary" onClick={openCreate}>إضافة</Button>
           </div>
@@ -378,6 +407,22 @@ export default function CashBanksPage() {
         onChange={(id) => { setTab(id); closeModal() }}
       />
       <Msg message={msg.message} error={msg.error} />
+
+      {search.debouncedQ && tab === 'boxes' && !boxes.isLoading && boxRows.length === 0 ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'banks' && !banks.isLoading && bankRows.length === 0 ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'transfers' && !transfers.isLoading && transferRows.length === 0 ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'exchange' && !exchanges.isLoading && exchangeRows.length === 0 ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'reconcile' && !reconciliations.isLoading && reconcileRows.length === 0 ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
 
       {activeQuery.isError && !(Array.isArray(activeQuery.data) && activeQuery.data.length > 0) && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-danger">
@@ -528,7 +573,12 @@ export default function CashBanksPage() {
                     onClick={() => { setViewRow(row as unknown as Record<string, unknown>); setModalOpen(true) }}
                     tabIndex={0}
                   >
-                    <td className="px-4 py-3 font-mono text-xs">{row.exchange_number}</td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <span className="inline-flex items-center gap-1">
+                        {row.exchange_number}
+                        <AttachmentIcon count={row.attachments_count} />
+                      </span>
+                    </td>
                     <td className="px-4 py-3">
                       {row.source_cash_box?.name || row.source_currency}
                       {' → '}
@@ -688,7 +738,7 @@ export default function CashBanksPage() {
         footer={
           <>
             <Button variant="secondary" onClick={closeModal}>إلغاء</Button>
-            <Button variant="primary" disabled={saveEx.isPending} onClick={() => saveEx.mutate()}>ترحيل</Button>
+            <Button variant="primary" disabled={saveEx.isPending || exceedsSource} onClick={() => saveEx.mutate()}>ترحيل</Button>
           </>
         }
       >
@@ -751,15 +801,26 @@ export default function CashBanksPage() {
             >
               <option value="">—</option>
               {sourceBoxes.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.balance != null ? ` — ${fmtLatn(Number(b.balance))} ${sourceCur}` : ''}
+                </option>
               ))}
             </select>
+            {sourceAvailable != null && (
+              <p className="mt-1 text-xs font-medium text-teal">
+                {t('common.availableBalance', { amount: fmtLatn(sourceAvailable), currency: sourceCur })}
+              </p>
+            )}
             {sourceBoxes.length === 0 && (
               <p className="mt-1 text-xs text-amber">لا يوجد صندوق بعملة {sourceCur}. أنشئ صندوقاً بهذه العملة أولاً.</p>
             )}
           </Field>
           <Field label={`المبلغ بالعملة الأصلية (${sourceCur})`}>
             <NumericInput value={exForm.source_amount} onChange={onSourceAmount} required />
+            {exceedsSource && (
+              <p className="mt-1 text-xs text-danger">المبلغ يتجاوز الرصيد المتاح في الصندوق المصدر.</p>
+            )}
           </Field>
           <Field label={`الصندوق الهدف (${targetCur})`}>
             <select
@@ -770,9 +831,17 @@ export default function CashBanksPage() {
             >
               <option value="">—</option>
               {targetBoxes.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}</option>
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                  {b.balance != null ? ` — ${fmtLatn(Number(b.balance))} ${targetCur}` : ''}
+                </option>
               ))}
             </select>
+            {targetAvailable != null && (
+              <p className="mt-1 text-xs font-medium text-teal">
+                {t('common.availableBalance', { amount: fmtLatn(targetAvailable), currency: targetCur })}
+              </p>
+            )}
             {targetBoxes.length === 0 && (
               <p className="mt-1 text-xs text-amber">لا يوجد صندوق بعملة {targetCur}. أنشئ صندوقاً بهذه العملة أولاً.</p>
             )}
@@ -792,6 +861,7 @@ export default function CashBanksPage() {
           <Field label="ملاحظات">
             <input className={inputClass} value={exForm.notes} onChange={(e) => setExForm({ ...exForm, notes: e.target.value })} placeholder="اسم الصراف مثلاً" />
           </Field>
+          <PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} />
         </div>
       </Modal>
 
@@ -842,6 +912,7 @@ export default function CashBanksPage() {
             {viewRow.notes ? (
               <div className="flex justify-between gap-4"><dt className="text-black/50">ملاحظات</dt><dd>{String(viewRow.notes)}</dd></div>
             ) : null}
+            <AttachmentPanel attachableType="currency_exchange" attachableId={Number(viewRow.id)} />
           </dl>
         )}
       </Modal>

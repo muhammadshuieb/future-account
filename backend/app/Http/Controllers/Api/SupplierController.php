@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Supplier;
 use App\Services\PurchaseService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,12 +16,15 @@ class SupplierController extends ApiController
     {
         $this->authorizePermission('suppliers.view');
         $query = Supplier::query()->with('branch')->orderBy('code');
-        if ($request->filled('search')) {
-            $s = $request->string('search');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$s}%")->orWhere('code', 'like', "%{$s}%"));
-        }
+        ListSearch::apply($query, $request, ['name', 'code', 'phone', 'email', 'tax_number', 'notes']);
 
-        return $this->ok($query->get());
+        $rows = $query->get()->map(function (Supplier $supplier) {
+            $supplier->setAttribute('balance', $this->purchases->supplierBalance($supplier));
+
+            return $supplier;
+        });
+
+        return $this->ok($rows);
     }
 
     public function store(Request $request): JsonResponse
@@ -46,6 +50,8 @@ class SupplierController extends ApiController
     public function show(Supplier $supplier): JsonResponse
     {
         $this->authorizePermission('suppliers.view');
+
+        $supplier->setAttribute('balance', $this->purchases->supplierBalance($supplier));
 
         return $this->ok($supplier->load('branch'));
     }

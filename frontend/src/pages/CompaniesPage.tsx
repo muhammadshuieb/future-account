@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
-import { Button, Field, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 type CompanyRow = {
   id: number
@@ -38,15 +39,16 @@ export default function CompaniesPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [coForm, setCoForm] = useState(emptyCo)
   const [brForm, setBrForm] = useState(emptyBr)
+  const search = useListSearch()
 
   const companies = useQuery({
-    queryKey: ['companies'],
-    queryFn: async () => (await api.get('/companies')).data.data as CompanyRow[],
+    queryKey: ['companies', tab === 'companies' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/companies', { params: tab === 'companies' ? search.params : {} })).data.data as CompanyRow[],
   })
 
   const branches = useQuery({
-    queryKey: ['branches'],
-    queryFn: async () => (await api.get('/branches')).data.data as BranchRow[],
+    queryKey: ['branches', search.debouncedQ],
+    queryFn: async () => (await api.get('/branches', { params: search.params })).data.data as BranchRow[],
     enabled: tab === 'branches',
   })
 
@@ -125,7 +127,12 @@ export default function CompaniesPage() {
       <PageHeader
         title={t('companies.title')}
         subtitle={t('companies.subtitle')}
-        actions={<Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
+            <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
+          </div>
+        }
       />
       <Tabs
         tabs={[
@@ -139,6 +146,13 @@ export default function CompaniesPage() {
         }}
       />
       <Msg message={msg.message} error={msg.error} />
+
+      {search.debouncedQ && tab === 'companies' && !(companies.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'branches' && !(branches.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
 
       {tab === 'companies' && (
         <Panel>

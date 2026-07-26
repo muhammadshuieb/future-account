@@ -9,9 +9,10 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
+import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, StatTile, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
+  | 'branch-complete'
   | 'trial-balance'
   | 'general-ledger'
   | 'income-statement'
@@ -27,6 +28,7 @@ type ReportKey =
   | 'product-movement'
 
 const reportTitleFallback: Record<ReportKey, string> = {
+  'branch-complete': 'تقرير الفرع الشامل',
   'trial-balance': 'ميزان المراجعة',
   'general-ledger': 'دفتر الأستاذ العام',
   'income-statement': 'قائمة الدخل (الأرباح والخسائر)',
@@ -82,12 +84,13 @@ export default function ReportsPage() {
   const base = currencies.data?.base_currency || 'SYP'
 
   const reportUrl = useMemo(() => {
+    if (tab === 'branch-complete') return branchId ? '/reports/branch-complete' : null
     if (tab === 'general-ledger') return accountId ? '/reports/general-ledger' : null
     if (tab === 'customer-statement') return customerId ? `/customers/${customerId}/statement` : null
     if (tab === 'supplier-statement') return supplierId ? `/suppliers/${supplierId}/statement` : null
     if (tab === 'product-movement') return productId ? `/reports/product-movement/${productId}` : null
     return `/reports/${tab}`
-  }, [tab, customerId, supplierId, productId, accountId])
+  }, [tab, customerId, supplierId, productId, accountId, branchId])
 
   const report = useQuery({
     queryKey: ['report', tab, from, to, branchId, customerId, supplierId, productId, accountId],
@@ -104,7 +107,7 @@ export default function ReportsPage() {
         params.from = from
         params.to = to
       }
-      if (branchId && (tab === 'sales' || tab === 'purchases')) {
+      if (branchId && tab !== 'customer-statement' && tab !== 'supplier-statement') {
         params.branch_id = branchId
       }
       return (await api.get(reportUrl!, { params })).data.data
@@ -155,7 +158,8 @@ export default function ReportsPage() {
                 (tab === 'customer-statement' && !customerId) ||
                 (tab === 'supplier-statement' && !supplierId) ||
                 (tab === 'product-movement' && !productId) ||
-                (tab === 'general-ledger' && !accountId)
+                (tab === 'general-ledger' && !accountId) ||
+                (tab === 'branch-complete' && !branchId)
               }
               path={`/exports/reports/${tab}`}
               params={{
@@ -208,10 +212,10 @@ export default function ReportsPage() {
         <Field label={tab === 'trial-balance' || tab === 'balance-sheet' ? 'بتاريخ' : 'إلى'}>
           <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
-        {(tab === 'sales' || tab === 'purchases') && (
-          <Field label="الفرع">
+        {tab !== 'customer-statement' && tab !== 'supplier-statement' && (
+          <Field label={t('common.branch')}>
             <select className={inputClass} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">كل الفروع</option>
+              <option value="">{tab === 'branch-complete' ? 'اختر فرعاً' : t('common.allBranches')}</option>
               {(branches.data || []).map((b: { id: number; name: string }) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
@@ -272,6 +276,7 @@ export default function ReportsPage() {
               <p className="mt-1 text-xs text-black/60">
                 العملة الأساسية: {base}
                 {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
+                {branchId && ` · فرع محدد`}
               </p>
             </div>
             {/* Second in RTL → visual left: logo */}
@@ -279,11 +284,46 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {!reportUrl && <EmptyState title="اختر عنصراً لعرض التقرير" />}
+        {!reportUrl && <EmptyState title={tab === 'branch-complete' ? 'اختر فرعاً لعرض التقرير' : 'اختر عنصراً لعرض التقرير'} />}
         {reportUrl && report.isLoading && <LoadingBlock />}
         {report.error && <p className="p-4 text-danger">تعذر تحميل التقرير</p>}
         {report.data && (
           <div className="space-y-4 p-4 text-sm">
+            {tab === 'branch-complete' && (
+              <div className="space-y-4">
+                <p className="font-semibold">
+                  {report.data.branch?.code} — {report.data.branch?.name}
+                  <span className="ms-2 text-xs font-normal text-black/50">({report.data.from} → {report.data.to})</span>
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <StatTile label="المبيعات" value={formatMoney(report.data.sales?.total || 0, base)} hint={`${report.data.sales?.count || 0} فاتورة`} tone="teal" />
+                  <StatTile label="المشتريات" value={formatMoney(report.data.purchases?.total || 0, base)} hint={`${report.data.purchases?.count || 0} فاتورة`} />
+                  <StatTile label="مجمل الربح" value={formatMoney(report.data.profit?.gross_profit || 0, base)} tone="success" />
+                  <StatTile label="الذمم المدينة" value={formatMoney(report.data.receivables || 0, base)} tone="amber" />
+                  <StatTile label="الذمم الدائنة" value={formatMoney(report.data.payables || 0, base)} />
+                  <StatTile label="قيمة المخزون" value={formatMoney(report.data.stock_value || 0, base)} />
+                </div>
+                {(report.data.cash_boxes || []).length > 0 && (
+                  <div>
+                    <h3 className="mb-2 font-semibold">صناديق الفرع</h3>
+                    <table className="data-table">
+                      <thead><tr><th>رمز</th><th>اسم</th><th>عملة</th></tr></thead>
+                      <tbody>
+                        {(report.data.cash_boxes || []).map((c: { id: number; code: string; name: string; currency?: string }) => (
+                          <tr key={c.id}><td className="font-mono">{c.code}</td><td>{c.name}</td><td>{c.currency || base}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="rounded-lg bg-mist/60 p-3 text-sm">
+                  <p>ضريبة مخرجات: {formatMoney(report.data.tax?.output_vat || 0, base)}</p>
+                  <p>ضريبة مدخلات: {formatMoney(report.data.tax?.input_vat || 0, base)}</p>
+                  <p className="font-semibold">صافي الضريبة: {formatMoney(report.data.tax?.net_vat || 0, base)}</p>
+                </div>
+              </div>
+            )}
+
             {tab === 'trial-balance' && (
               <div className="table-wrap">
                 <table className="data-table">

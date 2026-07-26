@@ -7,7 +7,8 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
-import { Button, Field, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { useListSearch } from '@/lib/useListSearch'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
 type Tab = (typeof WAREHOUSE_TABS)[number]
@@ -93,18 +94,50 @@ export default function WarehousePage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
+  const search = useListSearch()
 
-  const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
-  const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data })
-  const categories = useQuery({ queryKey: ['categories'], queryFn: async () => (await api.get('/categories')).data.data })
-  const units = useQuery({ queryKey: ['units'], queryFn: async () => (await api.get('/units')).data.data })
-  const stock = useQuery({ queryKey: ['stock-levels'], queryFn: async () => (await api.get('/stock-levels')).data.data, enabled: tab === 'stock' })
-  const movements = useQuery({ queryKey: ['stock-movements'], queryFn: async () => (await api.get('/stock-movements')).data.data, enabled: tab === 'movements' })
-  const transfers = useQuery({ queryKey: ['warehouse-transfers'], queryFn: async () => (await api.get('/warehouse-transfers')).data.data, enabled: tab === 'transfers' })
-  const alerts = useQuery({ queryKey: ['stock-alerts'], queryFn: async () => (await api.get('/stock-alerts')).data.data, enabled: tab === 'alerts' })
-  const counts = useQuery({ queryKey: ['inventory-counts'], queryFn: async () => (await api.get('/inventory-counts')).data.data, enabled: tab === 'counts' })
+  const warehouses = useQuery({
+    queryKey: ['warehouses', tab === 'warehouses' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/warehouses', { params: tab === 'warehouses' ? search.params : {} })).data.data,
+  })
+  const products = useQuery({
+    queryKey: ['products', tab === 'products' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/products', { params: tab === 'products' ? search.params : {} })).data.data,
+  })
+  const categories = useQuery({
+    queryKey: ['categories', tab === 'categories' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/categories', { params: tab === 'categories' ? search.params : {} })).data.data,
+  })
+  const units = useQuery({
+    queryKey: ['units', tab === 'units' ? search.debouncedQ : ''],
+    queryFn: async () => (await api.get('/units', { params: tab === 'units' ? search.params : {} })).data.data,
+  })
+  const stock = useQuery({
+    queryKey: ['stock-levels', search.debouncedQ],
+    queryFn: async () => (await api.get('/stock-levels', { params: search.params })).data.data,
+    enabled: tab === 'stock',
+  })
+  const movements = useQuery({
+    queryKey: ['stock-movements', search.debouncedQ],
+    queryFn: async () => (await api.get('/stock-movements', { params: search.params })).data.data,
+    enabled: tab === 'movements',
+  })
+  const transfers = useQuery({
+    queryKey: ['warehouse-transfers', search.debouncedQ],
+    queryFn: async () => (await api.get('/warehouse-transfers', { params: search.params })).data.data,
+    enabled: tab === 'transfers',
+  })
+  const alerts = useQuery({
+    queryKey: ['stock-alerts', search.debouncedQ],
+    queryFn: async () => (await api.get('/stock-alerts', { params: search.params })).data.data,
+    enabled: tab === 'alerts',
+  })
+  const counts = useQuery({
+    queryKey: ['inventory-counts', search.debouncedQ],
+    queryFn: async () => (await api.get('/inventory-counts', { params: search.params })).data.data,
+    enabled: tab === 'counts',
+  })
 
-  const [productFilter, setProductFilter] = useState('')
   const [whForm, setWhForm] = useState(emptyWh)
   const [catForm, setCatForm] = useState(emptyCat)
   const [unitForm, setUnitForm] = useState(emptyUnit)
@@ -164,7 +197,7 @@ export default function WarehousePage() {
         msg.setError('لم يُعثر على صنف بهذا الباركود')
         return
       }
-      setProductFilter(found.name)
+      search.setQ(found.name)
       setEditingId(found.id)
       setPrForm({
         sku: found.sku,
@@ -186,11 +219,21 @@ export default function WarehousePage() {
     }
   }
 
-  const filteredProducts = (products.data || []).filter((p: { name: string; sku: string; barcode?: string }) => {
-    if (!productFilter.trim()) return true
-    const q = productFilter.trim().toLowerCase()
-    return p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q) || (p.barcode || '').includes(q)
-  })
+  const productRows = (products.data || []) as {
+    id: number
+    sku: string
+    name: string
+    barcode?: string
+    category_id?: number
+    unit_id?: number
+    cost_price: number
+    sale_price: number
+    reorder_level?: number
+    track_batch?: boolean
+    track_serial?: boolean
+    on_hand?: number
+    stock_locations?: StockLocation[]
+  }[]
 
   const saveWh = useMutation({
     mutationFn: () => {
@@ -321,6 +364,7 @@ export default function WarehousePage() {
         subtitle="مستودعات، أصناف، حركات، تحويلات، وتنبيهات إعادة الطلب"
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <ListSearchInput value={search.q} onChange={search.setQ} />
             {['alerts', 'counts'].includes(tab) ? null : (
               <ExcelExportButton path={`/exports/${excelModuleForWarehouseTab(tab)}`} />
             )}
@@ -344,6 +388,34 @@ export default function WarehousePage() {
         onChange={(id) => { setTab(id as Tab); closeModal() }}
       />
       <Msg message={msg.message} error={msg.error} />
+
+      {search.debouncedQ && tab === 'warehouses' && !(warehouses.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'products' && !productRows.length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'categories' && !(categories.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'units' && !(units.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'stock' && !(stock.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'movements' && !(movements.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'transfers' && !(transfers.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'counts' && !(counts.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
+      {search.debouncedQ && tab === 'alerts' && !(alerts.data || []).length ? (
+        <EmptyState title={t('common.noSearchResults')} />
+      ) : null}
 
       {tab === 'warehouses' && (
         <Panel>
@@ -381,17 +453,12 @@ export default function WarehousePage() {
               hint="امسح باركود الصنف للبحث أو فتح نموذج التعديل"
               onScan={(code) => void handleProductBarcodeScan(code)}
             />
-            <div className="mt-3">
-              <Field label="تصفية الأصناف">
-                <input className={inputClass} value={productFilter} onChange={(e) => setProductFilter(e.target.value)} placeholder="اسم أو SKU أو باركود..." />
-              </Field>
-            </div>
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
               <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>رصيد</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
               <tbody>
-                {filteredProducts.map((p: { id: number; sku: string; name: string; barcode?: string; category_id?: number; unit_id?: number; cost_price: number; sale_price: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean; on_hand?: number; stock_locations?: StockLocation[] }) => (
+                {productRows.map((p) => (
                   <tr
                     key={p.id}
                     className="row-clickable"

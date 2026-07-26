@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -32,13 +33,7 @@ class AccountController extends Controller
             $query->where('is_group', false)->where('is_active', true);
         }
 
-        if ($request->filled('search')) {
-            $search = $request->string('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('code', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%");
-            });
-        }
+        \App\Support\ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'description']);
 
         return response()->json([
             'data' => $query->get(),

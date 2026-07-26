@@ -3,16 +3,21 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\LeaveRequest;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LeaveRequestController extends ApiController
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('hr.view');
+        $query = LeaveRequest::query()->with('employee')->latest('id');
+        ListSearch::apply($query, $request, ['leave_type', 'status', 'notes'], [
+            'employee' => ['name', 'employee_number'],
+        ]);
 
-        return $this->ok(LeaveRequest::query()->with('employee')->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

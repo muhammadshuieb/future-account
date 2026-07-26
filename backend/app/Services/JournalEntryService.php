@@ -20,6 +20,7 @@ class JournalEntryService
 
         return DB::transaction(function () use ($data, $lines, $user) {
             $entry = JournalEntry::query()->create([
+                'branch_id' => $data['branch_id'] ?? null,
                 'entry_number' => $data['entry_number'] ?? $this->nextEntryNumber(),
                 'entry_date' => $data['entry_date'],
                 'description' => $data['description'],

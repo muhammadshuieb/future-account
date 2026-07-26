@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\SalesReturn;
 use App\Services\SalesService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class SalesReturnController extends ApiController
 {
     public function __construct(protected SalesService $sales) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
+        $query = SalesReturn::query()->with(['customer', 'warehouse'])->latest('id');
+        ListSearch::apply($query, $request, ['return_number', 'notes', 'currency', 'total', 'status'], [
+            'customer' => ['name', 'code'],
+        ]);
 
-        return $this->ok(SalesReturn::query()->with(['customer', 'warehouse'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

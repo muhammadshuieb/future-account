@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Bank;
 use App\Services\CashService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class BankController extends ApiController
 {
     public function __construct(protected CashService $cash) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.view');
+        $query = Bank::query()->with(['branch', 'account'])->orderBy('code');
+        ListSearch::apply($query, $request, ['name', 'code', 'currency', 'account_number', 'iban'], [
+            'branch' => ['name', 'code'],
+        ]);
 
-        return $this->ok(Bank::query()->with(['branch', 'account'])->orderBy('code')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

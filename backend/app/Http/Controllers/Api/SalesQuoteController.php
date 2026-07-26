@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\SalesQuote;
 use App\Services\SalesService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class SalesQuoteController extends ApiController
 {
     public function __construct(protected SalesService $sales) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
+        $query = SalesQuote::query()->with(['customer', 'warehouse'])->latest('id');
+        ListSearch::apply($query, $request, ['quote_number', 'notes', 'currency', 'total', 'status'], [
+            'customer' => ['name', 'code'],
+        ]);
 
-        return $this->ok(SalesQuote::query()->with(['customer', 'warehouse'])->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

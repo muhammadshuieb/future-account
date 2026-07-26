@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\JournalEntry;
 use App\Services\JournalEntryService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,7 @@ class JournalEntryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = JournalEntry::query()
-            ->with(['creator:id,name', 'details'])
+            ->with(['creator:id,name', 'details', 'branch:id,name,code'])
             ->orderByDesc('entry_date')
             ->orderByDesc('id');
 
@@ -31,6 +32,14 @@ class JournalEntryController extends Controller
             $query->whereDate('entry_date', '<=', $request->date('to'));
         }
 
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->integer('branch_id'));
+        }
+
+        ListSearch::apply($query, $request, ['entry_number', 'description', 'reference'], [
+            'creator' => ['name'],
+        ]);
+
         $entries = $query->paginate($request->integer('per_page', 15));
 
         return response()->json($entries);
@@ -40,6 +49,7 @@ class JournalEntryController extends Controller
     {
         $data = $request->validate([
             'entry_date' => ['required', 'date'],
+            'branch_id' => ['nullable', 'exists:branches,id'],
             'description' => ['required', 'string', 'max:500'],
             'reference' => ['nullable', 'string', 'max:100'],
             'status' => ['nullable', 'in:draft,posted'],

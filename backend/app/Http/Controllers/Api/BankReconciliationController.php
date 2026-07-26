@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\BankReconciliation;
 use App\Services\CashService;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -11,11 +12,15 @@ class BankReconciliationController extends ApiController
 {
     public function __construct(protected CashService $cash) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('cash.view');
+        $query = BankReconciliation::query()->with('bank')->latest('id');
+        ListSearch::apply($query, $request, ['notes', 'status'], [
+            'bank' => ['name', 'code'],
+        ]);
 
-        return $this->ok(BankReconciliation::query()->with('bank')->latest('id')->get());
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse

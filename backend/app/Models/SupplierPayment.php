@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAttachments;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SupplierPayment extends Model
 {
+    use HasAttachments;
+
     protected $fillable = [
         'payment_number', 'payment_date', 'supplier_id', 'purchase_invoice_id',
         'cash_box_id', 'bank_id', 'method', 'amount', 'currency', 'exchange_rate',
