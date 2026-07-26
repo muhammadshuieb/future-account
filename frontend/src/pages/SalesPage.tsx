@@ -105,17 +105,9 @@ export default function SalesPage() {
     queryFn: async () => (await api.get('/currencies')).data.data as { base_currency: string; currencies: CurrencyOption[] },
   })
   const currencyList = currencies.data?.currencies || []
-  const baseCurrency = currencies.data?.base_currency || 'SYP'
+  const baseCurrency = currencies.data?.base_currency || 'USD'
 
-  useEffect(() => {
-    if (!rc.cash_box_id && (cashBoxes.data || []).length > 0) {
-      const boxes = cashBoxes.data || []
-      const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
-      if (main) setRc((prev) => prev.cash_box_id ? prev : { ...prev, cash_box_id: String(main.id) })
-    }
-  }, [cashBoxes.data, rc.cash_box_id])
-
-  const emptyLine = { customer_id: '', warehouse_id: '', product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '', currency: 'SYP', exchange_rate: '1' }
+  const emptyLine = { customer_id: '', warehouse_id: '', product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '', currency: 'USD', exchange_rate: '1' }
 
   const [quote, setQuote] = useState({ quote_date: todayYmd(), valid_until: '', ...emptyLine })
   const [order, setOrder] = useState({ order_date: todayYmd(), ...emptyLine })
@@ -137,7 +129,7 @@ export default function SalesPage() {
     unit_price: '',
     batch_no: '',
     serial_no: '',
-    currency: 'SYP',
+    currency: 'USD',
     exchange_rate: '1',
     status: 'posted',
   })
@@ -148,11 +140,19 @@ export default function SalesPage() {
     cash_box_id: '',
     amount: '',
     base_amount: '',
-    currency: 'SYP',
+    currency: 'USD',
     exchange_rate: '1',
     method: 'cash',
     status: 'posted',
   })
+
+  useEffect(() => {
+    if (!rc.cash_box_id && (cashBoxes.data || []).length > 0) {
+      const boxes = cashBoxes.data || []
+      const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
+      if (main) setRc((prev) => prev.cash_box_id ? prev : { ...prev, cash_box_id: String(main.id) })
+    }
+  }, [cashBoxes.data, rc.cash_box_id])
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
 
@@ -413,7 +413,7 @@ export default function SalesPage() {
       unit_price: String(line.unit_price || ''),
       batch_no: line.batch_no || '',
       serial_no: line.serial_no || '',
-      currency: d.currency || 'SYP',
+      currency: d.currency || 'USD',
       exchange_rate: String(d.exchange_rate || ''),
     })
     setStockInfo(null)
@@ -628,7 +628,7 @@ export default function SalesPage() {
                   <tr key={q.id} className="cursor-pointer" onClick={() => openRow(q, q.status !== 'converted')}>
                     <td className="font-mono text-xs">{q.quote_number}</td>
                     <td>{q.customer?.name}</td>
-                    <td>{q.currency || 'SYP'}</td>
+                    <td>{q.currency || 'USD'}</td>
                     <td>{q.total}</td>
                     <td>{documentStatusLabel(q.status)}</td>
                     <td className="space-x-2 space-x-reverse">
@@ -655,7 +655,7 @@ export default function SalesPage() {
                   <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.customer?.name}</td>
-                    <td>{o.currency || 'SYP'}</td>
+                    <td>{o.currency || 'USD'}</td>
                     <td>{o.total}</td>
                     <td>{documentStatusLabel(o.status)}</td>
                     <td className="space-x-2 space-x-reverse">
@@ -688,7 +688,7 @@ export default function SalesPage() {
                     </td>
                     <td>{i.customer?.name}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
-                    <td>{i.currency || 'SYP'}</td>
+                    <td>{i.currency || 'USD'}</td>
                     <td className="tabular-nums">{i.total}</td>
                     <td className="tabular-nums">{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
@@ -725,7 +725,7 @@ export default function SalesPage() {
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
                     <td className="font-mono text-xs">{r.return_number}</td>
                     <td>{r.customer?.name}</td>
-                    <td>{r.currency || 'SYP'}</td>
+                    <td>{r.currency || 'USD'}</td>
                     <td>{r.total}</td>
                     <td>{documentStatusLabel(r.status)}</td>
                     <td>
@@ -751,7 +751,7 @@ export default function SalesPage() {
                   <tr key={r.id} className="cursor-pointer" onClick={() => openRow(r)}>
                     <td className="font-mono text-xs">{r.receipt_number}</td>
                     <td>{r.customer?.name}</td>
-                    <td>{r.currency || 'SYP'}</td>
+                    <td>{r.currency || 'USD'}</td>
                     <td>{r.amount}</td>
                     <td>{documentStatusLabel(r.status)}</td>
                     <td>
