@@ -31,13 +31,12 @@ type StockInfo = {
   track_batch?: boolean
 }
 
-function linePayload(productId: string, qty: string, price: string, batch: string, serial: string, taxRate: number) {
+function linePayload(productId: string, qty: string, price: string, _batch: string, serial: string, taxRate: number) {
   return {
     product_id: Number(productId),
     quantity: Number(qty),
     unit_price: price ? Number(price) : undefined,
     tax_rate: taxRate,
-    batch_no: batch || undefined,
     serial_no: serial || undefined,
   }
 }
@@ -307,7 +306,7 @@ export default function SalesPage() {
       currency: ret.currency,
       exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
       status: ret.status,
-      lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_price: Number(ret.unit_price), batch_no: ret.batch_no || undefined, serial_no: ret.serial_no || undefined }],
+      lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_price: Number(ret.unit_price), serial_no: ret.serial_no || undefined }],
     }),
     onSuccess: () => { msg.setMessage(t('sales.returnPosted')); invalidateSales(); closeModal() },
     onError: msg.fromErr,
@@ -437,7 +436,7 @@ export default function SalesPage() {
               unit_price: product ? String(product.sale_price) : prev.unit_price,
             }))
             if (autoFillStock && productId && state.warehouse_id && !skipStockAutofill.current) {
-              void applyStockToForm(setState, productId, state.warehouse_id, state.batch_no || undefined)
+              void applyStockToForm(setState, productId, state.warehouse_id)
             } else if (!productId) {
               setStockInfo(null)
             }
@@ -452,36 +451,11 @@ export default function SalesPage() {
         <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
           <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
           {autoFillStock && stockInfo !== null && state.product_id && state.warehouse_id && (
-            <StockAvailabilityHint
-              stockInfo={stockInfo}
-              batchNo={state.batch_no}
-              onSelectBatch={(batch) => {
-                setState((prev) => ({ ...prev, batch_no: batch }))
-                if (state.warehouse_id) {
-                  void applyStockToForm(setState, state.product_id, state.warehouse_id, batch)
-                }
-              }}
-            />
+            <StockAvailabilityHint stockInfo={stockInfo} />
           )}
         </Field>
         <Field label={t('common.price')}><NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} /></Field>
       </div>
-      {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
-        <Field label={t('common.batch')}>
-          <input
-            className={inputClass}
-            value={state.batch_no}
-            onChange={(e) => {
-              const batch = e.target.value
-              setState({ ...state, batch_no: batch })
-              if (autoFillStock && state.product_id && state.warehouse_id) {
-                void applyStockToForm(setState, state.product_id, state.warehouse_id, batch || undefined)
-              }
-            }}
-            required
-          />
-        </Field>
-      )}
       {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_serial && (
         <Field label={t('common.serial')}><input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required /></Field>
       )}
@@ -571,7 +545,7 @@ export default function SalesPage() {
                 <tr>
                   <th>{t('common.product')}</th>
                   <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
-                  <th>{t('common.batch')}</th>
+                  {lines.some((l) => l.serial_no) && <th>{t('common.serial')}</th>}
                   <th>{t('sales.stockLocation')}</th>
                   <th>{t('common.total')}</th>
                 </tr>
@@ -581,12 +555,13 @@ export default function SalesPage() {
                   <tr key={index}>
                     <td>{line.product?.name}</td>
                     <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
-                    <td className="font-mono text-xs">{line.batch_no || line.serial_no || '—'}</td>
+                    {lines.some((l) => l.serial_no) && (
+                      <td className="font-mono text-xs">{line.serial_no || '—'}</td>
+                    )}
                     <td>
                       <LineStockHint
                         productId={line.product?.id || line.product_id}
                         warehouseId={data.warehouse_id as number | undefined}
-                        batchNo={line.batch_no}
                       />
                     </td>
                     <td>{line.line_total}</td>
@@ -797,7 +772,7 @@ export default function SalesPage() {
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label={t('common.validUntil')}><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}<DocumentCurrencyFields state={quote} setState={setQuote} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}<DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}
-            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0))} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0)))} /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0))} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0)))} /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
             {tab === 'receipts' && <>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
           </form>
@@ -807,49 +782,18 @@ export default function SalesPage() {
   )
 }
 
-function StockAvailabilityHint({
-  stockInfo,
-  batchNo,
-  onSelectBatch,
-}: {
-  stockInfo: StockInfo
-  batchNo?: string
-  onSelectBatch?: (batch: string) => void
-}) {
+function StockAvailabilityHint({ stockInfo }: { stockInfo: StockInfo }) {
   const { t } = useTranslation()
   const warehouseLabel = stockInfo.warehouse_name || t('common.warehouse')
 
   return (
     <div className="mt-1 space-y-1 text-xs text-black/55">
       <p>
-        {batchNo && stockInfo.track_batch
-          ? t('sales.stockRemainingBatch', {
-              qty: formatQuantity(stockInfo.available_qty),
-              warehouse: warehouseLabel,
-              batch: batchNo,
-            })
-          : t('sales.stockRemainingIn', {
-              qty: formatQuantity(stockInfo.available_qty),
-              warehouse: warehouseLabel,
-            })}
+        {t('sales.stockRemainingIn', {
+          qty: formatQuantity(stockInfo.available_qty),
+          warehouse: warehouseLabel,
+        })}
       </p>
-      {stockInfo.breakdown.length > 0 && (
-        <ul className="space-y-0.5">
-          {stockInfo.breakdown.map((row) => (
-            <li key={`${row.warehouse_id}-${row.batch_no}`} className="flex flex-wrap items-center gap-1">
-              <span>
-                {row.batch_no ? `${t('common.batch')} ${row.batch_no}: ` : ''}
-                {formatQuantity(row.quantity)}
-              </span>
-              {stockInfo.track_batch && row.batch_no && onSelectBatch && batchNo !== row.batch_no && (
-                <button type="button" className="text-teal underline" onClick={() => onSelectBatch(row.batch_no)}>
-                  {t('sales.useBatch')}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
       {stockInfo.breakdown.length === 0 && (
         <p className="text-amber">{t('sales.noStockInWarehouse')}</p>
       )}
@@ -860,11 +804,9 @@ function StockAvailabilityHint({
 function LineStockHint({
   productId,
   warehouseId,
-  batchNo,
 }: {
   productId?: number
   warehouseId?: number
-  batchNo?: string
 }) {
   const { t } = useTranslation()
   const [info, setInfo] = useState<StockInfo | null>(null)
@@ -875,11 +817,11 @@ function LineStockHint({
       return
     }
     let active = true
-    void fetchStockInfo(String(productId), String(warehouseId), batchNo).then((data) => {
+    void fetchStockInfo(String(productId), String(warehouseId)).then((data) => {
       if (active) setInfo(data)
     })
     return () => { active = false }
-  }, [productId, warehouseId, batchNo])
+  }, [productId, warehouseId])
 
   if (!productId || !warehouseId) return <span className="text-black/40">—</span>
   if (!info) return <span className="text-black/40">{t('common.loading')}</span>
@@ -890,13 +832,7 @@ function LineStockHint({
 
   return (
     <span className="text-xs text-black/60">
-      {info.breakdown.map((row, i) => (
-        <span key={`${row.batch_no}-${i}`}>
-          {i > 0 ? '؛ ' : ''}
-          {row.batch_no ? `${t('common.batch')} ${row.batch_no}: ` : ''}
-          {formatQuantity(row.quantity)}
-        </span>
-      ))}
+      {formatQuantity(info.available_qty)}
     </span>
   )
 }

@@ -195,7 +195,7 @@ export function SalesInvoicePrintView({
             <th>{t('common.product')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.price')}</th>
-            <th>{t('common.batch')}</th>
+            {(invoice.lines || []).some((l) => l.serial_no) && <th>{t('common.serial')}</th>}
             <th>{t('common.total')}</th>
           </tr>
         </thead>
@@ -205,7 +205,9 @@ export function SalesInvoicePrintView({
               <td>{l.product?.name}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
-              <td className="font-mono text-xs">{l.batch_no || l.serial_no || '—'}</td>
+              {(invoice.lines || []).some((row) => row.serial_no) && (
+                <td className="font-mono text-xs">{l.serial_no || '—'}</td>
+              )}
               <td className="tabular-nums">{l.line_total}</td>
             </tr>
           ))}
