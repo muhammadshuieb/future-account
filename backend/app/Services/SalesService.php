@@ -23,6 +23,7 @@ class SalesService
         protected InventoryService $inventory,
         protected AuditLogger $audit,
         protected CurrencyService $currencies,
+        protected CashService $cash,
     ) {}
 
     public function createInvoice(array $data, array $lines, User $user): SalesInvoice
@@ -202,17 +203,25 @@ class SalesService
             ]);
 
             if ($intendedPaid > 0) {
-                if (! $invoice->cash_box_id) {
+                $cashBoxId = $invoice->cash_box_id
+                    ? (int) $invoice->cash_box_id
+                    : $this->cash->resolveDefaultCashBoxId();
+
+                if (! $cashBoxId) {
                     throw ValidationException::withMessages([
                         'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
                     ]);
+                }
+
+                if (! $invoice->cash_box_id) {
+                    $invoice->update(['cash_box_id' => $cashBoxId]);
                 }
 
                 $this->createReceipt([
                     'receipt_date' => $invoice->invoice_date->toDateString(),
                     'customer_id' => $invoice->customer_id,
                     'sales_invoice_id' => $invoice->id,
-                    'cash_box_id' => $invoice->cash_box_id,
+                    'cash_box_id' => $cashBoxId,
                     'method' => 'cash',
                     'amount' => $intendedPaid,
                     'currency' => $invoice->currency,
@@ -241,6 +250,10 @@ class SalesService
         $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
             ? (int) $data['cash_box_id']
             : null;
+
+        if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
+            $cashBoxId = $this->cash->resolveDefaultCashBoxId();
+        }
 
         $intendedPaid = match ($paymentType) {
             'cash' => $total,
@@ -388,14 +401,24 @@ class SalesService
                 }
             }
 
+            $method = $data['method'] ?? 'cash';
+            $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
+                ? (int) $data['cash_box_id']
+                : null;
+
+            // Cash collections without an explicit box go to the main cash box.
+            if (! $cashBoxId && $method === 'cash' && empty($data['bank_id'])) {
+                $cashBoxId = $this->cash->resolveDefaultCashBoxId();
+            }
+
             $receipt = Receipt::query()->create([
                 'receipt_number' => $this->nextNumber('RC'),
                 'receipt_date' => $data['receipt_date'],
                 'customer_id' => $data['customer_id'],
                 'sales_invoice_id' => $data['sales_invoice_id'] ?? null,
-                'cash_box_id' => $data['cash_box_id'] ?? null,
+                'cash_box_id' => $cashBoxId,
                 'bank_id' => $data['bank_id'] ?? null,
-                'method' => $data['method'] ?? 'cash',
+                'method' => $method,
                 'amount' => $amount,
                 'currency' => $fx['currency'],
                 'exchange_rate' => $fx['exchange_rate'],

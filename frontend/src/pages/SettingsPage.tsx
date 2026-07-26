@@ -50,6 +50,7 @@ const HIDDEN_GENERAL_KEYS = new Set([
   'backup_last_cleanup',
   'default_branch_id',
   'default_warehouse_id',
+  'default_cash_box_id',
   'multi_language',
 ])
 

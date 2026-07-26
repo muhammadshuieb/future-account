@@ -75,7 +75,7 @@ export default function PurchasesPage() {
   const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
   const cashBoxes = useQuery({
     queryKey: ['cash-boxes'],
-    queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string }[],
+    queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string; is_default?: boolean; code?: string }[],
     enabled: tab === 'payments' || tab === 'invoices',
   })
   const currencies = useQuery({
@@ -125,7 +125,7 @@ export default function PurchasesPage() {
   })
 
   const invalidate = () => {
-    for (const key of ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels', 'cash-boxes'] as const) {
+    for (const key of ['purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns', 'supplier-payments', 'stock-levels', 'cash-boxes', 'suppliers'] as const) {
       void qc.invalidateQueries({ queryKey: [key] })
     }
   }
@@ -134,6 +134,14 @@ export default function PurchasesPage() {
   useEffect(() => {
     if (taxEnabled && !purchaseTaxRate) setPurchaseTaxRate(String(defaultTaxRate))
   }, [taxEnabled, defaultTaxRate, purchaseTaxRate])
+
+  useEffect(() => {
+    if (!pay.cash_box_id && (cashBoxes.data || []).length > 0) {
+      const boxes = cashBoxes.data || []
+      const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
+      if (main) setPay((prev) => prev.cash_box_id ? prev : { ...prev, cash_box_id: String(main.id) })
+    }
+  }, [cashBoxes.data, pay.cash_box_id])
 
   const effectiveTaxRate = taxEnabled && applyPurchaseTax ? (Number(purchaseTaxRate) || defaultTaxRate) : 0
 
@@ -287,7 +295,7 @@ export default function PurchasesPage() {
     }),
     onSuccess: () => {
       msg.setMessage(t('purchases.paymentPosted'))
-      for (const key of ['supplier-payments', 'purchase-invoices', 'cash-boxes'] as const) {
+      for (const key of ['supplier-payments', 'purchase-invoices', 'cash-boxes', 'suppliers'] as const) {
         void qc.invalidateQueries({ queryKey: [key] })
       }
       closeModal()
@@ -614,9 +622,9 @@ export default function PurchasesPage() {
         {modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
-          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} />{productFields(inv, setInv)}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} />{productFields(inv, setInv)}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
           {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
-          {tab === 'payments' && <>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
+          {tab === 'payments' && <><p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
         </form>}
       </Modal>
     </div>

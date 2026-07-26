@@ -1,9 +1,10 @@
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field, NumericInput, inputClass } from '@/components/ui'
 
 export type PaymentType = 'cash' | 'credit' | 'partial'
 
-type CashBox = { id: number; name: string; currency?: string }
+type CashBox = { id: number; name: string; currency?: string; is_default?: boolean; code?: string }
 
 type Props<T extends {
   payment_type: string
@@ -19,6 +20,8 @@ type Props<T extends {
   onApplyTaxChange?: (v: boolean) => void
   taxRate?: string
   onTaxRateChange?: (v: string) => void
+  /** sales = customer debt; purchases = supplier payable */
+  partner?: 'customer' | 'supplier'
 }
 
 export function paymentTypeLabel(type?: string | null, t?: (k: string) => string): string {
@@ -31,6 +34,14 @@ export function paymentTypeLabel(type?: string | null, t?: (k: string) => string
   if (key === 'cash') return 'نقدي'
   if (key === 'partial') return 'دفعة من المبلغ'
   return 'آجل'
+}
+
+function defaultCashBoxId(cashBoxes: CashBox[]): string {
+  const flagged = cashBoxes.find((c) => c.is_default)
+  if (flagged) return String(flagged.id)
+  const cash01 = cashBoxes.find((c) => c.code === 'CASH-01')
+  if (cash01) return String(cash01.id)
+  return cashBoxes[0] ? String(cashBoxes[0].id) : ''
 }
 
 export default function PaymentTypeFields<T extends {
@@ -47,10 +58,26 @@ export default function PaymentTypeFields<T extends {
   onApplyTaxChange,
   taxRate = '',
   onTaxRateChange,
+  partner = 'customer',
 }: Props<T>) {
   const { t } = useTranslation()
   const type = (state.payment_type || 'credit') as PaymentType
   const remaining = Math.max(0, estimatedTotal - (Number(state.paid_amount) || 0))
+  const hintKey =
+    type === 'cash'
+      ? (partner === 'supplier' ? 'common.paymentHintCashPurchase' : 'common.paymentHintCash')
+      : type === 'partial'
+        ? (partner === 'supplier' ? 'common.paymentHintPartialPurchase' : 'common.paymentHintPartial')
+        : (partner === 'supplier' ? 'common.paymentHintCreditPurchase' : 'common.paymentHintCredit')
+
+  useEffect(() => {
+    if ((type === 'cash' || type === 'partial') && !state.cash_box_id && cashBoxes.length > 0) {
+      const id = defaultCashBoxId(cashBoxes)
+      if (id) setState({ ...state, cash_box_id: id })
+    }
+    // Only auto-pick when box list arrives / type needs a box.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: avoid loops on every state change
+  }, [type, cashBoxes])
 
   return (
     <div className="space-y-3">
@@ -70,13 +97,16 @@ export default function PaymentTypeFields<T extends {
                   ...state,
                   payment_type: value,
                   paid_amount: value === 'partial' ? state.paid_amount : '',
-                  cash_box_id: value === 'credit' ? '' : state.cash_box_id,
+                  cash_box_id: value === 'credit'
+                    ? ''
+                    : (state.cash_box_id || defaultCashBoxId(cashBoxes)),
                 })}
               />
               {label}
             </label>
           ))}
         </div>
+        <p className="mt-2 text-xs leading-relaxed text-black/55">{t(hintKey)}</p>
       </Field>
 
       {(type === 'cash' || type === 'partial') && (
@@ -90,7 +120,7 @@ export default function PaymentTypeFields<T extends {
             <option value="">—</option>
             {cashBoxes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}{c.currency ? ` (${c.currency})` : ''}
+                {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
               </option>
             ))}
           </select>

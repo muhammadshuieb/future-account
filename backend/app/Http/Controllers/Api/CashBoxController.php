@@ -41,11 +41,19 @@ class CashBoxController extends ApiController
             'opening_balance' => ['numeric'],
             'currency' => ['nullable', 'string', 'max:8'],
             'is_active' => ['boolean'],
+            'is_default' => ['boolean'],
         ]);
 
         $data['currency'] = strtoupper($data['currency'] ?? 'SYP');
 
+        if (! empty($data['is_default'])) {
+            CashBox::query()->where('is_default', true)->update(['is_default' => false]);
+        }
+
         $box = CashBox::query()->create($data)->load(['branch', 'account']);
+        if ($box->is_default) {
+            \App\Models\Setting::setValue('default_cash_box_id', (string) $box->id, 'cash', 'string', 'الصندوق الرئيسي الافتراضي');
+        }
         $box->setAttribute('balance', $this->cash->cashBoxCurrencyBalance($box));
 
         return $this->ok($box, 201);
@@ -62,14 +70,22 @@ class CashBoxController extends ApiController
             'opening_balance' => ['numeric'],
             'currency' => ['nullable', 'string', 'max:8'],
             'is_active' => ['boolean'],
+            'is_default' => ['boolean'],
         ]);
 
         if (isset($data['currency'])) {
             $data['currency'] = strtoupper($data['currency']);
         }
 
+        if (! empty($data['is_default'])) {
+            CashBox::query()->where('id', '!=', $cashBox->id)->where('is_default', true)->update(['is_default' => false]);
+        }
+
         $cashBox->update($data);
         $fresh = $cashBox->fresh(['branch', 'account']);
+        if ($fresh->is_default) {
+            \App\Models\Setting::setValue('default_cash_box_id', (string) $fresh->id, 'cash', 'string', 'الصندوق الرئيسي الافتراضي');
+        }
         $fresh->setAttribute('balance', $this->cash->cashBoxCurrencyBalance($fresh));
 
         return $this->ok($fresh);

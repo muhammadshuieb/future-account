@@ -7,11 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CashBox extends Model
 {
-    protected $fillable = ['branch_id', 'code', 'name', 'account_id', 'opening_balance', 'currency', 'is_active'];
+    protected $fillable = ['branch_id', 'code', 'name', 'account_id', 'opening_balance', 'currency', 'is_active', 'is_default'];
 
     protected function casts(): array
     {
-        return ['opening_balance' => 'decimal:2', 'is_active' => 'boolean'];
+        return [
+            'opening_balance' => 'decimal:2',
+            'is_active' => 'boolean',
+            'is_default' => 'boolean',
+        ];
     }
 
     public function branch(): BelongsTo { return $this->belongsTo(Branch::class); }

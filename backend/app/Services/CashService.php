@@ -9,6 +9,7 @@ use App\Models\CashBox;
 use App\Models\CashTransfer;
 use App\Models\CurrencyExchange;
 use App\Models\JournalDetail;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -245,6 +246,41 @@ class CashService
         }
 
         return $this->ledgerBalance((int) $accountId, (float) $bank->opening_balance);
+    }
+
+    /**
+     * Resolve the main/default cash box:
+     * explicit id → setting default_cash_box_id → is_default → CASH-01 → first active.
+     */
+    public function resolveDefaultCashBoxId(?int $cashBoxId = null): ?int
+    {
+        if ($cashBoxId) {
+            $exists = CashBox::query()->whereKey($cashBoxId)->where('is_active', true)->exists();
+
+            return $exists ? $cashBoxId : null;
+        }
+
+        $setting = Setting::getValue('default_cash_box_id');
+        if ($setting) {
+            $id = (int) $setting;
+            if ($id > 0 && CashBox::query()->whereKey($id)->where('is_active', true)->exists()) {
+                return $id;
+            }
+        }
+
+        $flagged = CashBox::query()->where('is_default', true)->where('is_active', true)->value('id');
+        if ($flagged) {
+            return (int) $flagged;
+        }
+
+        $cash01 = CashBox::query()->where('code', 'CASH-01')->where('is_active', true)->value('id');
+        if ($cash01) {
+            return (int) $cash01;
+        }
+
+        $first = CashBox::query()->where('is_active', true)->orderBy('id')->value('id');
+
+        return $first ? (int) $first : null;
     }
 
     public function cashBoxBalance(CashBox $box): float
