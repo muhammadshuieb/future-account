@@ -114,10 +114,11 @@ export default function WarehousePage() {
     queryFn: async () => (await api.get('/units', { params: tab === 'units' ? search.params : {} })).data.data,
   })
   const warehouseFilterParams = useMemo(() => {
-    const params: Record<string, string> = { ...search.params }
+    const params: Record<string, string> = {}
+    if (search.debouncedQ) params.q = search.debouncedQ
     if (filterWarehouseId) params.warehouse_id = filterWarehouseId
     return params
-  }, [search.params, filterWarehouseId])
+  }, [search.debouncedQ, filterWarehouseId])
 
   const stock = useQuery({
     queryKey: ['stock-levels', search.debouncedQ, filterWarehouseId],
