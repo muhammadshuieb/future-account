@@ -548,12 +548,12 @@ export default function SalesPage() {
             <p><b>{t('common.exchangeRate')}:</b> {String(data.exchange_rate)}</p>
           )}
           <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')} {String(data.currency || baseCurrency)}</p>
-          {data.payment_type && (
-            <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), t)}</p>
-          )}
-          {data.paid_amount != null && data.invoice_number && (
-            <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {t('common.remainingAmount')}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
-          )}
+          {data.payment_type ? (
+            <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), (k) => String(t(k)))}</p>
+          ) : null}
+          {data.paid_amount != null && data.invoice_number ? (
+            <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {String(t('common.remainingAmount'))}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
+          ) : null}
           {data.tax_amount != null && Number(data.tax_amount) > 0 && (
             <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
           )}

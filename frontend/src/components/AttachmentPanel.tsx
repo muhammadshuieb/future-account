@@ -36,7 +36,7 @@ export async function uploadAttachment(attachableType: string, attachableId: num
 
 export function AttachmentIcon({ count }: { count?: number | null }) {
   if (!count || count < 1) return null
-  return <Paperclip size={14} className="inline text-teal" title={`${count}`} aria-label="attachment" />
+  return <Paperclip size={14} className="inline text-teal" aria-label="attachment" />
 }
 
 export function PendingAttachmentField({

@@ -24,9 +24,9 @@ type Props<T extends {
 export function paymentTypeLabel(type?: string | null, t?: (k: string) => string): string {
   const key = type || 'credit'
   if (t) {
-    if (key === 'cash') return t('common.paymentCash')
-    if (key === 'partial') return t('common.paymentPartial')
-    return t('common.paymentCredit')
+    if (key === 'cash') return String(t('common.paymentCash'))
+    if (key === 'partial') return String(t('common.paymentPartial'))
+    return String(t('common.paymentCredit'))
   }
   if (key === 'cash') return 'نقدي'
   if (key === 'partial') return 'دفعة من المبلغ'

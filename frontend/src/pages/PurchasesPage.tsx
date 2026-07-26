@@ -13,7 +13,7 @@ import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachme
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean }
