@@ -92,6 +92,51 @@ class CashExchangeTest extends TestCase
         $this->assertEqualsWithDelta(100, (float) $usd['balance'], 0.01);
     }
 
+    public function test_exchange_uses_posted_source_box_balance_before_deducting(): void
+    {
+        $cash = Account::query()->where('code', '1101')->firstOrFail();
+        $fundingBox = CashBox::query()->create([
+            'code' => 'SYP-2',
+            'name' => 'صندوق تمويل ليرة',
+            'account_id' => $cash->id,
+            'opening_balance' => 2_000_000,
+            'currency' => 'SYP',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/cash-transfers', [
+            'transfer_date' => now()->toDateString(),
+            'from_type' => 'cash_box',
+            'from_id' => $fundingBox->id,
+            'to_type' => 'cash_box',
+            'to_id' => $this->sypBox->id,
+            'amount' => 750_000,
+            'status' => 'posted',
+        ])->assertCreated();
+
+        $this->sypBox->update(['opening_balance' => 0]);
+
+        $response = $this->postJson('/api/currency-exchanges', [
+            'exchange_date' => now()->toDateString(),
+            'source_cash_box_id' => $this->sypBox->id,
+            'target_cash_box_id' => $this->usdBox->id,
+            'source_currency' => 'SYP',
+            'target_currency' => 'USD',
+            'source_amount' => 750_000,
+            'target_amount' => 50,
+            'exchange_rate' => 15000,
+            'status' => 'posted',
+        ]);
+
+        $response->assertCreated()->assertJsonPath('data.status', 'posted');
+
+        $boxes = $this->getJson('/api/cash-boxes')->json('data');
+        $syp = collect($boxes)->firstWhere('id', $this->sypBox->id);
+        $usd = collect($boxes)->firstWhere('id', $this->usdBox->id);
+        $this->assertEqualsWithDelta(0, (float) $syp['balance'], 0.01);
+        $this->assertEqualsWithDelta(50, (float) $usd['balance'], 0.01);
+    }
+
     public function test_posts_fx_loss_when_received_below_official_rate(): void
     {
         $response = $this->postJson('/api/currency-exchanges', [

@@ -9,7 +9,9 @@ use App\Models\CashBox;
 use App\Models\CashTransfer;
 use App\Models\CurrencyExchange;
 use App\Models\JournalDetail;
+use App\Models\Receipt;
 use App\Models\Setting;
+use App\Models\SupplierPayment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -297,13 +299,54 @@ class CashService
 
     /**
      * Balance in the cash box's own currency.
-     * Base-currency boxes with a dedicated GL account use ledger balance;
-     * otherwise opening + posted currency exchanges (in/out).
+     * Base-currency boxes with a dedicated GL account use ledger balance.
+     * Non-base boxes are tracked from their own posted box movements.
      */
     public function cashBoxCurrencyBalance(CashBox $box): float
     {
         $currency = strtoupper((string) ($box->currency ?: 'USD'));
         $base = $this->currencies->baseCurrency();
+
+        if ($currency === $base && $box->account_id) {
+            // Ledger already reflects posted movements in the system base currency.
+            return $this->cashBoxBalance($box);
+        }
+
+        $receiptsIn = Receipt::query()
+            ->where('cash_box_id', $box->id)
+            ->where('status', 'posted')
+            ->get()
+            ->sum(fn (Receipt $receipt) => $this->boxMovementAmount(
+                $currency,
+                $receipt->currency,
+                (float) $receipt->amount,
+                $receipt->base_amount !== null ? (float) $receipt->base_amount : null,
+                $receipt->receipt_date?->toDateString()
+            ));
+
+        $paymentsOut = SupplierPayment::query()
+            ->where('cash_box_id', $box->id)
+            ->where('status', 'posted')
+            ->get()
+            ->sum(fn (SupplierPayment $payment) => $this->boxMovementAmount(
+                $currency,
+                $payment->currency,
+                (float) $payment->amount,
+                $payment->base_amount !== null ? (float) $payment->base_amount : null,
+                $payment->payment_date?->toDateString()
+            ));
+
+        $transfersIn = (float) CashTransfer::query()
+            ->where('to_type', 'cash_box')
+            ->where('to_id', $box->id)
+            ->where('status', 'posted')
+            ->sum('amount');
+
+        $transfersOut = (float) CashTransfer::query()
+            ->where('from_type', 'cash_box')
+            ->where('from_id', $box->id)
+            ->where('status', 'posted')
+            ->sum('amount');
 
         $in = (float) CurrencyExchange::query()
             ->where('target_cash_box_id', $box->id)
@@ -315,12 +358,42 @@ class CashService
             ->sum('source_amount');
         $exchangeNet = $in - $out;
 
-        if ($currency === $base && $box->account_id) {
-            // Ledger already reflects posted exchange journals in base currency.
-            return $this->cashBoxBalance($box);
+        return round(
+            (float) $box->opening_balance
+            + (float) $receiptsIn
+            - (float) $paymentsOut
+            + $transfersIn
+            - $transfersOut
+            + $exchangeNet,
+            2
+        );
+    }
+
+    protected function boxMovementAmount(
+        string $boxCurrency,
+        ?string $documentCurrency,
+        float $amount,
+        ?float $baseAmount = null,
+        ?string $asOf = null,
+    ): float {
+        $documentCurrency = strtoupper((string) ($documentCurrency ?: $boxCurrency));
+        if ($documentCurrency === $boxCurrency) {
+            return round($amount, 2);
         }
 
-        return round((float) $box->opening_balance + $exchangeNet, 2);
+        if ($baseAmount !== null && $baseAmount > 0) {
+            try {
+                return $this->currencies->convert($baseAmount, $this->currencies->baseCurrency(), $boxCurrency, $asOf);
+            } catch (ValidationException) {
+                return round($amount, 2);
+            }
+        }
+
+        try {
+            return $this->currencies->convert($amount, $documentCurrency, $boxCurrency, $asOf);
+        } catch (ValidationException) {
+            return round($amount, 2);
+        }
     }
 
     protected function ledgerBalance(int $accountId, float $opening): float
