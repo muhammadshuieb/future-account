@@ -54,7 +54,7 @@ class PurchaseInvoiceController extends ApiController
     {
         $this->authorizePermission('purchases.view');
 
-        return $this->ok($purchaseInvoice->load(['supplier', 'warehouse', 'cashBox', 'lines.product', 'journalEntry', 'attachments']));
+        return $this->ok($purchaseInvoice->load(['supplier', 'warehouse', 'cashBox', 'lines.product.unit', 'journalEntry', 'attachments']));
     }
 
     public function post(PurchaseInvoice $purchaseInvoice): JsonResponse

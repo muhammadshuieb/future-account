@@ -54,7 +54,7 @@ class SalesInvoiceController extends ApiController
     {
         $this->authorizePermission('sales.view');
 
-        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'cashBox', 'lines.product', 'journalEntry', 'attachments']));
+        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'cashBox', 'lines.product.unit', 'journalEntry', 'attachments']));
     }
 
     public function post(SalesInvoice $salesInvoice): JsonResponse

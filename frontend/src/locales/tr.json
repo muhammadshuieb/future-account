@@ -59,6 +59,7 @@
     "warehouse": "Depo",
     "product": "Ürün",
     "quantity": "Miktar",
+    "unit": "Birim",
     "price": "Fiyat",
     "cost": "Maliyet",
     "batch": "Parti",

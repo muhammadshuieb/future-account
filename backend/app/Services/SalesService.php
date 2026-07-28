@@ -7,9 +7,11 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Receipt;
 use App\Models\SalesInvoice;
+use App\Models\SalesInvoiceLine;
 use App\Models\SalesOrder;
 use App\Models\SalesQuote;
 use App\Models\SalesReturn;
+use App\Models\SalesReturnLine;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,9 @@ use Illuminate\Validation\ValidationException;
 
 class SalesService
 {
+    /** Same-day ordering so a statement reads invoice → return → collection. */
+    protected const STATEMENT_ORDER = ['invoice' => 1, 'return' => 2, 'receipt' => 3];
+
     public function __construct(
         protected JournalEntryService $journals,
         protected InventoryService $inventory,
@@ -33,17 +38,20 @@ class SalesService
 
             [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
 
-            if (($data['status'] ?? 'draft') === 'posted') {
-                // Credit limit applies to the unpaid remainder.
-                $this->assertCustomerCreditLimit((int) $data['customer_id'], max(0, $total - $intendedPaid));
-            }
-
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? null,
                 isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
                 $data['invoice_date'] ?? null,
             );
+
+            if (($data['status'] ?? 'draft') === 'posted') {
+                // Credit limit applies to the unpaid remainder, expressed in base currency.
+                $this->assertCustomerCreditLimit(
+                    (int) $data['customer_id'],
+                    round(max(0, $total - $intendedPaid) * (float) $fx['exchange_rate'], 2)
+                );
+            }
 
             $warehouseId = $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
 
@@ -82,7 +90,7 @@ class SalesService
                 $invoice->update(['paid_amount' => $intendedPaid]);
             }
 
-            return $invoice->load(['lines.product', 'customer', 'warehouse', 'cashBox', 'attachments']);
+            return $invoice->load(['lines.product.unit', 'customer', 'warehouse', 'cashBox', 'attachments']);
         });
     }
 
@@ -93,7 +101,7 @@ class SalesService
         }
 
         return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
-            $invoice->load(['lines.product', 'customer']);
+            $invoice->load(['lines.product.unit', 'customer']);
 
             if ($invoice->lines->isEmpty()) {
                 throw ValidationException::withMessages(['lines' => ['الفاتورة بلا بنود.']]);
@@ -116,7 +124,11 @@ class SalesService
             // Reset paid_amount before auto-receipt increments it.
             $invoice->update(['paid_amount' => 0]);
 
-            $this->assertCustomerCreditLimit((int) $invoice->customer_id, max(0, (float) $invoice->total - $intendedPaid));
+            // Base currency, otherwise a foreign-currency total is measured against a base-currency limit.
+            $this->assertCustomerCreditLimit(
+                (int) $invoice->customer_id,
+                round(max(0, (float) $invoice->total - $intendedPaid) * (float) ($invoice->exchange_rate ?: 1), 2)
+            );
 
             $customer = $invoice->customer;
             $arAccount = $customer->account_id
@@ -129,8 +141,9 @@ class SalesService
 
             $rate = (float) ($invoice->exchange_rate ?: 1);
             $baseTotal = (float) ($invoice->base_amount ?: round((float) $invoice->total * $rate, 2));
-            $baseSubtotal = round((float) $invoice->subtotal * $rate, 2);
             $baseTax = round((float) $invoice->tax_amount * $rate, 2);
+            // Revenue absorbs the sub-cent FX rounding so the entry always balances against base_amount.
+            $baseSubtotal = round($baseTotal - $baseTax, 2);
 
             $glLines = [
                 ['account_id' => $arAccount->id, 'debit' => $baseTotal, 'credit' => 0, 'memo' => 'فاتورة '.$invoice->invoice_number],
@@ -191,6 +204,7 @@ class SalesService
 
             $entry = $this->journals->create([
                 'entry_date' => $invoice->invoice_date->toDateString(),
+                'branch_id' => $this->resolveSalesBranchId($invoice->branch_id, $invoice->warehouse_id, $invoice->customer?->branch_id),
                 'description' => 'ترحيل فاتورة مبيعات '.$invoice->invoice_number,
                 'reference' => $invoice->invoice_number,
                 'status' => 'posted',
@@ -221,6 +235,7 @@ class SalesService
                     'receipt_date' => $invoice->invoice_date->toDateString(),
                     'customer_id' => $invoice->customer_id,
                     'sales_invoice_id' => $invoice->id,
+                    'branch_id' => $invoice->branch_id,
                     'cash_box_id' => $cashBoxId,
                     'method' => 'cash',
                     'amount' => $intendedPaid,
@@ -233,7 +248,7 @@ class SalesService
 
             $this->audit->log($user, 'sales_invoice.posted', $invoice);
 
-            return $invoice->fresh(['lines.product', 'customer', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
+            return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
     }
 
@@ -348,15 +363,30 @@ class SalesService
                 : Account::query()->where('code', '1103')->firstOrFail();
             $sales = Account::query()->where('code', '4101')->firstOrFail();
 
+            $baseAmount = (float) ($ret->base_amount ?: $ret->total);
+
+            $glLines = [
+                ['account_id' => $sales->id, 'debit' => $baseAmount, 'credit' => 0],
+                ['account_id' => $ar->id, 'debit' => 0, 'credit' => $baseAmount],
+            ];
+
+            // Returned goods come back into stock, so inventory and COGS must be reversed too.
+            $returnedCost = $ret->warehouse_id ? $this->returnedGoodsCost($ret) : 0.0;
+
+            if ($returnedCost > 0) {
+                $inventoryAccount = Account::query()->where('code', '1104')->firstOrFail();
+                $cogsAccount = Account::query()->where('code', '5101')->firstOrFail();
+                $glLines[] = ['account_id' => $inventoryAccount->id, 'debit' => $returnedCost, 'credit' => 0, 'memo' => 'إرجاع تكلفة بضاعة'];
+                $glLines[] = ['account_id' => $cogsAccount->id, 'debit' => 0, 'credit' => $returnedCost, 'memo' => 'عكس تكلفة البضاعة المباعة'];
+            }
+
             $entry = $this->journals->create([
                 'entry_date' => $ret->return_date->toDateString(),
+                'branch_id' => $this->resolveSalesBranchId($ret->customer?->branch_id, $ret->warehouse_id, $ret->customer?->branch_id),
                 'description' => 'مرتجع مبيعات '.$ret->return_number,
                 'reference' => $ret->return_number,
                 'status' => 'posted',
-            ], [
-                ['account_id' => $sales->id, 'debit' => (float) ($ret->base_amount ?: $ret->total), 'credit' => 0],
-                ['account_id' => $ar->id, 'debit' => 0, 'credit' => (float) ($ret->base_amount ?: $ret->total)],
-            ], $user);
+            ], $glLines, $user);
 
             if ($ret->warehouse_id) {
                 foreach ($ret->lines as $line) {
@@ -368,8 +398,10 @@ class SalesService
                         $user,
                         [
                             'movement_date' => $ret->return_date->toDateString(),
+                            'unit_cost' => $this->returnedUnitCost($ret, $line),
                             'reference_type' => $ret::class,
                             'reference_id' => $ret->id,
+                            'journal_entry_id' => $entry->id,
                             'notes' => 'مرتجع مبيعات '.$ret->return_number,
                         ]
                     );
@@ -380,6 +412,37 @@ class SalesService
 
             return $ret->fresh(['lines.product', 'customer']);
         });
+    }
+
+    protected function returnedGoodsCost(SalesReturn $ret): float
+    {
+        $cost = 0.0;
+
+        foreach ($ret->lines as $line) {
+            $cost += round((float) $line->quantity * $this->returnedUnitCost($ret, $line), 2);
+        }
+
+        return round($cost, 2);
+    }
+
+    /**
+     * Cost per unit for returned goods: the cost captured on the original invoice line
+     * when the return is linked to an invoice, otherwise the product's current cost.
+     */
+    protected function returnedUnitCost(SalesReturn $ret, SalesReturnLine $line): float
+    {
+        if ($ret->sales_invoice_id) {
+            $invoiceCost = SalesInvoiceLine::query()
+                ->where('sales_invoice_id', $ret->sales_invoice_id)
+                ->where('product_id', $line->product_id)
+                ->value('cost_price');
+
+            if ($invoiceCost !== null) {
+                return (float) $invoiceCost;
+            }
+        }
+
+        return (float) ($line->product?->cost_price ?? Product::query()->whereKey($line->product_id)->value('cost_price') ?? 0);
     }
 
     public function createReceipt(array $data, User $user): Receipt
@@ -468,6 +531,7 @@ class SalesService
 
             $entry = $this->journals->create([
                 'entry_date' => $receipt->receipt_date->toDateString(),
+                'branch_id' => $this->resolveReceiptBranchId($receipt),
                 'description' => 'سند قبض '.$receipt->receipt_number,
                 'reference' => $receipt->receipt_number,
                 'status' => 'posted',
@@ -742,12 +806,16 @@ class SalesService
     {
         $events = [];
 
+        // Every event is expressed in the system base currency, otherwise a foreign-currency
+        // receipt would be summed against base-currency invoices.
         foreach ($customer->invoices()->where('status', 'posted')->get() as $inv) {
             $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
-                'debit' => (float) $inv->total,
+                'currency' => $inv->currency,
+                'document_amount' => (float) $inv->total,
+                'debit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
                 'credit' => 0.0,
             ];
         }
@@ -757,12 +825,30 @@ class SalesService
                 'date' => $rc->receipt_date->toDateString(),
                 'type' => 'receipt',
                 'number' => $rc->receipt_number,
+                'currency' => $rc->currency,
+                'document_amount' => (float) $rc->amount,
                 'debit' => 0.0,
-                'credit' => (float) $rc->amount,
+                'credit' => $this->baseValue($rc->base_amount, $rc->amount, $rc->exchange_rate),
             ];
         }
 
-        usort($events, fn ($a, $b) => strcmp($a['date'], $b['date']) ?: strcmp($a['number'], $b['number']));
+        foreach (SalesReturn::query()->where('customer_id', $customer->id)->where('status', 'posted')->get() as $ret) {
+            $events[] = [
+                'date' => $ret->return_date->toDateString(),
+                'type' => 'return',
+                'number' => $ret->return_number,
+                'currency' => $ret->currency,
+                'document_amount' => (float) $ret->total,
+                'debit' => 0.0,
+                'credit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
+            ];
+        }
+
+        usort($events, function ($a, $b) {
+            return strcmp($a['date'], $b['date'])
+                ?: (self::STATEMENT_ORDER[$a['type']] <=> self::STATEMENT_ORDER[$b['type']])
+                ?: strcmp($a['number'], $b['number']);
+        });
 
         $openingBalance = 0.0;
         $balance = 0.0;
@@ -785,6 +871,8 @@ class SalesService
                 'date' => $event['date'],
                 'type' => $event['type'],
                 'number' => $event['number'],
+                'currency' => $event['currency'],
+                'document_amount' => $event['document_amount'],
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
@@ -801,11 +889,26 @@ class SalesService
             'customer' => $customer,
             'from' => $from,
             'to' => $to,
+            'currency' => $this->currencies->baseCurrency(),
             'opening_balance' => round($openingBalance, 2),
             'closing_balance' => round($closingBalance, 2),
             'rows' => $rows,
             'balance' => round($closingBalance, 2),
         ];
+    }
+
+    /**
+     * Document value expressed in the system base currency.
+     */
+    protected function baseValue(mixed $baseAmount, mixed $documentAmount, mixed $exchangeRate): float
+    {
+        if ($baseAmount !== null && $baseAmount !== '' && (float) $baseAmount > 0) {
+            return round((float) $baseAmount, 2);
+        }
+
+        $rate = (float) ($exchangeRate ?: 1);
+
+        return round((float) $documentAmount * ($rate > 0 ? $rate : 1), 2);
     }
 
     public function deleteQuote(SalesQuote $quote): void
@@ -901,6 +1004,53 @@ class SalesService
         return $default ? (int) $default : null;
     }
 
+    protected function resolveSalesBranchId(?int $branchId, ?int $warehouseId, ?int $fallbackBranchId = null): ?int
+    {
+        if ($branchId) {
+            return $branchId;
+        }
+
+        if ($warehouseId) {
+            $warehouseBranchId = \App\Models\Warehouse::query()->whereKey($warehouseId)->value('branch_id');
+            if ($warehouseBranchId) {
+                return (int) $warehouseBranchId;
+            }
+        }
+
+        return $fallbackBranchId ? (int) $fallbackBranchId : null;
+    }
+
+    protected function resolveReceiptBranchId(Receipt $receipt): ?int
+    {
+        if ($receipt->sales_invoice_id) {
+            $invoiceBranchId = SalesInvoice::query()->whereKey($receipt->sales_invoice_id)->value('branch_id');
+            if ($invoiceBranchId) {
+                return (int) $invoiceBranchId;
+            }
+        }
+
+        $customerBranchId = Customer::query()->whereKey($receipt->customer_id)->value('branch_id');
+        if ($customerBranchId) {
+            return (int) $customerBranchId;
+        }
+
+        if ($receipt->cash_box_id) {
+            $cashBoxBranchId = \App\Models\CashBox::query()->whereKey($receipt->cash_box_id)->value('branch_id');
+            if ($cashBoxBranchId) {
+                return (int) $cashBoxBranchId;
+            }
+        }
+
+        if ($receipt->bank_id) {
+            $bankBranchId = \App\Models\Bank::query()->whereKey($receipt->bank_id)->value('branch_id');
+            if ($bankBranchId) {
+                return (int) $bankBranchId;
+            }
+        }
+
+        return null;
+    }
+
     protected function assertCustomerCreditLimit(int $customerId, float $additionalAmount): void
     {
         $customer = Customer::query()->findOrFail($customerId);
@@ -917,10 +1067,11 @@ class SalesService
             throw ValidationException::withMessages([
                 'customer_id' => [
                     sprintf(
-                        'تجاوز حد الائتمان للعميل (%s). الرصيد الحالي: %s — الحد: %s',
+                        'تجاوز حد الائتمان للعميل (%s). الرصيد الحالي: %s — الحد: %s (%s)',
                         $customer->name,
                         number_format((float) $statement['balance'], 2),
                         number_format($limit, 2),
+                        $this->currencies->baseCurrency(),
                     ),
                 ],
             ]);

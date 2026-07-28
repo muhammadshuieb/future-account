@@ -17,6 +17,9 @@ use Illuminate\Validation\ValidationException;
 
 class PurchaseService
 {
+    /** Same-day ordering so a statement reads invoice → return → payment. */
+    protected const STATEMENT_ORDER = ['invoice' => 1, 'return' => 2, 'payment' => 3];
+
     public function __construct(
         protected JournalEntryService $journals,
         protected InventoryService $inventory,
@@ -68,7 +71,7 @@ class PurchaseService
                 return $this->postInvoice($invoice, $user, $intendedPaid);
             }
 
-            return $invoice->load(['lines.product', 'supplier', 'warehouse', 'cashBox', 'attachments']);
+            return $invoice->load(['lines.product.unit', 'supplier', 'warehouse', 'cashBox', 'attachments']);
         });
     }
 
@@ -79,7 +82,7 @@ class PurchaseService
         }
 
         return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
-            $invoice->load(['lines.product', 'supplier']);
+            $invoice->load(['lines.product.unit', 'supplier']);
 
             if (! $invoice->warehouse_id) {
                 throw ValidationException::withMessages(['warehouse_id' => ['يجب تحديد المخزن قبل الترحيل.']]);
@@ -105,9 +108,10 @@ class PurchaseService
                 ?? Account::query()->where('code', '2102')->firstOrFail();
 
             $rate = (float) ($invoice->exchange_rate ?: 1);
-            $baseSubtotal = round((float) $invoice->subtotal * $rate, 2);
-            $baseTax = round((float) $invoice->tax_amount * $rate, 2);
             $baseTotal = (float) ($invoice->base_amount ?: round((float) $invoice->total * $rate, 2));
+            $baseTax = round((float) $invoice->tax_amount * $rate, 2);
+            // Inventory absorbs the sub-cent FX rounding so the entry always balances against base_amount.
+            $baseSubtotal = round($baseTotal - $baseTax, 2);
 
             $glLines = [
                 ['account_id' => $inventory->id, 'debit' => $baseSubtotal, 'credit' => 0],
@@ -121,6 +125,7 @@ class PurchaseService
 
             $entry = $this->journals->create([
                 'entry_date' => $invoice->invoice_date->toDateString(),
+                'branch_id' => $this->resolvePurchaseBranchId($invoice->branch_id, $invoice->warehouse_id, $invoice->supplier?->branch_id),
                 'description' => 'ترحيل فاتورة مشتريات '.$invoice->invoice_number,
                 'reference' => $invoice->invoice_number,
                 'status' => 'posted',
@@ -128,7 +133,11 @@ class PurchaseService
 
             foreach ($invoice->lines as $line) {
                 $product = $line->product;
-                $product->update(['cost_price' => $line->unit_cost]);
+                // Line costs are in the invoice currency; product cost and stock cost are kept in base currency.
+                $baseUnitCost = round((float) $line->unit_cost * $rate, 4);
+                $product->update([
+                    'cost_price' => $this->inventory->movingAverageCost($product, (float) $line->quantity, $baseUnitCost),
+                ]);
 
                 $this->inventory->adjustStock(
                     $invoice->warehouse_id,
@@ -138,7 +147,7 @@ class PurchaseService
                     $user,
                     [
                         'movement_date' => $invoice->invoice_date->toDateString(),
-                        'unit_cost' => $line->unit_cost,
+                        'unit_cost' => $baseUnitCost,
                         'batch_no' => $product->track_batch ? ($line->batch_no ?? null) : null,
                         'serial_no' => $line->serial_no,
                         'reference_type' => $invoice::class,
@@ -174,6 +183,7 @@ class PurchaseService
                     'payment_date' => $invoice->invoice_date->toDateString(),
                     'supplier_id' => $invoice->supplier_id,
                     'purchase_invoice_id' => $invoice->id,
+                    'branch_id' => $invoice->branch_id,
                     'cash_box_id' => $cashBoxId,
                     'method' => 'cash',
                     'amount' => $intendedPaid,
@@ -186,7 +196,7 @@ class PurchaseService
 
             $this->audit->log($user, 'purchase_invoice.posted', $invoice);
 
-            return $invoice->fresh(['lines.product', 'supplier', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
+            return $invoice->fresh(['lines.product.unit', 'supplier', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
     }
 
@@ -302,6 +312,7 @@ class PurchaseService
 
             $entry = $this->journals->create([
                 'entry_date' => $ret->return_date->toDateString(),
+                'branch_id' => $this->resolvePurchaseBranchId($ret->supplier?->branch_id, $ret->warehouse_id, $ret->supplier?->branch_id),
                 'description' => 'مرتجع مشتريات '.$ret->return_number,
                 'reference' => $ret->return_number,
                 'status' => 'posted',
@@ -311,6 +322,8 @@ class PurchaseService
             ], $user);
 
             if ($ret->warehouse_id) {
+                $returnRate = (float) ($ret->exchange_rate ?: 1);
+
                 foreach ($ret->lines as $line) {
                     $this->inventory->adjustStock(
                         $ret->warehouse_id,
@@ -320,9 +333,13 @@ class PurchaseService
                         $user,
                         [
                             'movement_date' => $ret->return_date->toDateString(),
+                            'unit_cost' => round((float) $line->unit_cost * ($returnRate > 0 ? $returnRate : 1), 4),
                             'reference_type' => $ret::class,
                             'reference_id' => $ret->id,
+                            'journal_entry_id' => $entry->id,
                             'notes' => 'مرتجع مشتريات '.$ret->return_number,
+                            'batch_no' => $line->batch_no,
+                            'serial_no' => $line->serial_no,
                         ]
                     );
                 }
@@ -419,6 +436,7 @@ class PurchaseService
 
             $entry = $this->journals->create([
                 'entry_date' => $payment->payment_date->toDateString(),
+                'branch_id' => $this->resolvePaymentBranchId($payment),
                 'description' => 'سند صرف مورد '.$payment->payment_number,
                 'reference' => $payment->payment_number,
                 'status' => 'posted',
@@ -686,6 +704,53 @@ class PurchaseService
         return $default ? (int) $default : null;
     }
 
+    protected function resolvePurchaseBranchId(?int $branchId, ?int $warehouseId, ?int $fallbackBranchId = null): ?int
+    {
+        if ($branchId) {
+            return $branchId;
+        }
+
+        if ($warehouseId) {
+            $warehouseBranchId = \App\Models\Warehouse::query()->whereKey($warehouseId)->value('branch_id');
+            if ($warehouseBranchId) {
+                return (int) $warehouseBranchId;
+            }
+        }
+
+        return $fallbackBranchId ? (int) $fallbackBranchId : null;
+    }
+
+    protected function resolvePaymentBranchId(SupplierPayment $payment): ?int
+    {
+        if ($payment->purchase_invoice_id) {
+            $invoiceBranchId = PurchaseInvoice::query()->whereKey($payment->purchase_invoice_id)->value('branch_id');
+            if ($invoiceBranchId) {
+                return (int) $invoiceBranchId;
+            }
+        }
+
+        $supplierBranchId = Supplier::query()->whereKey($payment->supplier_id)->value('branch_id');
+        if ($supplierBranchId) {
+            return (int) $supplierBranchId;
+        }
+
+        if ($payment->cash_box_id) {
+            $cashBoxBranchId = \App\Models\CashBox::query()->whereKey($payment->cash_box_id)->value('branch_id');
+            if ($cashBoxBranchId) {
+                return (int) $cashBoxBranchId;
+            }
+        }
+
+        if ($payment->bank_id) {
+            $bankBranchId = \App\Models\Bank::query()->whereKey($payment->bank_id)->value('branch_id');
+            if ($bankBranchId) {
+                return (int) $bankBranchId;
+            }
+        }
+
+        return null;
+    }
+
     public function deleteRequest(PurchaseRequest $request): void
     {
         if ($request->status === 'converted') {
@@ -766,13 +831,17 @@ class PurchaseService
     {
         $events = [];
 
+        // Every event is expressed in the system base currency, otherwise a foreign-currency
+        // invoice or payment would be summed against base-currency documents.
         foreach ($supplier->invoices()->where('status', 'posted')->get() as $inv) {
             $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
+                'currency' => $inv->currency,
+                'document_amount' => (float) $inv->total,
                 'debit' => 0.0,
-                'credit' => (float) $inv->total,
+                'credit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
             ];
         }
 
@@ -781,12 +850,30 @@ class PurchaseService
                 'date' => $pay->payment_date->toDateString(),
                 'type' => 'payment',
                 'number' => $pay->payment_number,
-                'debit' => (float) $pay->amount,
+                'currency' => $pay->currency,
+                'document_amount' => (float) $pay->amount,
+                'debit' => $this->baseValue($pay->base_amount, $pay->amount, $pay->exchange_rate),
                 'credit' => 0.0,
             ];
         }
 
-        usort($events, fn ($a, $b) => strcmp($a['date'], $b['date']) ?: strcmp($a['number'], $b['number']));
+        foreach (PurchaseReturn::query()->where('supplier_id', $supplier->id)->where('status', 'posted')->get() as $ret) {
+            $events[] = [
+                'date' => $ret->return_date->toDateString(),
+                'type' => 'return',
+                'number' => $ret->return_number,
+                'currency' => $ret->currency,
+                'document_amount' => (float) $ret->total,
+                'debit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
+                'credit' => 0.0,
+            ];
+        }
+
+        usort($events, function ($a, $b) {
+            return strcmp($a['date'], $b['date'])
+                ?: (self::STATEMENT_ORDER[$a['type']] <=> self::STATEMENT_ORDER[$b['type']])
+                ?: strcmp($a['number'], $b['number']);
+        });
 
         $openingBalance = 0.0;
         $balance = 0.0;
@@ -810,6 +897,8 @@ class PurchaseService
                 'date' => $event['date'],
                 'type' => $event['type'],
                 'number' => $event['number'],
+                'currency' => $event['currency'],
+                'document_amount' => $event['document_amount'],
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
@@ -826,10 +915,25 @@ class PurchaseService
             'supplier' => $supplier,
             'from' => $from,
             'to' => $to,
+            'currency' => $this->currencies->baseCurrency(),
             'opening_balance' => round($openingBalance, 2),
             'closing_balance' => round($closingBalance, 2),
             'rows' => $rows,
             'balance' => round($closingBalance, 2),
         ];
+    }
+
+    /**
+     * Document value expressed in the system base currency.
+     */
+    protected function baseValue(mixed $baseAmount, mixed $documentAmount, mixed $exchangeRate): float
+    {
+        if ($baseAmount !== null && $baseAmount !== '' && (float) $baseAmount > 0) {
+            return round((float) $baseAmount, 2);
+        }
+
+        $rate = (float) ($exchangeRate ?: 1);
+
+        return round((float) $documentAmount * ($rate > 0 ? $rate : 1), 2);
     }
 }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
+import { unitFromProduct } from '@/lib/productUnit'
 
 export type SalesInvoicePrintData = {
   invoice_number: string
@@ -14,9 +15,10 @@ export type SalesInvoicePrintData = {
   paid_amount?: number
   payment_type?: string
   currency?: string
+  notes?: string | null
   customer?: { name: string; tax_number?: string; phone?: string }
   lines?: {
-    product?: { name: string; sku?: string }
+    product?: { name: string; sku?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_price: number
     line_total: number
@@ -34,9 +36,10 @@ export type PurchaseInvoicePrintData = {
   paid_amount?: number
   payment_type?: string
   currency?: string
+  notes?: string | null
   supplier?: { name: string; tax_number?: string; phone?: string }
   lines?: {
-    product?: { name: string; sku?: string }
+    product?: { name: string; sku?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_cost?: number
     unit_price?: number
@@ -189,10 +192,18 @@ export function SalesInvoicePrintView({
         )}
       </div>
 
+      {invoice.notes ? (
+        <div className="rounded border border-black/10 bg-black/[0.02] p-3">
+          <p className="text-xs font-semibold text-black/55">ملاحظات</p>
+          <p className="mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      ) : null}
+
       <table className="data-table">
         <thead>
           <tr>
             <th>{t('common.product')}</th>
+            <th>{t('common.unit')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.price')}</th>
             {(invoice.lines || []).some((l) => l.serial_no) && <th>{t('common.serial')}</th>}
@@ -203,6 +214,7 @@ export function SalesInvoicePrintView({
           {(invoice.lines || []).map((l, i) => (
             <tr key={i}>
               <td>{l.product?.name}</td>
+              <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
               {(invoice.lines || []).some((row) => row.serial_no) && (
@@ -292,10 +304,18 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         )}
       </div>
 
+      {invoice.notes ? (
+        <div className="rounded border border-black/10 bg-black/[0.02] p-3">
+          <p className="text-xs font-semibold text-black/55">ملاحظات</p>
+          <p className="mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      ) : null}
+
       <table className="data-table">
         <thead>
           <tr>
             <th>{t('common.product')}</th>
+            <th>{t('common.unit')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.cost')}</th>
             <th>{t('common.batch')}</th>
@@ -306,6 +326,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
           {lines.map((l, i) => (
             <tr key={i}>
               <td>{l.product?.name}</td>
+              <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_cost ?? l.unit_price ?? '—'}</td>
               <td className="font-mono text-xs">{l.batch_no || l.serial_no || '—'}</td>
