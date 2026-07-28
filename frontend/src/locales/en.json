@@ -191,7 +191,11 @@
     "returnPosted": "Sales return posted",
     "convertedToOrder": "Converted to sales order",
     "convertedToInvoice": "Converted to invoice",
-    "receiptSaved": "Receipt recorded"
+    "receiptSaved": "Receipt recorded",
+    "collectRemaining": "Collect remaining",
+    "collectAndClose": "Collect & close",
+    "collectHint": "Enter the remaining amount or part of it. A receipt is created, cash increases, and customer AR decreases. When remaining reaches zero the invoice is settled.",
+    "collectSaved": "Amount collected and invoice updated"
   },
   "purchases": {
     "title": "Purchases",
@@ -212,7 +216,11 @@
     "returnPosted": "Purchase return posted",
     "convertedToOrder": "Converted to purchase order",
     "convertedToInvoice": "Converted to invoice",
-    "paymentPosted": "Payment posted"
+    "paymentPosted": "Payment posted",
+    "payRemaining": "Pay remaining",
+    "payAndClose": "Pay & close",
+    "payRemainingHint": "Enter the remaining amount or part of it. A supplier payment is created, cash decreases, and AP decreases. When remaining reaches zero the invoice is settled.",
+    "payRemainingSaved": "Amount paid and invoice updated"
   },
   "warehouse": {
     "title": "Warehouse & Inventory",

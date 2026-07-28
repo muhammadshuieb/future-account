@@ -499,6 +499,53 @@ class SalesService
         });
     }
 
+    /**
+     * Collect remaining unpaid balance on a posted sales invoice (credit/partial).
+     * Creates a posted customer receipt allocated to the invoice.
+     */
+    public function collectRemaining(SalesInvoice $invoice, User $user, array $data = []): Receipt
+    {
+        if ($invoice->status !== 'posted') {
+            throw ValidationException::withMessages(['status' => ['يجب أن تكون الفاتورة مرحّلة أولاً.']]);
+        }
+
+        $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0) {
+            throw ValidationException::withMessages(['amount' => ['لا يوجد مبلغ متبقّي على هذه الفاتورة.']]);
+        }
+
+        $amount = array_key_exists('amount', $data) && $data['amount'] !== null && $data['amount'] !== ''
+            ? round((float) $data['amount'], 2)
+            : $remaining;
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => ['المبلغ يجب أن يكون أكبر من صفر.']]);
+        }
+
+        if ($amount > $remaining + 0.001) {
+            throw ValidationException::withMessages([
+                'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
+            ]);
+        }
+
+        return $this->createReceipt([
+            'receipt_date' => $data['receipt_date'] ?? now()->toDateString(),
+            'customer_id' => $invoice->customer_id,
+            'sales_invoice_id' => $invoice->id,
+            'cash_box_id' => $data['cash_box_id'] ?? $invoice->cash_box_id,
+            'bank_id' => $data['bank_id'] ?? null,
+            'method' => $data['method'] ?? 'cash',
+            'amount' => $amount,
+            'currency' => $data['currency'] ?? $invoice->currency,
+            'exchange_rate' => isset($data['exchange_rate'])
+                ? (float) $data['exchange_rate']
+                : ($invoice->exchange_rate ? (float) $invoice->exchange_rate : null),
+            'base_amount' => $data['base_amount'] ?? null,
+            'notes' => $data['notes'] ?? ('تحصيل باقي فاتورة '.$invoice->invoice_number),
+            'status' => 'posted',
+        ], $user);
+    }
+
     public function postReceipt(Receipt $receipt, User $user): Receipt
     {
         if ($receipt->status === 'posted') {
@@ -528,6 +575,27 @@ class SalesService
                 : Account::query()->where('code', '1103')->firstOrFail();
 
             $baseAmount = (float) ($receipt->base_amount ?: $receipt->amount);
+
+            if ($receipt->sales_invoice_id) {
+                $invoice = SalesInvoice::query()->lockForUpdate()->findOrFail($receipt->sales_invoice_id);
+                if ((int) $invoice->customer_id !== (int) $receipt->customer_id) {
+                    throw ValidationException::withMessages([
+                        'sales_invoice_id' => ['الفاتورة لا تخص هذا العميل.'],
+                    ]);
+                }
+                if ($invoice->status !== 'posted') {
+                    throw ValidationException::withMessages([
+                        'sales_invoice_id' => ['لا يمكن التحصيل على فاتورة غير مرحّلة.'],
+                    ]);
+                }
+                $applied = $this->receiptAmountInInvoiceCurrency($receipt, $invoice);
+                $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+                if ($applied > $remaining + 0.001) {
+                    throw ValidationException::withMessages([
+                        'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
+                    ]);
+                }
+            }
 
             $entry = $this->journals->create([
                 'entry_date' => $receipt->receipt_date->toDateString(),

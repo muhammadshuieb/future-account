@@ -404,6 +404,53 @@ class PurchaseService
         });
     }
 
+    /**
+     * Pay remaining unpaid balance on a posted purchase invoice (credit/partial).
+     * Creates a posted supplier payment allocated to the invoice.
+     */
+    public function payRemaining(PurchaseInvoice $invoice, User $user, array $data = []): SupplierPayment
+    {
+        if ($invoice->status !== 'posted') {
+            throw ValidationException::withMessages(['status' => ['يجب أن تكون الفاتورة مرحّلة أولاً.']]);
+        }
+
+        $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0) {
+            throw ValidationException::withMessages(['amount' => ['لا يوجد مبلغ متبقّي على هذه الفاتورة.']]);
+        }
+
+        $amount = array_key_exists('amount', $data) && $data['amount'] !== null && $data['amount'] !== ''
+            ? round((float) $data['amount'], 2)
+            : $remaining;
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages(['amount' => ['المبلغ يجب أن يكون أكبر من صفر.']]);
+        }
+
+        if ($amount > $remaining + 0.001) {
+            throw ValidationException::withMessages([
+                'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
+            ]);
+        }
+
+        return $this->createPayment([
+            'payment_date' => $data['payment_date'] ?? now()->toDateString(),
+            'supplier_id' => $invoice->supplier_id,
+            'purchase_invoice_id' => $invoice->id,
+            'cash_box_id' => $data['cash_box_id'] ?? $invoice->cash_box_id,
+            'bank_id' => $data['bank_id'] ?? null,
+            'method' => $data['method'] ?? 'cash',
+            'amount' => $amount,
+            'currency' => $data['currency'] ?? $invoice->currency,
+            'exchange_rate' => isset($data['exchange_rate'])
+                ? (float) $data['exchange_rate']
+                : ($invoice->exchange_rate ? (float) $invoice->exchange_rate : null),
+            'base_amount' => $data['base_amount'] ?? null,
+            'notes' => $data['notes'] ?? ('دفع باقي فاتورة شراء '.$invoice->invoice_number),
+            'status' => 'posted',
+        ], $user);
+    }
+
     public function postPayment(SupplierPayment $payment, User $user): SupplierPayment
     {
         if ($payment->status === 'posted') {
@@ -433,6 +480,27 @@ class PurchaseService
                 : Account::query()->where('code', '2101')->firstOrFail();
 
             $baseAmount = (float) ($payment->base_amount ?: $payment->amount);
+
+            if ($payment->purchase_invoice_id) {
+                $invoice = PurchaseInvoice::query()->lockForUpdate()->findOrFail($payment->purchase_invoice_id);
+                if ((int) $invoice->supplier_id !== (int) $payment->supplier_id) {
+                    throw ValidationException::withMessages([
+                        'purchase_invoice_id' => ['الفاتورة لا تخص هذا المورد.'],
+                    ]);
+                }
+                if ($invoice->status !== 'posted') {
+                    throw ValidationException::withMessages([
+                        'purchase_invoice_id' => ['لا يمكن الدفع على فاتورة غير مرحّلة.'],
+                    ]);
+                }
+                $applied = $this->paymentAmountInInvoiceCurrency($payment, $invoice);
+                $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+                if ($applied > $remaining + 0.001) {
+                    throw ValidationException::withMessages([
+                        'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
+                    ]);
+                }
+            }
 
             $entry = $this->journals->create([
                 'entry_date' => $payment->payment_date->toDateString(),

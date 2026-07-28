@@ -190,7 +190,11 @@
     "returnPosted": "Satış iadesi onaylandı",
     "convertedToOrder": "Satış siparişine dönüştürüldü",
     "convertedToInvoice": "Faturaya dönüştürüldü",
-    "receiptSaved": "Tahsilat kaydedildi"
+    "receiptSaved": "Tahsilat kaydedildi",
+    "collectRemaining": "Kalanı tahsil et",
+    "collectAndClose": "Tahsil et ve kapat",
+    "collectHint": "Kalan tutarı veya bir kısmını girin. Tahsilat fişi oluşur, kasa artar ve müşteri borcu azalır. Kalan sıfırlanınca fatura kapanır.",
+    "collectSaved": "Tutar tahsil edildi ve fatura güncellendi"
   },
   "purchases": {
     "title": "Satın Alma",
@@ -211,7 +215,11 @@
     "returnPosted": "Satın alma iadesi onaylandı",
     "convertedToOrder": "Satın alma siparişine dönüştürüldü",
     "convertedToInvoice": "Faturaya dönüştürüldü",
-    "paymentPosted": "Ödeme onaylandı"
+    "paymentPosted": "Ödeme onaylandı",
+    "payRemaining": "Kalanı öde",
+    "payAndClose": "Öde ve kapat",
+    "payRemainingHint": "Kalan tutarı veya bir kısmını girin. Tedarikçi ödemesi oluşur, kasa azalır ve borç azalır. Kalan sıfırlanınca fatura kapanır.",
+    "payRemainingSaved": "Tutar ödendi ve fatura güncellendi"
   },
   "warehouse": {
     "title": "Depo ve Stok",

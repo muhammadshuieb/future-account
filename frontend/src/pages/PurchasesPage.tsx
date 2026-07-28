@@ -37,9 +37,10 @@ export default function PurchasesPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
-  const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
+  const [modal, setModal] = useState<'create' | 'view' | 'edit' | 'pay' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
+  const [payForm, setPayForm] = useState({ amount: '', cash_box_id: '', payment_date: todayYmd() })
 
   const requests = useQuery({
     queryKey: ['purchase-requests', search.debouncedQ],
@@ -132,7 +133,42 @@ export default function PurchasesPage() {
       void qc.invalidateQueries({ queryKey: [key] })
     }
   }
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setPendingAttachment(null) }
+  const closeModal = () => {
+    setModal(null)
+    setSelectedId(null)
+    setSelectedRow(null)
+    setPendingAttachment(null)
+    setPayForm({ amount: '', cash_box_id: '', payment_date: todayYmd() })
+  }
+
+  const invoiceRemaining = (invRow: { total?: number; paid_amount?: number }) =>
+    Math.max(0, Math.round((Number(invRow.total || 0) - Number(invRow.paid_amount || 0)) * 100) / 100)
+
+  const canPayInvoice = (invRow: { status?: string; total?: number; paid_amount?: number }) =>
+    invRow.status === 'posted' && invoiceRemaining(invRow) > 0
+
+  const openPayRemaining = (invRow: {
+    id: number
+    total?: number
+    paid_amount?: number
+    status?: string
+    invoice_number?: string
+    cash_box_id?: number | null
+    supplier?: { name?: string; phone?: string }
+  }) => {
+    if (!canPayInvoice(invRow)) return
+    const boxes = cashBoxes.data || []
+    const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
+    const defaultBox = invRow.cash_box_id ? String(invRow.cash_box_id) : (main ? String(main.id) : '')
+    setSelectedId(invRow.id)
+    setSelectedRow(invRow as unknown as Record<string, unknown>)
+    setPayForm({
+      amount: String(invoiceRemaining(invRow)),
+      cash_box_id: defaultBox,
+      payment_date: todayYmd(),
+    })
+    setModal('pay')
+  }
 
   useEffect(() => {
     if (taxEnabled && !purchaseTaxRate) setPurchaseTaxRate(String(defaultTaxRate))
@@ -281,6 +317,21 @@ export default function PurchasesPage() {
   const convertPo = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-orders/${id}/convert-to-invoice`, { status: 'posted' }),
     onSuccess: () => { msg.setMessage(t('purchases.convertedToInvoice')); invalidate() },
+    onError: msg.fromErr,
+  })
+
+  const payRemaining = useMutation({
+    mutationFn: () => api.post(`/purchase-invoices/${selectedId}/pay-remaining`, {
+      payment_date: payForm.payment_date,
+      amount: Number(payForm.amount),
+      cash_box_id: payForm.cash_box_id ? Number(payForm.cash_box_id) : undefined,
+      method: 'cash',
+    }),
+    onSuccess: () => {
+      msg.setMessage(t('purchases.payRemainingSaved'))
+      invalidate()
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 
@@ -568,6 +619,15 @@ export default function PurchasesPage() {
                           documentLabel={`فاتورة مشتريات ${i.invoice_number}`}
                         />
                       </span>
+                      {canPayInvoice(i) && (
+                        <button
+                          type="button"
+                          className="text-xs text-teal"
+                          onClick={(e) => { e.stopPropagation(); openPayRemaining(i) }}
+                        >
+                          {t('purchases.payRemaining')}
+                        </button>
+                      )}
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -626,33 +686,135 @@ export default function PurchasesPage() {
             </table>
         </Panel>
       )}
-      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></> : <>
-          {tab === 'invoices' && selectedId && (
+      <Modal
+        open={modal !== null}
+        onClose={closeModal}
+        title={
+          modal === 'create' ? t('common.add')
+            : modal === 'edit' ? t('common.edit')
+              : modal === 'pay' ? t('purchases.payRemaining')
+                : t('common.view')
+        }
+        size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'}
+        footer={
+          modal === 'pay' ? (
             <>
-              <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
-              <PdfExportButton
-                printPath={`/print/purchase-invoices/${selectedId}`}
-                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                  || `purchase-${selectedId}`)}
-              />
-              <WhatsAppSendButton
-                defaultPhone={(detail.data as { supplier?: { phone?: string } } | undefined)?.supplier?.phone
-                  || (selectedRow as { supplier?: { phone?: string } } | null)?.supplier?.phone}
-                printPath={`/print/purchase-invoices/${selectedId}`}
-                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                  || `purchase-${selectedId}`)}
-                documentLabel={`فاتورة مشتريات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
-              />
+              <Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button>
+              <Button variant="primary" type="submit" form="purchase-pay-form" disabled={payRemaining.isPending}>
+                {t('purchases.payAndClose')}
+              </Button>
             </>
-          )}
-          {selectedId && selectedRow && canDeletePurchase(tab, String(selectedRow.status || '')) && (
-            <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
-          )}
-          <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
-        </>}>
-        {modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
+          ) : modal !== 'view' ? (
+            <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="purchase-form">{t('common.save')}</Button></>
+          ) : (
+            <>
+              {tab === 'invoices' && selectedId && (
+                <>
+                  {canPayInvoice({
+                    status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
+                    total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),
+                    paid_amount: Number((detail.data as { paid_amount?: number } | undefined)?.paid_amount ?? selectedRow?.paid_amount ?? 0),
+                  }) && (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        const src = (detail.data || selectedRow || {}) as Record<string, unknown>
+                        openPayRemaining({
+                          id: selectedId,
+                          total: Number(src.total ?? 0),
+                          paid_amount: Number(src.paid_amount ?? 0),
+                          status: String(src.status || ''),
+                          invoice_number: src.invoice_number as string | undefined,
+                          cash_box_id: src.cash_box_id as number | null | undefined,
+                          supplier: src.supplier as { name?: string; phone?: string } | undefined,
+                        })
+                      }}
+                    >
+                      {t('purchases.payRemaining')}
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+                  <PdfExportButton
+                    printPath={`/print/purchase-invoices/${selectedId}`}
+                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                      || `purchase-${selectedId}`)}
+                  />
+                  <WhatsAppSendButton
+                    defaultPhone={(detail.data as { supplier?: { phone?: string } } | undefined)?.supplier?.phone
+                      || (selectedRow as { supplier?: { phone?: string } } | null)?.supplier?.phone}
+                    printPath={`/print/purchase-invoices/${selectedId}`}
+                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                      || `purchase-${selectedId}`)}
+                    documentLabel={`فاتورة مشتريات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+                  />
+                </>
+              )}
+              {selectedId && selectedRow && canDeletePurchase(tab, String(selectedRow.status || '')) && (
+                <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
+              )}
+              <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
+            </>
+          )
+        }
+      >
+        {modal === 'pay' ? (
+          <form
+            id="purchase-pay-form"
+            className="space-y-3"
+            onSubmit={(e) => { e.preventDefault(); payRemaining.mutate() }}
+          >
+            <p className="text-sm text-black/70">
+              {(selectedRow as { invoice_number?: string } | null)?.invoice_number
+                ? `${t('common.invoice')}: ${(selectedRow as { invoice_number?: string }).invoice_number}`
+                : null}
+              {(selectedRow as { supplier?: { name?: string } } | null)?.supplier?.name
+                ? ` — ${(selectedRow as { supplier?: { name?: string } }).supplier?.name}`
+                : null}
+            </p>
+            <p className="text-xs leading-relaxed text-black/55">{t('purchases.payRemainingHint')}</p>
+            <Field label={t('common.remainingAmount')}>
+              <input
+                className={inputClass}
+                readOnly
+                value={String(invoiceRemaining({
+                  total: Number(selectedRow?.total || 0),
+                  paid_amount: Number(selectedRow?.paid_amount || 0),
+                }))}
+              />
+            </Field>
+            <Field label={t('common.date')}>
+              <input
+                type="date"
+                className={inputClass}
+                value={payForm.payment_date}
+                onChange={(e) => setPayForm({ ...payForm, payment_date: e.target.value })}
+              />
+            </Field>
+            <Field label={t('common.amount')}>
+              <NumericInput
+                className={inputClass}
+                value={payForm.amount}
+                onChange={(v) => setPayForm({ ...payForm, amount: v })}
+              />
+            </Field>
+            <Field label={t('common.cashBox')}>
+              <select
+                className={inputClass}
+                value={payForm.cash_box_id}
+                onChange={(e) => setPayForm({ ...payForm, cash_box_id: e.target.value })}
+              >
+                <option value="">—</option>
+                {(cashBoxes.data || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </form>
+        ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
           {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} />{productFields(inv, setInv)}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}

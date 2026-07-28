@@ -61,9 +61,10 @@ export default function SalesPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
-  const [modal, setModal] = useState<'create' | 'view' | 'edit' | null>(null)
+  const [modal, setModal] = useState<'create' | 'view' | 'edit' | 'collect' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
+  const [collectForm, setCollectForm] = useState({ amount: '', cash_box_id: '', receipt_date: todayYmd() })
 
   const quotes = useQuery({
     queryKey: ['sales-quotes', search.debouncedQ],
@@ -206,7 +207,44 @@ export default function SalesPage() {
       void qc.invalidateQueries({ queryKey: [key] })
     }
   }
-  const closeModal = () => { setModal(null); setSelectedId(null); setSelectedRow(null); setStockInfo(null); setPendingAttachment(null) }
+  const closeModal = () => {
+    setModal(null)
+    setSelectedId(null)
+    setSelectedRow(null)
+    setStockInfo(null)
+    setPendingAttachment(null)
+    setCollectForm({ amount: '', cash_box_id: '', receipt_date: todayYmd() })
+  }
+
+  const invoiceRemaining = (invRow: { total?: number; paid_amount?: number }) =>
+    Math.max(0, Math.round((Number(invRow.total || 0) - Number(invRow.paid_amount || 0)) * 100) / 100)
+
+  const canCollectInvoice = (invRow: { status?: string; total?: number; paid_amount?: number }) =>
+    invRow.status === 'posted' && invoiceRemaining(invRow) > 0
+
+  const openCollect = (invRow: {
+    id: number
+    total?: number
+    paid_amount?: number
+    status?: string
+    invoice_number?: string
+    currency?: string
+    customer?: { name?: string; phone?: string }
+    cash_box_id?: number | null
+  }) => {
+    if (!canCollectInvoice(invRow)) return
+    const boxes = cashBoxes.data || []
+    const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
+    const defaultBox = invRow.cash_box_id ? String(invRow.cash_box_id) : (main ? String(main.id) : '')
+    setSelectedId(invRow.id)
+    setSelectedRow(invRow as unknown as Record<string, unknown>)
+    setCollectForm({
+      amount: String(invoiceRemaining(invRow)),
+      cash_box_id: defaultBox,
+      receipt_date: todayYmd(),
+    })
+    setModal('collect')
+  }
 
   const salesDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'quotes') return `/sales-quotes/${id}`
@@ -351,6 +389,22 @@ export default function SalesPage() {
   const convertOrder = useMutation({
     mutationFn: (id: number) => api.post(`/sales-orders/${id}/convert-to-invoice`, { status: 'posted' }),
     onSuccess: () => { msg.setMessage(t('sales.convertedToInvoice')); invalidateSales() },
+    onError: msg.fromErr,
+  })
+
+  const collectRemaining = useMutation({
+    mutationFn: () => api.post(`/sales-invoices/${selectedId}/collect`, {
+      receipt_date: collectForm.receipt_date,
+      amount: Number(collectForm.amount),
+      cash_box_id: collectForm.cash_box_id ? Number(collectForm.cash_box_id) : undefined,
+      method: 'cash',
+      status: 'posted',
+    }),
+    onSuccess: () => {
+      msg.setMessage(t('sales.collectSaved'))
+      invalidateSales()
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 
@@ -554,7 +608,14 @@ export default function SalesPage() {
             <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), (k) => String(t(k)))}</p>
           ) : null}
           {data.paid_amount != null && data.invoice_number ? (
-            <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {String(t('common.remainingAmount'))}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
+            <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {String(t('common.remainingAmount'))}: {String(invoiceRemaining({ total: Number(data.total || 0), paid_amount: Number(data.paid_amount || 0) }))}</p>
+          ) : null}
+          {tab === 'invoices' && canCollectInvoice({
+            status: String(data.status || ''),
+            total: Number(data.total || 0),
+            paid_amount: Number(data.paid_amount || 0),
+          }) ? (
+            <p className="sm:col-span-2 text-xs text-teal">{t('sales.collectHint')}</p>
           ) : null}
           {data.tax_amount != null && Number(data.tax_amount) > 0 && (
             <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
@@ -734,6 +795,15 @@ export default function SalesPage() {
                           documentLabel={`فاتورة مبيعات ${i.invoice_number}`}
                         />
                       </span>
+                      {canCollectInvoice(i) && (
+                        <button
+                          type="button"
+                          className="text-xs text-teal"
+                          onClick={(e) => { e.stopPropagation(); openCollect(i) }}
+                        >
+                          {t('sales.collectRemaining')}
+                        </button>
+                      )}
                       {canDeleteSales('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -797,33 +867,136 @@ export default function SalesPage() {
             </div>
         </Panel>
       )}
-      <Modal open={modal !== null} onClose={closeModal} title={modal === 'create' ? t('common.add') : modal === 'edit' ? t('common.edit') : t('common.view')} size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'} footer={modal !== 'view' ? <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></> : <>
-          {tab === 'invoices' && selectedId && (
+      <Modal
+        open={modal !== null}
+        onClose={closeModal}
+        title={
+          modal === 'create' ? t('common.add')
+            : modal === 'edit' ? t('common.edit')
+              : modal === 'collect' ? t('sales.collectRemaining')
+                : t('common.view')
+        }
+        size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'}
+        footer={
+          modal === 'collect' ? (
             <>
-              <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
-              <PdfExportButton
-                printPath={`/print/sales-invoices/${selectedId}`}
-                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                  || `sales-${selectedId}`)}
-              />
-              <WhatsAppSendButton
-                defaultPhone={(detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
-                  || (selectedRow as { customer?: { phone?: string } } | null)?.customer?.phone}
-                printPath={`/print/sales-invoices/${selectedId}`}
-                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                  || `sales-${selectedId}`)}
-                documentLabel={`فاتورة مبيعات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
-              />
+              <Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button>
+              <Button variant="primary" type="submit" form="sales-collect-form" disabled={collectRemaining.isPending}>
+                {t('sales.collectAndClose')}
+              </Button>
             </>
-          )}
-          {selectedId && selectedRow && canDeleteSales(tab, String(selectedRow.status || '')) && (
-            <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
-          )}
-          <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
-        </>}>
-        {modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
+          ) : modal !== 'view' ? (
+            <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></>
+          ) : (
+            <>
+              {tab === 'invoices' && selectedId && (
+                <>
+                  {canCollectInvoice({
+                    status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
+                    total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),
+                    paid_amount: Number((detail.data as { paid_amount?: number } | undefined)?.paid_amount ?? selectedRow?.paid_amount ?? 0),
+                  }) && (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        const src = (detail.data || selectedRow || {}) as Record<string, unknown>
+                        openCollect({
+                          id: selectedId,
+                          total: Number(src.total ?? 0),
+                          paid_amount: Number(src.paid_amount ?? 0),
+                          status: String(src.status || ''),
+                          invoice_number: src.invoice_number as string | undefined,
+                          currency: src.currency as string | undefined,
+                          customer: src.customer as { name?: string; phone?: string } | undefined,
+                          cash_box_id: src.cash_box_id as number | null | undefined,
+                        })
+                      }}
+                    >
+                      {t('sales.collectRemaining')}
+                    </Button>
+                  )}
+                  <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+                  <PdfExportButton
+                    printPath={`/print/sales-invoices/${selectedId}`}
+                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                      || `sales-${selectedId}`)}
+                  />
+                  <WhatsAppSendButton
+                    defaultPhone={(detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
+                      || (selectedRow as { customer?: { phone?: string } } | null)?.customer?.phone}
+                    printPath={`/print/sales-invoices/${selectedId}`}
+                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                      || `sales-${selectedId}`)}
+                    documentLabel={`فاتورة مبيعات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+                  />
+                </>
+              )}
+              {selectedId && selectedRow && canDeleteSales(tab, String(selectedRow.status || '')) && (
+                <Button variant="danger" disabled={deleteDoc.isPending} onClick={() => askDelete(tab, selectedId, String(selectedRow.status || ''))}>{t('common.delete')}</Button>
+              )}
+              <Button variant="secondary" onClick={closeModal}>{t('common.close')}</Button>
+            </>
+          )
+        }
+      >
+        {modal === 'collect' ? (
+          <form
+            id="sales-collect-form"
+            className="space-y-3"
+            onSubmit={(e) => { e.preventDefault(); collectRemaining.mutate() }}
+          >
+            <p className="text-sm text-black/70">
+              {(selectedRow as { invoice_number?: string } | null)?.invoice_number
+                ? `${t('common.invoice')}: ${(selectedRow as { invoice_number?: string }).invoice_number}`
+                : null}
+              {(selectedRow as { customer?: { name?: string } } | null)?.customer?.name
+                ? ` — ${(selectedRow as { customer?: { name?: string } }).customer?.name}`
+                : null}
+            </p>
+            <p className="text-xs leading-relaxed text-black/55">{t('sales.collectHint')}</p>
+            <Field label={t('common.remainingAmount')}>
+              <input
+                className={inputClass}
+                readOnly
+                value={String(invoiceRemaining({
+                  total: Number(selectedRow?.total || 0),
+                  paid_amount: Number(selectedRow?.paid_amount || 0),
+                }))}
+              />
+            </Field>
+            <Field label={t('common.date')}>
+              <input
+                type="date"
+                className={inputClass}
+                value={collectForm.receipt_date}
+                onChange={(e) => setCollectForm({ ...collectForm, receipt_date: e.target.value })}
+              />
+            </Field>
+            <Field label={t('common.amount')}>
+              <NumericInput
+                className={inputClass}
+                value={collectForm.amount}
+                onChange={(v) => setCollectForm({ ...collectForm, amount: v })}
+              />
+            </Field>
+            <Field label={t('common.cashBox')}>
+              <select
+                className={inputClass}
+                value={collectForm.cash_box_id}
+                onChange={(e) => setCollectForm({ ...collectForm, cash_box_id: e.target.value })}
+              >
+                <option value="">—</option>
+                {(cashBoxes.data || []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </form>
+        ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label={t('common.validUntil')}><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}<DocumentCurrencyFields state={quote} setState={setQuote} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}<DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}

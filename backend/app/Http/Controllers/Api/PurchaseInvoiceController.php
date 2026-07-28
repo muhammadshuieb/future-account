@@ -64,6 +64,29 @@ class PurchaseInvoiceController extends ApiController
         return $this->ok($this->purchases->postInvoice($purchaseInvoice, request()->user()));
     }
 
+    public function payRemaining(Request $request, PurchaseInvoice $purchaseInvoice): JsonResponse
+    {
+        $this->authorizePermission('purchases.manage');
+        $data = $request->validate([
+            'payment_date' => ['nullable', 'date'],
+            'amount' => ['nullable', 'numeric', 'gt:0'],
+            'cash_box_id' => ['nullable', 'exists:cash_boxes,id'],
+            'bank_id' => ['nullable', 'exists:banks,id'],
+            'method' => ['nullable', 'in:cash,bank'],
+            'currency' => ['nullable', 'string', 'max:8'],
+            'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
+            'base_amount' => ['nullable', 'numeric', 'gt:0'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $payment = $this->purchases->payRemaining($purchaseInvoice, $request->user(), $data);
+
+        return $this->ok([
+            'payment' => $payment,
+            'invoice' => $purchaseInvoice->fresh(['supplier', 'cashBox']),
+        ], 201);
+    }
+
     public function destroy(PurchaseInvoice $purchaseInvoice): JsonResponse
     {
         $this->authorizePermission('purchases.manage');
