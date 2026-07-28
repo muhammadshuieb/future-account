@@ -43,7 +43,7 @@ class BackupAuthTest extends TestCase
 
     public function test_guest_cannot_restore_upload(): void
     {
-        $this->post('/api/backups/restore-upload', [
+        $this->postJson('/api/backups/restore-upload', [
             'confirm' => '1',
         ])->assertUnauthorized();
     }
@@ -54,7 +54,7 @@ class BackupAuthTest extends TestCase
         $user->assignRole('sales');
         Sanctum::actingAs($user);
 
-        $this->post('/api/backups/restore-upload', [
+        $this->postJson('/api/backups/restore-upload', [
             'confirm' => '1',
         ])->assertForbidden();
     }
