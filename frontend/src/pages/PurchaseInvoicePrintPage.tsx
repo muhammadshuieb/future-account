@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import PdfExportButton from '@/components/PdfExportButton'
 import { Button } from '@/components/ui'
 
 export default function PurchaseInvoicePrintPage() {
@@ -49,6 +50,9 @@ export default function PurchaseInvoicePrintPage() {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
+        <PdfExportButton
+          fileName={invoice.data.invoice_number || `purchase-invoice-${invoiceId}`}
+        />
         <WhatsAppSendButton
           defaultPhone={invoice.data.supplier?.phone}
           fileName={invoice.data.invoice_number || `purchase-invoice-${invoiceId}`}

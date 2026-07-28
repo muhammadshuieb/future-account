@@ -30,6 +30,75 @@ async function withHiddenPrintChrome<T>(root: Document, run: () => Promise<T>): 
   }
 }
 
+function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG capture failed'))), 'image/png')
+  })
+}
+
+/** Slice a tall canvas across multiple A4 pages (portrait or landscape by aspect). */
+function canvasToMultiPagePdf(canvas: HTMLCanvasElement): Blob {
+  const orientation = canvas.width >= canvas.height * 1.15 ? 'landscape' : 'portrait'
+  const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' })
+  const pageWidth = pdf.internal.pageSize.getWidth()
+  const pageHeight = pdf.internal.pageSize.getHeight()
+  const margin = 18
+  const usableW = pageWidth - margin * 2
+  const usableH = pageHeight - margin * 2
+
+  const imgData = canvas.toDataURL('image/png')
+  const scaledW = usableW
+  const scaledH = (canvas.height * scaledW) / canvas.width
+
+  // Single page fits — center vertically a bit from top margin
+  if (scaledH <= usableH) {
+    const x = margin
+    const y = margin
+    pdf.addImage(imgData, 'PNG', x, y, scaledW, scaledH)
+    return pdf.output('blob')
+  }
+
+  // Multi-page: map source canvas slices to each PDF page
+  const pxPerPt = canvas.width / scaledW
+  const pageSlicePx = usableH * pxPerPt
+  let sourceY = 0
+  let pageIndex = 0
+
+  while (sourceY < canvas.height - 1) {
+    const sliceHeightPx = Math.min(pageSlicePx, canvas.height - sourceY)
+    const sliceCanvas = document.createElement('canvas')
+    sliceCanvas.width = canvas.width
+    sliceCanvas.height = Math.max(1, Math.ceil(sliceHeightPx))
+    const ctx = sliceCanvas.getContext('2d')
+    if (!ctx) throw new Error('PDF capture failed')
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
+    ctx.drawImage(
+      canvas,
+      0,
+      sourceY,
+      canvas.width,
+      sliceHeightPx,
+      0,
+      0,
+      canvas.width,
+      sliceHeightPx,
+    )
+
+    const sliceData = sliceCanvas.toDataURL('image/png')
+    const sliceH = (sliceHeightPx * scaledW) / canvas.width
+    if (pageIndex > 0) pdf.addPage()
+    pdf.addImage(sliceData, 'PNG', margin, margin, scaledW, sliceH)
+
+    sourceY += sliceHeightPx
+    pageIndex += 1
+    // Safety: avoid infinite loops on tiny remainders
+    if (sliceHeightPx < 2) break
+  }
+
+  return pdf.output('blob')
+}
+
 export async function captureElement(
   element: HTMLElement,
   opts: { format: CaptureFormat; fileName: string },
@@ -45,30 +114,11 @@ export async function captureElement(
   const baseName = opts.fileName.replace(/\.(pdf|png)$/i, '') || 'document'
 
   if (opts.format === 'png') {
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG capture failed'))), 'image/png')
-    })
+    const blob = await canvasToPngBlob(canvas)
     return { blob, fileName: `${baseName}.png`, mimeType: 'image/png', format: 'png' }
   }
 
-  const imgData = canvas.toDataURL('image/png')
-  const pdf = new jsPDF({
-    orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait',
-    unit: 'pt',
-    format: 'a4',
-  })
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 24
-  const maxW = pageWidth - margin * 2
-  const maxH = pageHeight - margin * 2
-  const ratio = Math.min(maxW / canvas.width, maxH / canvas.height)
-  const w = canvas.width * ratio
-  const h = canvas.height * ratio
-  const x = (pageWidth - w) / 2
-  const y = margin
-  pdf.addImage(imgData, 'PNG', x, y, w, h)
-  const blob = pdf.output('blob')
+  const blob = canvasToMultiPagePdf(canvas)
   return { blob, fileName: `${baseName}.pdf`, mimeType: 'application/pdf', format: 'pdf' }
 }
 
@@ -186,4 +236,123 @@ export async function captureFromPrintPopup(
   } finally {
     iframe.remove()
   }
+}
+
+/** Capture local `.print-area` or a print route and download as PDF. */
+export async function exportPdf(opts: {
+  fileName: string
+  captureSelector?: string
+  printPath?: string
+}): Promise<CapturedFile> {
+  const selector = opts.captureSelector || '.print-area'
+  const localEl = document.querySelector<HTMLElement>(selector)
+  const hasLocalPrint =
+    !!localEl &&
+    (localEl.getAttribute('data-print-ready') === '1' ||
+      localEl.innerText.replace(/\s+/g, ' ').trim().length > 20)
+
+  const captured = hasLocalPrint
+    ? await captureSelectorInDocument(document, selector, { format: 'pdf', fileName: opts.fileName })
+    : opts.printPath
+      ? await captureFromPrintPopup(opts.printPath, { format: 'pdf', fileName: opts.fileName })
+      : await captureSelectorInDocument(document, selector, { format: 'pdf', fileName: opts.fileName })
+
+  downloadBlob(captured.blob, captured.fileName)
+  return captured
+}
+
+/**
+ * Capture multiple print routes and merge into one multi-document PDF
+ * (each document starts on a new page).
+ */
+export async function exportMergedPdfFromPrintPaths(
+  paths: string[],
+  opts: { fileName: string; onProgress?: (done: number, total: number) => void },
+): Promise<CapturedFile> {
+  if (paths.length === 0) throw new Error('لا توجد مستندات للتصدير')
+
+  const baseName = opts.fileName.replace(/\.(pdf|png)$/i, '') || 'documents'
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+  let pageAdded = false
+
+  for (let i = 0; i < paths.length; i++) {
+    opts.onProgress?.(i, paths.length)
+    // Capture as PNG then slice into A4 pages so multiple documents can be merged.
+    const pngCapture = await captureFromPrintPopup(paths[i], {
+      format: 'png',
+      fileName: `${baseName}-${i + 1}`,
+    })
+    const pngUrl = URL.createObjectURL(pngCapture.blob)
+    try {
+      const img = await loadImage(pngUrl)
+      const pageWidth = pdf.internal.pageSize.getWidth()
+      const pageHeight = pdf.internal.pageSize.getHeight()
+      const margin = 18
+      const usableW = pageWidth - margin * 2
+      const usableH = pageHeight - margin * 2
+      const scaledW = usableW
+      const scaledH = (img.height * scaledW) / img.width
+
+      if (!pageAdded) {
+        pageAdded = true
+      } else {
+        pdf.addPage()
+      }
+
+      if (scaledH <= usableH) {
+        pdf.addImage(img, 'PNG', margin, margin, scaledW, scaledH)
+      } else {
+        // Draw onto temp canvas and slice
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('PDF merge failed')
+        ctx.drawImage(img, 0, 0)
+        const pxPerPt = canvas.width / scaledW
+        const pageSlicePx = usableH * pxPerPt
+        let sourceY = 0
+        let firstSlice = true
+        while (sourceY < canvas.height - 1) {
+          const sliceHeightPx = Math.min(pageSlicePx, canvas.height - sourceY)
+          const sliceCanvas = document.createElement('canvas')
+          sliceCanvas.width = canvas.width
+          sliceCanvas.height = Math.max(1, Math.ceil(sliceHeightPx))
+          const sctx = sliceCanvas.getContext('2d')
+          if (!sctx) throw new Error('PDF merge failed')
+          sctx.fillStyle = '#ffffff'
+          sctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
+          sctx.drawImage(canvas, 0, sourceY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx)
+          const sliceH = (sliceHeightPx * scaledW) / canvas.width
+          if (!firstSlice) pdf.addPage()
+          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, scaledW, sliceH)
+          firstSlice = false
+          sourceY += sliceHeightPx
+          if (sliceHeightPx < 2) break
+        }
+      }
+    } finally {
+      URL.revokeObjectURL(pngUrl)
+    }
+  }
+
+  opts.onProgress?.(paths.length, paths.length)
+  const blob = pdf.output('blob')
+  const file: CapturedFile = {
+    blob,
+    fileName: `${baseName}.pdf`,
+    mimeType: 'application/pdf',
+    format: 'pdf',
+  }
+  downloadBlob(file.blob, file.fileName)
+  return file
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('فشل تحميل صورة المستند'))
+    img.src = url
+  })
 }

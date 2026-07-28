@@ -8,6 +8,7 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
+import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPartnersTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -192,6 +193,13 @@ export default function PartnersPage() {
                       <Printer size={14} /> طباعة
                     </button>
                     <span onClick={(e) => e.stopPropagation()}>
+                      <PdfExportButton
+                        compact
+                        printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                        fileName={`statement-${tab}-${r.id}`}
+                      />
+                    </span>
+                    <span onClick={(e) => e.stopPropagation()}>
                       <WhatsAppSendButton
                         compact
                         defaultPhone={r.phone}
@@ -229,6 +237,10 @@ export default function PartnersPage() {
               <Button variant="secondary" onClick={() => printStatement(statementId)}>
                 <Printer size={16} /> طباعة
               </Button>
+              <PdfExportButton
+                printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                fileName={`statement-${tab}-${statementId}`}
+              />
               <WhatsAppSendButton
                 defaultPhone={(rows || []).find((r) => r.id === statementId)?.phone}
                 printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}

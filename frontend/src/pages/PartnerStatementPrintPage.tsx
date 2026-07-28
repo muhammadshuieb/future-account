@@ -7,6 +7,7 @@ import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { StatementPrintView, type PartnerStatementData } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import PdfExportButton from '@/components/PdfExportButton'
 import { Button } from '@/components/ui'
 
 type Kind = 'customers' | 'suppliers'
@@ -75,6 +76,9 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
+        <PdfExportButton
+          fileName={`statement-${kind}-${partnerId}`}
+        />
         <WhatsAppSendButton
           defaultPhone={partnerPhone}
           fileName={`statement-${kind}-${partnerId}`}

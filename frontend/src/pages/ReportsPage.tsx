@@ -9,6 +9,7 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
+import PdfExportButton from '@/components/PdfExportButton'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, StatTile, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 
 type ReportKey =
@@ -149,16 +150,31 @@ export default function ReportsPage() {
     return ''
   })()
 
-  const whatsappDisabled =
+  const statementPrintPath = (() => {
+    if (tab === 'customer-statement' && customerId) {
+      return `/print/customers/${customerId}/statement?${new URLSearchParams({ from, to }).toString()}`
+    }
+    if (tab === 'supplier-statement' && supplierId) {
+      return `/print/suppliers/${supplierId}/statement?${new URLSearchParams({ from, to }).toString()}`
+    }
+    return undefined
+  })()
+
+  const exportDisabled =
     (tab === 'customer-statement' && !customerId) ||
     (tab === 'supplier-statement' && !supplierId) ||
+    (tab === 'product-movement' && !productId) ||
+    (tab === 'general-ledger' && !accountId) ||
+    (tab === 'branch-complete' && !branchId) ||
     !report.data
+
+  const whatsappDisabled = exportDisabled
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="التقارير"
-        subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة"
+        subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة وتصدير PDF"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ExcelExportButton
@@ -192,13 +208,21 @@ export default function ReportsPage() {
                 (tab === 'supplier-statement' && !supplierId)
               }
             >
-              <Printer size={16} /> طباعة / PDF
+              <Printer size={16} /> {t('common.print')}
             </Button>
+            <PdfExportButton
+              className="print-hide"
+              disabled={exportDisabled}
+              fileName={`report-${tab}`}
+              captureSelector=".print-area"
+              printPath={statementPrintPath}
+            />
             <WhatsAppSendButton
               className="print-hide"
               disabled={whatsappDisabled}
               defaultPhone={statementPhone}
               captureSelector=".print-area"
+              printPath={statementPrintPath}
               fileName={`report-${tab}`}
               documentLabel={tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
             />

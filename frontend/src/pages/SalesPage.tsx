@@ -13,6 +13,7 @@ import PaymentTypeFields, { paymentTypeLabel } from '@/components/PaymentTypeFie
 import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
+import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -616,6 +617,14 @@ export default function SalesPage() {
           <div className="flex flex-wrap items-center gap-2">
             <ListSearchInput value={search.q} onChange={search.setQ} />
             <ExcelExportButton path={`/exports/${excelModuleForSalesTab(tab)}`} />
+            {tab === 'invoices' && (
+              <PdfExportButton
+                label={t('common.exportPdfAll')}
+                fileName="sales-invoices"
+                printPaths={(invoices.data || []).map((i: { id: number }) => `/print/sales-invoices/${i.id}`)}
+                disabled={!(invoices.data || []).length}
+              />
+            )}
             <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
           </div>
         }
@@ -710,6 +719,13 @@ export default function SalesPage() {
                     <td className="space-x-2 space-x-reverse">
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       <span className="print-hide inline-block">
+                        <PdfExportButton
+                          compact
+                          printPath={`/print/sales-invoices/${i.id}`}
+                          fileName={i.invoice_number}
+                        />
+                      </span>
+                      <span className="print-hide inline-block">
                         <WhatsAppSendButton
                           compact
                           defaultPhone={i.customer?.phone}
@@ -785,6 +801,12 @@ export default function SalesPage() {
           {tab === 'invoices' && selectedId && (
             <>
               <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
+              <PdfExportButton
+                printPath={`/print/sales-invoices/${selectedId}`}
+                fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                  || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                  || `sales-${selectedId}`)}
+              />
               <WhatsAppSendButton
                 defaultPhone={(detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
                   || (selectedRow as { customer?: { phone?: string } } | null)?.customer?.phone}
