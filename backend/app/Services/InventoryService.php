@@ -60,6 +60,33 @@ class InventoryService
         ])->all();
     }
 
+    /**
+     * New carrying cost per unit after receiving `$incomingQty` at `$incomingUnitCost`.
+     *
+     * Stock is valued at a moving weighted average, which keeps `on_hand × cost_price`
+     * in step with what was capitalised into the inventory control account.
+     */
+    public function movingAverageCost(Product $product, float $incomingQty, float $incomingUnitCost): float
+    {
+        if ($incomingQty <= 0) {
+            return round((float) $product->cost_price, 2);
+        }
+
+        $existingQty = round((float) StockLevel::query()
+            ->where('product_id', $product->id)
+            ->where('quantity', '>', 0)
+            ->sum('quantity'), 3);
+
+        if ($existingQty <= 0) {
+            return round($incomingUnitCost, 2);
+        }
+
+        $existingValue = $existingQty * (float) $product->cost_price;
+        $incomingValue = $incomingQty * $incomingUnitCost;
+
+        return round(($existingValue + $incomingValue) / ($existingQty + $incomingQty), 2);
+    }
+
     public function adjustStock(
         int $warehouseId,
         int $productId,
