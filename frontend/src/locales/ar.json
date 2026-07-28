@@ -82,6 +82,7 @@
     "tax": "الضريبة",
     "taxRate": "نسبة الضريبة %",
     "subtotal": "المجموع الفرعي",
+    "discount": "حسم",
     "exchangeRateRequired": "أدخل سعر الصرف للتحويل إلى العملة الأساسية",
     "amountInCurrency": "المبلغ بالعملة ({{currency}})",
     "amountInBase": "المبلغ بالليرة ({{currency}})",

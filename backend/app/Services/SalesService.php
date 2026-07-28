@@ -34,7 +34,9 @@ class SalesService
     public function createInvoice(array $data, array $lines, User $user): SalesInvoice
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            [$subtotal, $tax, , $normalized] = $this->normalizeSalesLines($lines);
+            $discount = $this->normalizeDiscountAmount($data['discount_amount'] ?? 0, $subtotal);
+            $total = round($subtotal - $discount + $tax, 2);
 
             [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
 
@@ -70,6 +72,7 @@ class SalesService
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
+                'discount_amount' => $discount,
                 'tax_amount' => $tax,
                 'total' => $total,
                 'paid_amount' => 0,
@@ -135,6 +138,7 @@ class SalesService
                 ? Account::query()->findOrFail($customer->account_id)
                 : Account::query()->where('code', '1103')->firstOrFail();
             $salesAccount = Account::query()->where('code', '4101')->firstOrFail();
+            $discountAccount = Account::query()->where('code', '4104')->firstOrFail();
             $vatAccount = Account::query()->where('code', '2102')->firstOrFail();
             $cogsAccount = Account::query()->where('code', '5101')->firstOrFail();
             $inventoryAccount = Account::query()->where('code', '1104')->firstOrFail();
@@ -142,13 +146,24 @@ class SalesService
             $rate = (float) ($invoice->exchange_rate ?: 1);
             $baseTotal = (float) ($invoice->base_amount ?: round((float) $invoice->total * $rate, 2));
             $baseTax = round((float) $invoice->tax_amount * $rate, 2);
-            // Revenue absorbs the sub-cent FX rounding so the entry always balances against base_amount.
-            $baseSubtotal = round($baseTotal - $baseTax, 2);
+            $baseDiscount = round((float) ($invoice->discount_amount ?? 0) * $rate, 2);
+            // Gross sales absorbs FX rounding so the entry always balances against base_amount.
+            // Dr AR (net) + Dr Discount = Cr Sales (gross) + Cr VAT
+            $baseGrossSales = round($baseTotal - $baseTax + $baseDiscount, 2);
 
             $glLines = [
                 ['account_id' => $arAccount->id, 'debit' => $baseTotal, 'credit' => 0, 'memo' => 'فاتورة '.$invoice->invoice_number],
-                ['account_id' => $salesAccount->id, 'debit' => 0, 'credit' => $baseSubtotal],
+                ['account_id' => $salesAccount->id, 'debit' => 0, 'credit' => $baseGrossSales],
             ];
+
+            if ($baseDiscount > 0) {
+                $glLines[] = [
+                    'account_id' => $discountAccount->id,
+                    'debit' => $baseDiscount,
+                    'credit' => 0,
+                    'memo' => 'حسم فاتورة '.$invoice->invoice_number,
+                ];
+            }
 
             if ($baseTax > 0) {
                 $glLines[] = ['account_id' => $vatAccount->id, 'debit' => 0, 'credit' => $baseTax];
@@ -665,6 +680,20 @@ class SalesService
         }
 
         return [$subtotal, $tax, round($subtotal + $tax, 2), $normalized];
+    }
+
+    /** Optional invoice-level discount (حسم); must be >= 0 and <= subtotal. */
+    protected function normalizeDiscountAmount(mixed $raw, float $subtotal): float
+    {
+        $discount = round(max(0, (float) $raw), 2);
+
+        if ($discount > round($subtotal, 2) + 0.00001) {
+            throw ValidationException::withMessages([
+                'discount_amount' => ['الحسم لا يجوز أن يتجاوز مجموع البنود.'],
+            ]);
+        }
+
+        return $discount;
     }
 
     public function createQuote(array $data, array $lines, User $user): SalesQuote

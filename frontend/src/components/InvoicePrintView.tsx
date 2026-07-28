@@ -11,6 +11,7 @@ export type SalesInvoicePrintData = {
   e_invoice_uuid?: string
   total: number
   tax_amount: number
+  discount_amount?: number
   subtotal: number
   paid_amount?: number
   payment_type?: string
@@ -243,12 +244,18 @@ export function SalesInvoicePrintView({
 
       <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
         <p>
-          <span className="text-black/55">المجموع الفرعي: </span>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
           <span className="tabular-nums">{invoice.subtotal}</span>
         </p>
+        {Number(invoice.discount_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.discount')}: </span>
+            <span className="tabular-nums">-{invoice.discount_amount}</span>
+          </p>
+        )}
         {Number(invoice.tax_amount) > 0 && (
           <p>
-            <span className="text-black/55">الضريبة: </span>
+            <span className="text-black/55">{t('common.tax')}: </span>
             <span className="tabular-nums">{invoice.tax_amount}</span>
           </p>
         )}

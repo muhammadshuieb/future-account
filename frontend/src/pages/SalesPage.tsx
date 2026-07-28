@@ -120,6 +120,7 @@ export default function SalesPage() {
     payment_type: 'credit',
     paid_amount: '',
     cash_box_id: '',
+    discount_amount: '',
     notes: '',
     ...emptyLine,
   })
@@ -324,8 +325,9 @@ export default function SalesPage() {
   const saveInv = useMutation({
     mutationFn: async () => {
       const lineSub = (Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0)
+      const discountAmt = Math.max(0, Number(inv.discount_amount) || 0)
       const taxAmt = taxEnabled ? round2(lineSub * defaultTaxRate / 100) : 0
-      const estTotal = round2(lineSub + taxAmt)
+      const estTotal = round2(lineSub - discountAmt + taxAmt)
       const res = await api.post('/sales-invoices', {
         invoice_date: inv.invoice_date,
         customer_id: Number(inv.customer_id),
@@ -335,6 +337,7 @@ export default function SalesPage() {
         exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
         payment_type: inv.payment_type || 'credit',
         paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
+        discount_amount: discountAmt > 0 ? discountAmt : 0,
         status: inv.status,
         notes: inv.notes || null,
         lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no, defaultTaxRate)],
@@ -350,6 +353,11 @@ export default function SalesPage() {
   function round2(n: number) {
     return Math.round(n * 100) / 100
   }
+
+  const invLineSub = round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0))
+  const invDiscount = Math.max(0, Number(inv.discount_amount) || 0)
+  const invTax = taxEnabled ? round2(invLineSub * defaultTaxRate / 100) : 0
+  const invEstimatedTotal = round2(invLineSub - invDiscount + invTax)
 
   const saveRet = useMutation({
     mutationFn: () => api.post('/sales-returns', {
@@ -604,6 +612,9 @@ export default function SalesPage() {
             <p><b>{t('common.exchangeRate')}:</b> {String(data.exchange_rate)}</p>
           )}
           <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')} {String(data.currency || baseCurrency)}</p>
+          {data.discount_amount != null && Number(data.discount_amount) > 0 && (
+            <p><b>{t('common.discount')}:</b> {String(data.discount_amount)}</p>
+          )}
           {data.payment_type ? (
             <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), (k) => String(t(k)))}</p>
           ) : null}
@@ -760,9 +771,9 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">
                       <span className="inline-flex items-center gap-1">
@@ -774,6 +785,7 @@ export default function SalesPage() {
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'USD'}</td>
+                    <td className="tabular-nums">{Number(i.discount_amount || 0) > 0 ? i.discount_amount : '—'}</td>
                     <td className="tabular-nums">{i.total}</td>
                     <td className="tabular-nums">{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
@@ -1000,7 +1012,7 @@ export default function SalesPage() {
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label={t('common.validUntil')}><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}<DocumentCurrencyFields state={quote} setState={setQuote} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}<DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}
-            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={(Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0))} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0) * (1 + (taxEnabled ? defaultTaxRate / 100 : 0)))} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invEstimatedTotal} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field><PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invEstimatedTotal} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
             {tab === 'receipts' && <><p className="text-xs leading-relaxed text-black/55">{t('common.receiptHint')}</p>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
           </form>

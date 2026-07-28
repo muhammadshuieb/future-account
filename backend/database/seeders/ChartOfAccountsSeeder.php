@@ -37,6 +37,7 @@ class ChartOfAccountsSeeder extends Seeder
                 ['code' => '4101', 'name' => 'إيرادات المبيعات', 'name_en' => 'Sales Revenue', 'type' => 'revenue', 'nature' => 'credit'],
                 ['code' => '4102', 'name' => 'إيرادات أخرى', 'name_en' => 'Other Income', 'type' => 'revenue', 'nature' => 'credit'],
                 ['code' => '4103', 'name' => 'أرباح فروق أسعار الصرف', 'name_en' => 'Foreign Exchange Gain', 'type' => 'revenue', 'nature' => 'credit'],
+                ['code' => '4104', 'name' => 'حسومات المبيعات', 'name_en' => 'Sales Discounts', 'type' => 'revenue', 'nature' => 'credit'],
             ]],
             ['code' => '5', 'name' => 'المصروفات', 'name_en' => 'Expenses', 'type' => 'expense', 'nature' => 'debit', 'is_group' => true, 'children' => [
                 ['code' => '5101', 'name' => 'تكلفة البضاعة المباعة', 'name_en' => 'Cost of Goods Sold', 'type' => 'expense', 'nature' => 'debit'],

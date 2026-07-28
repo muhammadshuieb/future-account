@@ -204,10 +204,10 @@ class ExcelExportService
             ])->all());
 
         $book->addSheet('فواتير المبيعات', [
-            'المعرف', 'الرقم', 'التاريخ', 'العميل', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الفرع',
+            'المعرف', 'الرقم', 'التاريخ', 'العميل', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الحسم', 'الضريبة', 'الإجمالي', 'المدفوع', 'الفرع',
         ], SalesInvoice::query()->with('customer')->orderBy('id')->get()->map(fn (SalesInvoice $i) => [
             $i->id, $i->invoice_number, optional($i->invoice_date)?->format('Y-m-d'), $i->customer?->name,
-            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount, $i->branch_id,
+            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->discount_amount, $i->tax_amount, $i->total, $i->paid_amount, $i->branch_id,
         ])->all());
 
         $book->addSheet('بنود فواتير المبيعات', [
@@ -425,10 +425,10 @@ class ExcelExportService
             $q->where('currency', $request->query('currency'));
         }
         $book->addSheet('فواتير المبيعات', [
-            'الرقم', 'التاريخ', 'العميل', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
+            'الرقم', 'التاريخ', 'العميل', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الحسم', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
         ], $q->get()->map(fn ($r) => [
             $r->invoice_number, optional($r->invoice_date)?->format('Y-m-d'), $r->customer?->name,
-            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
+            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->discount_amount, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
         ])->all());
     }
 

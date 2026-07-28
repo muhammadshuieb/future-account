@@ -36,6 +36,7 @@ class SalesInvoiceController extends ApiController
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'payment_type' => ['nullable', 'in:cash,credit,partial'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],

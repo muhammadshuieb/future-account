@@ -82,6 +82,7 @@
     "tax": "Tax",
     "taxRate": "Tax rate %",
     "subtotal": "Subtotal",
+    "discount": "Discount",
     "exchangeRateRequired": "Enter an exchange rate to convert to the base currency",
     "amountInCurrency": "Amount in {{currency}}",
     "amountInBase": "Amount in {{currency}}",

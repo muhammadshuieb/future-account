@@ -81,6 +81,7 @@
     "tax": "Vergi",
     "taxRate": "Vergi oranı %",
     "subtotal": "Ara toplam",
+    "discount": "İndirim",
     "exchangeRateRequired": "Temel para birimine dönüştürmek için kur girin",
     "amountInCurrency": "Tutar ({{currency}})",
     "amountInBase": "Temel tutar ({{currency}})",
