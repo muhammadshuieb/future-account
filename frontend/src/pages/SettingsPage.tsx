@@ -210,7 +210,7 @@ export default function SettingsPage() {
       map[s.key] = s.value ?? ''
     })
     if (!map.default_locale && map.locale) map.default_locale = map.locale
-    if (map.tax_enabled === undefined) map.tax_enabled = '1'
+    if (map.tax_enabled === undefined) map.tax_enabled = '0'
     if (!map.backup_time_1) map.backup_time_1 = '02:00'
     if (!map.backup_time_2) map.backup_time_2 = '14:00'
     if (!map.backup_retention_days) map.backup_retention_days = '7'

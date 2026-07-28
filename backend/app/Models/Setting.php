@@ -104,7 +104,7 @@ class Setting extends Model
 
     public static function taxEnabled(): bool
     {
-        return static::boolValue('tax_enabled', true);
+        return static::boolValue('tax_enabled', false);
     }
 
     public static function defaultTaxRate(): float

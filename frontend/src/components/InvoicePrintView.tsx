@@ -33,6 +33,10 @@ export type PurchaseInvoicePrintData = {
   total: number
   tax_amount?: number
   subtotal?: number
+  customs_amount?: number
+  transport_fees?: number
+  fines_amount?: number
+  other_fees?: number
   paid_amount?: number
   payment_type?: string
   currency?: string
@@ -339,14 +343,38 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
       <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
         {invoice.subtotal != null && (
           <p>
-            <span className="text-black/55">المجموع الفرعي: </span>
+            <span className="text-black/55">{t('common.subtotal')}: </span>
             <span className="tabular-nums">{invoice.subtotal}</span>
           </p>
         )}
         {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (
           <p>
-            <span className="text-black/55">الضريبة: </span>
+            <span className="text-black/55">{t('common.tax')}: </span>
             <span className="tabular-nums">{invoice.tax_amount}</span>
+          </p>
+        )}
+        {Number(invoice.customs_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.customs')}: </span>
+            <span className="tabular-nums">{invoice.customs_amount}</span>
+          </p>
+        )}
+        {Number(invoice.transport_fees) > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.transportFees')}: </span>
+            <span className="tabular-nums">{invoice.transport_fees}</span>
+          </p>
+        )}
+        {Number(invoice.fines_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.fines')}: </span>
+            <span className="tabular-nums">{invoice.fines_amount}</span>
+          </p>
+        )}
+        {Number(invoice.other_fees) > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.otherFees')}: </span>
+            <span className="tabular-nums">{invoice.other_fees}</span>
           </p>
         )}
         <p className="text-base font-bold">

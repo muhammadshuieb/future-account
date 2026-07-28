@@ -31,7 +31,14 @@ class PurchaseService
     public function createInvoice(array $data, array $lines, User $user): PurchaseInvoice
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeLines($lines);
+            [$subtotal, $tax, $linesTotal, $normalized] = $this->normalizeLines($lines);
+            $extras = $this->normalizeExtras($data);
+            $extrasSum = round(
+                $extras['customs_amount'] + $extras['transport_fees'] + $extras['fines_amount'] + $extras['other_fees'],
+                2
+            );
+            // Landed cost: line subtotal + tax (if enabled) + optional extras.
+            $total = round($linesTotal + $extrasSum, 2);
 
             [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
 
@@ -57,6 +64,10 @@ class PurchaseService
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
                 'tax_amount' => $tax,
+                'customs_amount' => $extras['customs_amount'],
+                'transport_fees' => $extras['transport_fees'],
+                'fines_amount' => $extras['fines_amount'],
+                'other_fees' => $extras['other_fees'],
                 'total' => $total,
                 'paid_amount' => in_array($paymentType, ['cash', 'partial'], true) ? $intendedPaid : 0,
                 'notes' => $data['notes'] ?? null,
@@ -110,11 +121,12 @@ class PurchaseService
             $rate = (float) ($invoice->exchange_rate ?: 1);
             $baseTotal = (float) ($invoice->base_amount ?: round((float) $invoice->total * $rate, 2));
             $baseTax = round((float) $invoice->tax_amount * $rate, 2);
-            // Inventory absorbs the sub-cent FX rounding so the entry always balances against base_amount.
-            $baseSubtotal = round($baseTotal - $baseTax, 2);
+            // Extras (customs/transport/fines/other) are capitalized into inventory/AP — not expensed.
+            // Inventory debit = base total − recoverable VAT so FX rounding stays on inventory.
+            $baseInventory = round($baseTotal - $baseTax, 2);
 
             $glLines = [
-                ['account_id' => $inventory->id, 'debit' => $baseSubtotal, 'credit' => 0],
+                ['account_id' => $inventory->id, 'debit' => $baseInventory, 'credit' => 0],
             ];
 
             if ($baseTax > 0) {
@@ -131,18 +143,49 @@ class PurchaseService
                 'status' => 'posted',
             ], $glLines, $user);
 
+            $extrasDoc = $invoice->extrasTotal();
+            $lineWeights = [];
+            $weightSum = 0.0;
+            foreach ($invoice->lines as $line) {
+                $lineSub = round((float) $line->quantity * (float) $line->unit_cost, 2);
+                $lineWeights[$line->id] = $lineSub;
+                $weightSum += $lineSub;
+            }
+
+            $allocatedExtras = 0.0;
+            $lineIds = $invoice->lines->pluck('id')->all();
+            $lastLineId = $lineIds === [] ? null : $lineIds[array_key_last($lineIds)];
+
             foreach ($invoice->lines as $line) {
                 $product = $line->product;
+                $qty = (float) $line->quantity;
+                $lineSub = $lineWeights[$line->id] ?? 0.0;
+
+                if ($extrasDoc > 0 && $qty > 0) {
+                    if ($line->id === $lastLineId) {
+                        $lineExtra = round($extrasDoc - $allocatedExtras, 2);
+                    } elseif ($weightSum > 0) {
+                        $lineExtra = round($extrasDoc * ($lineSub / $weightSum), 2);
+                        $allocatedExtras += $lineExtra;
+                    } else {
+                        $lineExtra = 0.0;
+                    }
+                    // Document currency unit cost including proportional landed-cost share.
+                    $docUnitCost = round(($lineSub + $lineExtra) / $qty, 4);
+                } else {
+                    $docUnitCost = (float) $line->unit_cost;
+                }
+
                 // Line costs are in the invoice currency; product cost and stock cost are kept in base currency.
-                $baseUnitCost = round((float) $line->unit_cost * $rate, 4);
+                $baseUnitCost = round($docUnitCost * $rate, 4);
                 $product->update([
-                    'cost_price' => $this->inventory->movingAverageCost($product, (float) $line->quantity, $baseUnitCost),
+                    'cost_price' => $this->inventory->movingAverageCost($product, $qty, $baseUnitCost),
                 ]);
 
                 $this->inventory->adjustStock(
                     $invoice->warehouse_id,
                     $line->product_id,
-                    (float) $line->quantity,
+                    $qty,
                     'in',
                     $user,
                     [
@@ -537,6 +580,26 @@ class PurchaseService
         $invRate = (float) ($invoice->exchange_rate ?: 1);
 
         return $invRate > 0 ? round($payBase / $invRate, 2) : $payBase;
+    }
+
+    /**
+     * Optional purchase landed-cost extras (document currency).
+     *
+     * @return array{customs_amount: float, transport_fees: float, fines_amount: float, other_fees: float}
+     */
+    protected function normalizeExtras(array $data): array
+    {
+        $fields = ['customs_amount', 'transport_fees', 'fines_amount', 'other_fees'];
+        $out = [];
+        foreach ($fields as $field) {
+            $value = round((float) ($data[$field] ?? 0), 2);
+            if ($value < 0) {
+                throw ValidationException::withMessages([$field => ['يجب أن يكون المبلغ صفراً أو أكبر.']]);
+            }
+            $out[$field] = $value;
+        }
+
+        return $out;
     }
 
     /**

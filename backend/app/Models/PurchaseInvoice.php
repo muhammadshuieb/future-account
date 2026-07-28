@@ -14,7 +14,8 @@ class PurchaseInvoice extends Model
     protected $fillable = [
         'invoice_number', 'invoice_date', 'supplier_id', 'warehouse_id', 'cash_box_id', 'branch_id',
         'purchase_order_id', 'status', 'payment_type', 'currency', 'exchange_rate', 'base_amount',
-        'subtotal', 'tax_amount', 'total', 'paid_amount', 'notes',
+        'subtotal', 'tax_amount', 'customs_amount', 'transport_fees', 'fines_amount', 'other_fees',
+        'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
 
@@ -25,11 +26,27 @@ class PurchaseInvoice extends Model
             'posted_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'tax_amount' => 'decimal:2',
+            'customs_amount' => 'decimal:2',
+            'transport_fees' => 'decimal:2',
+            'fines_amount' => 'decimal:2',
+            'other_fees' => 'decimal:2',
             'total' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'exchange_rate' => 'decimal:8',
             'base_amount' => 'decimal:2',
         ];
+    }
+
+    /** Optional landed-cost extras (customs, transport, fines, other) in document currency. */
+    public function extrasTotal(): float
+    {
+        return round(
+            (float) $this->customs_amount
+            + (float) $this->transport_fees
+            + (float) $this->fines_amount
+            + (float) $this->other_fees,
+            2
+        );
     }
 
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }

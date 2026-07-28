@@ -81,6 +81,7 @@
     "inactive": "Inactive",
     "tax": "Tax",
     "taxRate": "Tax rate %",
+    "subtotal": "Subtotal",
     "exchangeRateRequired": "Enter an exchange rate to convert to the base currency",
     "amountInCurrency": "Amount in {{currency}}",
     "amountInBase": "Amount in {{currency}}",
@@ -220,7 +221,13 @@
     "payRemaining": "Pay remaining",
     "payAndClose": "Pay & close",
     "payRemainingHint": "Enter the remaining amount or part of it. A supplier payment is created, cash decreases, and AP decreases. When remaining reaches zero the invoice is settled.",
-    "payRemainingSaved": "Amount paid and invoice updated"
+    "payRemainingSaved": "Amount paid and invoice updated",
+    "customs": "Customs",
+    "transportFees": "Transport fees",
+    "fines": "Fines / violations",
+    "otherFees": "Other fees",
+    "costExtrasHint": "Optional costs added to the invoice total and capitalized into inventory cost",
+    "extrasTotal": "Extras total"
   },
   "warehouse": {
     "title": "Warehouse & Inventory",

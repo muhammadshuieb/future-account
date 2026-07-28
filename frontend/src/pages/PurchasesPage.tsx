@@ -71,9 +71,9 @@ export default function PurchasesPage() {
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
-  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
+  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '0').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
-  const [applyPurchaseTax, setApplyPurchaseTax] = useState(true)
+  const [applyPurchaseTax, setApplyPurchaseTax] = useState(false)
   const [purchaseTaxRate, setPurchaseTaxRate] = useState('')
   const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
   const cashBoxes = useQuery({
@@ -99,6 +99,10 @@ export default function PurchasesPage() {
     paid_amount: '',
     cash_box_id: '',
     notes: '',
+    customs_amount: '',
+    transport_fees: '',
+    fines_amount: '',
+    other_fees: '',
     ...base,
   })
   const [ret, setRet] = useState({
@@ -188,6 +192,15 @@ export default function PurchasesPage() {
     return Math.round(n * 100) / 100
   }
 
+  const invoiceExtrasSum = round2(
+    (Number(inv.customs_amount) || 0)
+    + (Number(inv.transport_fees) || 0)
+    + (Number(inv.fines_amount) || 0)
+    + (Number(inv.other_fees) || 0),
+  )
+  const invoiceLineSub = round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0))
+  const invoiceEstTotal = round2(invoiceLineSub * (1 + effectiveTaxRate / 100) + invoiceExtrasSum)
+
   const purchaseDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'requests') return `/purchase-requests/${id}`
     if (rowTab === 'orders') return `/purchase-orders/${id}`
@@ -269,6 +282,10 @@ export default function PurchasesPage() {
         paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
         status: inv.status,
         notes: inv.notes || null,
+        customs_amount: inv.customs_amount ? Number(inv.customs_amount) : 0,
+        transport_fees: inv.transport_fees ? Number(inv.transport_fees) : 0,
+        fines_amount: inv.fines_amount ? Number(inv.fines_amount) : 0,
+        other_fees: inv.other_fees ? Number(inv.other_fees) : 0,
         lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, effectiveTaxRate)],
       })
       const id = res.data?.data?.id as number | undefined
@@ -447,6 +464,18 @@ export default function PurchasesPage() {
             {data.tax_amount != null && Number(data.tax_amount) > 0 && (
               <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
             )}
+            {Number(data.customs_amount) > 0 && (
+              <p><b>{t('purchases.customs')}:</b> {String(data.customs_amount)}</p>
+            )}
+            {Number(data.transport_fees) > 0 && (
+              <p><b>{t('purchases.transportFees')}:</b> {String(data.transport_fees)}</p>
+            )}
+            {Number(data.fines_amount) > 0 && (
+              <p><b>{t('purchases.fines')}:</b> {String(data.fines_amount)}</p>
+            )}
+            {Number(data.other_fees) > 0 && (
+              <p><b>{t('purchases.otherFees')}:</b> {String(data.other_fees)}</p>
+            )}
           </div>
           <div className="rounded-lg border border-black/10 bg-white p-4">
             <PurchaseInvoicePrintView invoice={data as PurchaseInvoicePrintData} />
@@ -583,7 +612,7 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.tax')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
                 {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; tax_amount?: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
@@ -598,7 +627,7 @@ export default function PurchasesPage() {
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'USD'}</td>
                     <td>{i.total}</td>
-                    <td>{i.tax_amount ?? 0}</td>
+                    {taxEnabled && <td>{i.tax_amount ?? 0}</td>}
                     <td>{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
                     <td className="space-x-2 space-x-reverse">
@@ -817,7 +846,20 @@ export default function PurchasesPage() {
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
-          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} />{productFields(inv, setInv)}<PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0) * (1 + effectiveTaxRate / 100))} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invoiceEstTotal} />{productFields(inv, setInv)}
+            <div className="rounded-lg border border-dashed border-black/15 bg-black/[0.02] p-3 space-y-2">
+              <p className="text-xs font-medium text-black/55">{t('purchases.costExtrasHint')}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={t('purchases.customs')}><NumericInput value={inv.customs_amount} onChange={(v) => setInv((prev) => ({ ...prev, customs_amount: v }))} /></Field>
+                <Field label={t('purchases.transportFees')}><NumericInput value={inv.transport_fees} onChange={(v) => setInv((prev) => ({ ...prev, transport_fees: v }))} /></Field>
+                <Field label={t('purchases.fines')}><NumericInput value={inv.fines_amount} onChange={(v) => setInv((prev) => ({ ...prev, fines_amount: v }))} /></Field>
+                <Field label={t('purchases.otherFees')}><NumericInput value={inv.other_fees} onChange={(v) => setInv((prev) => ({ ...prev, other_fees: v }))} /></Field>
+              </div>
+              {invoiceExtrasSum > 0 && (
+                <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{invoiceExtrasSum}</span></p>
+              )}
+            </div>
+            <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
           {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
           {tab === 'payments' && <><p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
         </form>}

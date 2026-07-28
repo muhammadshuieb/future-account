@@ -95,7 +95,7 @@ export default function SalesPage() {
   const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
-  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '1').toLowerCase())
+  const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '0').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
   const cashBoxes = useQuery({
     queryKey: ['cash-boxes'],

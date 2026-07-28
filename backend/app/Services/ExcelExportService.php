@@ -217,10 +217,12 @@ class ExcelExportService
         ])->all());
 
         $book->addSheet('فواتير المشتريات', [
-            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع',
+            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع',
         ], PurchaseInvoice::query()->with('supplier')->orderBy('id')->get()->map(fn (PurchaseInvoice $i) => [
             $i->id, $i->invoice_number, optional($i->invoice_date)?->format('Y-m-d'), $i->supplier?->name,
-            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount, $i->total, $i->paid_amount,
+            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount,
+            $i->customs_amount, $i->transport_fees, $i->fines_amount, $i->other_fees,
+            $i->total, $i->paid_amount,
         ])->all());
 
         $book->addSheet('بنود فواتير المشتريات', [
@@ -484,10 +486,12 @@ class ExcelExportService
             $q->where('currency', $request->query('currency'));
         }
         $book->addSheet('فواتير المشتريات', [
-            'الرقم', 'التاريخ', 'المورد', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'الإجمالي', 'المدفوع', 'الحالة',
+            'الرقم', 'التاريخ', 'المورد', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع', 'الحالة',
         ], $q->get()->map(fn ($r) => [
             $r->invoice_number, optional($r->invoice_date)?->format('Y-m-d'), $r->supplier?->name,
-            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount, $r->total, $r->paid_amount, $r->status,
+            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount,
+            $r->customs_amount, $r->transport_fees, $r->fines_amount, $r->other_fees,
+            $r->total, $r->paid_amount, $r->status,
         ])->all());
     }
 

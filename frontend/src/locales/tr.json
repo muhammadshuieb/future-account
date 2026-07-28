@@ -80,6 +80,7 @@
     "inactive": "Pasif",
     "tax": "Vergi",
     "taxRate": "Vergi oranı %",
+    "subtotal": "Ara toplam",
     "exchangeRateRequired": "Temel para birimine dönüştürmek için kur girin",
     "amountInCurrency": "Tutar ({{currency}})",
     "amountInBase": "Temel tutar ({{currency}})",
@@ -219,7 +220,13 @@
     "payRemaining": "Kalanı öde",
     "payAndClose": "Öde ve kapat",
     "payRemainingHint": "Kalan tutarı veya bir kısmını girin. Tedarikçi ödemesi oluşur, kasa azalır ve borç azalır. Kalan sıfırlanınca fatura kapanır.",
-    "payRemainingSaved": "Tutar ödendi ve fatura güncellendi"
+    "payRemainingSaved": "Tutar ödendi ve fatura güncellendi",
+    "customs": "Gümrük",
+    "transportFees": "Nakliye ücretleri",
+    "fines": "Cezalar",
+    "otherFees": "Diğer ücretler",
+    "costExtrasHint": "Fatura toplamına eklenen isteğe bağlı maliyetler; stok maliyetine kapitalize edilir",
+    "extrasTotal": "Ek maliyetler toplamı"
   },
   "warehouse": {
     "title": "Depo ve Stok",
