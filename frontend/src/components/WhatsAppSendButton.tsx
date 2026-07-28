@@ -42,7 +42,7 @@ export default function WhatsAppSendButton({
 }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [phone, setPhone] = useState(defaultPhone)
+  const [phone, setPhone] = useState(defaultPhone ?? '')
   const [format, setFormat] = useState<CaptureFormat>('pdf')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -50,7 +50,7 @@ export default function WhatsAppSendButton({
   const [cloudConfigured, setCloudConfigured] = useState(false)
 
   useEffect(() => {
-    if (open) setPhone(defaultPhone || '')
+    if (open) setPhone(defaultPhone ?? '')
   }, [open, defaultPhone])
 
   useEffect(() => {
@@ -171,7 +171,7 @@ export default function WhatsAppSendButton({
             <Button variant="secondary" disabled={busy} onClick={() => setOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button variant="primary" disabled={busy || !phone.trim()} onClick={() => void handleSend()}>
+            <Button variant="primary" disabled={busy || !(phone ?? '').trim()} onClick={() => void handleSend()}>
               {busy ? t('whatsapp.preparing') : t('whatsapp.confirm')}
             </Button>
           </>
