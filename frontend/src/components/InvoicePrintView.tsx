@@ -18,6 +18,8 @@ export type SalesInvoicePrintData = {
   currency?: string
   notes?: string | null
   customer?: { name: string; tax_number?: string; phone?: string }
+  branch?: { name?: string; code?: string } | null
+  warehouse?: { name?: string } | null
   lines?: {
     product?: { name: string; sku?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
@@ -177,6 +179,18 @@ export function SalesInvoicePrintView({
           <p>
             <span className="text-black/55">{t('companies.taxNumber')}: </span>
             {invoice.customer.tax_number}
+          </p>
+        )}
+        {invoice.branch?.name && (
+          <p>
+            <span className="text-black/55">{t('common.branch')}: </span>
+            {invoice.branch.name}
+          </p>
+        )}
+        {invoice.warehouse?.name && (
+          <p>
+            <span className="text-black/55">{t('common.warehouse')}: </span>
+            {invoice.warehouse.name}
           </p>
         )}
         <p>

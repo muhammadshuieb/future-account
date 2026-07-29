@@ -15,9 +15,10 @@ class SalesInvoiceController extends ApiController
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
-        $query = SalesInvoice::query()->with(['customer', 'warehouse'])->withCount('attachments')->latest('id');
+        $query = SalesInvoice::query()->with(['customer', 'warehouse', 'branch'])->withCount('attachments')->latest('id');
         ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
             'customer' => ['name', 'code'],
+            'branch' => ['name', 'code'],
         ]);
 
         return $this->ok($query->get());
@@ -55,7 +56,7 @@ class SalesInvoiceController extends ApiController
     {
         $this->authorizePermission('sales.view');
 
-        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'cashBox', 'lines.product.unit', 'journalEntry', 'attachments']));
+        return $this->ok($salesInvoice->load(['customer', 'warehouse', 'branch', 'cashBox', 'lines.product.unit', 'journalEntry', 'attachments']));
     }
 
     public function post(SalesInvoice $salesInvoice): JsonResponse

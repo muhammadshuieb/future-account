@@ -56,6 +56,12 @@ class SalesService
             }
 
             $warehouseId = $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+            $customerBranchId = Customer::query()->whereKey($data['customer_id'])->value('branch_id');
+            $branchId = $this->resolveSalesBranchId(
+                isset($data['branch_id']) ? (int) $data['branch_id'] : null,
+                $warehouseId,
+                $customerBranchId ? (int) $customerBranchId : null,
+            );
 
             $invoice = SalesInvoice::query()->create([
                 'invoice_number' => $this->nextNumber('SI'),
@@ -64,7 +70,7 @@ class SalesService
                 'customer_id' => $data['customer_id'],
                 'warehouse_id' => $warehouseId,
                 'cash_box_id' => $cashBoxId,
-                'branch_id' => $data['branch_id'] ?? null,
+                'branch_id' => $branchId,
                 'sales_order_id' => $data['sales_order_id'] ?? null,
                 'status' => 'draft',
                 'payment_type' => $paymentType,
@@ -93,7 +99,7 @@ class SalesService
                 $invoice->update(['paid_amount' => $intendedPaid]);
             }
 
-            return $invoice->load(['lines.product.unit', 'customer', 'warehouse', 'cashBox', 'attachments']);
+            return $invoice->load(['lines.product.unit', 'customer', 'warehouse', 'branch', 'cashBox', 'attachments']);
         });
     }
 
@@ -263,7 +269,7 @@ class SalesService
 
             $this->audit->log($user, 'sales_invoice.posted', $invoice);
 
-            return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
+            return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'branch', 'cashBox', 'journalEntry', 'attachments']);
         });
     }
 
