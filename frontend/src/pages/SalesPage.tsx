@@ -33,6 +33,18 @@ type StockInfo = {
   track_batch?: boolean
 }
 
+type InvoiceLineDraft = {
+  product_id: string
+  quantity: string
+  unit_price: string
+  batch_no: string
+  serial_no: string
+}
+
+function emptyInvoiceLine(): InvoiceLineDraft {
+  return { product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '' }
+}
+
 function linePayload(productId: string, qty: string, price: string, _batch: string, serial: string, taxRate: number) {
   return {
     product_id: Number(productId),
@@ -92,9 +104,18 @@ export default function SalesPage() {
   })
   const customers = useQuery({ queryKey: ['customers'], queryFn: async () => (await api.get('/customers')).data.data })
   const products = useQuery({ queryKey: ['products'], queryFn: async () => (await api.get('/products')).data.data as ProductRow[] })
-  const warehouses = useQuery({ queryKey: ['warehouses'], queryFn: async () => (await api.get('/warehouses')).data.data })
+  const warehouses = useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => (await api.get('/warehouses')).data.data as { id: number; name: string; branch_id?: number | null }[],
+  })
+  const branches = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => (await api.get('/branches')).data.data as { id: number; name: string; code?: string; is_main?: boolean }[],
+  })
   const settings = useQuery({ queryKey: ['settings'], queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[] })
   const defaultWarehouseId = settings.data?.find((s) => s.key === 'default_warehouse_id')?.value || ''
+  const defaultBranchId = settings.data?.find((s) => s.key === 'default_branch_id')?.value
+    || String((branches.data || []).find((b) => b.is_main)?.id || (branches.data || [])[0]?.id || '')
   const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '0').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
   const cashBoxes = useQuery({
@@ -122,7 +143,12 @@ export default function SalesPage() {
     cash_box_id: '',
     discount_amount: '',
     notes: '',
-    ...emptyLine,
+    customer_id: '',
+    warehouse_id: '',
+    branch_id: '',
+    currency: 'USD',
+    exchange_rate: '1',
+    lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
   })
   const [ret, setRet] = useState({
     return_date: todayYmd(),
@@ -161,7 +187,9 @@ export default function SalesPage() {
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
 
-  const selectedProduct = (products.data || []).find((p) => String(p.id) === inv.product_id)
+  const invHasSerialProduct = inv.lines.some((line) =>
+    (products.data || []).find((p) => String(p.id) === line.product_id)?.track_serial,
+  )
 
   const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string; batch_no?: string }>(
     setState: Dispatch<SetStateAction<T>>,
@@ -178,6 +206,31 @@ export default function SalesPage() {
     setState((prev) => ({ ...prev, quantity: String(info.available_qty) }))
   }, [])
 
+  const applyStockToInvoiceLine = useCallback(async (index: number, productId: string, warehouseId: string) => {
+    const info = await fetchStockInfo(productId, warehouseId)
+    if (info === null) return
+    setInv((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, quantity: String(info.available_qty) } : line)),
+    }))
+  }, [])
+
+  const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+    setInv((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  const addInvLine = () => setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+
+  const removeInvLine = (index: number) => {
+    setInv((prev) => ({
+      ...prev,
+      lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
+    }))
+  }
+
   async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
     try {
       const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
@@ -188,8 +241,17 @@ export default function SalesPage() {
       }
       const patch = { product_id: String(found.id), unit_price: String(found.sale_price) }
       if (target === 'inv') {
-        setInv((prev) => ({ ...prev, ...patch }))
-        if (inv.warehouse_id) void applyStockToForm(setInv, String(found.id), inv.warehouse_id)
+        setInv((prev) => {
+          const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
+          const lines = emptyIdx >= 0
+            ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...patch } : line))
+            : [...prev.lines, { ...emptyInvoiceLine(), ...patch }]
+          const targetIdx = emptyIdx >= 0 ? emptyIdx : lines.length - 1
+          if (prev.warehouse_id && !skipStockAutofill.current) {
+            void applyStockToInvoiceLine(targetIdx, String(found.id), prev.warehouse_id)
+          }
+          return { ...prev, lines }
+        })
       } else if (target === 'order') {
         setOrder((prev) => ({ ...prev, ...patch }))
         if (order.warehouse_id) void applyStockToForm(setOrder, String(found.id), order.warehouse_id)
@@ -281,10 +343,24 @@ export default function SalesPage() {
     setSelectedRow(null)
     setStockInfo(null)
     skipStockAutofill.current = false
+    setInv({
+      invoice_date: todayYmd(),
+      status: 'posted',
+      payment_type: 'credit',
+      paid_amount: '',
+      cash_box_id: '',
+      discount_amount: '',
+      notes: '',
+      customer_id: '',
+      warehouse_id: defaultWarehouseId || '',
+      branch_id: defaultBranchId || '',
+      currency: 'USD',
+      exchange_rate: '1',
+      lines: [emptyInvoiceLine()],
+    })
     if (defaultWarehouseId) {
       setQuote((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
       setOrder((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
-      setInv((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
     }
     setModal('create')
   }
@@ -324,7 +400,14 @@ export default function SalesPage() {
 
   const saveInv = useMutation({
     mutationFn: async () => {
-      const lineSub = (Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0)
+      const filledLines = inv.lines.filter((l) => l.product_id)
+      if (filledLines.length === 0) {
+        throw { response: { data: { message: t('common.linesRequired') } } }
+      }
+      const lineSub = filledLines.reduce(
+        (sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0),
+        0,
+      )
       const discountAmt = Math.max(0, Number(inv.discount_amount) || 0)
       const taxAmt = taxEnabled ? round2(lineSub * defaultTaxRate / 100) : 0
       const estTotal = round2(lineSub - discountAmt + taxAmt)
@@ -332,6 +415,7 @@ export default function SalesPage() {
         invoice_date: inv.invoice_date,
         customer_id: Number(inv.customer_id),
         warehouse_id: Number(inv.warehouse_id),
+        branch_id: inv.branch_id ? Number(inv.branch_id) : null,
         cash_box_id: inv.cash_box_id ? Number(inv.cash_box_id) : null,
         currency: inv.currency,
         exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
@@ -340,7 +424,7 @@ export default function SalesPage() {
         discount_amount: discountAmt > 0 ? discountAmt : 0,
         status: inv.status,
         notes: inv.notes || null,
-        lines: [linePayload(inv.product_id, inv.quantity, inv.unit_price, inv.batch_no, inv.serial_no, defaultTaxRate)],
+        lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
       })
       const id = res.data?.data?.id as number | undefined
       if (id && pendingAttachment) await uploadAttachment('sales_invoice', id, pendingAttachment)
@@ -354,7 +438,9 @@ export default function SalesPage() {
     return Math.round(n * 100) / 100
   }
 
-  const invLineSub = round2((Number(inv.quantity) || 0) * (Number(inv.unit_price) || 0))
+  const invLineSub = round2(
+    inv.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0),
+  )
   const invDiscount = Math.max(0, Number(inv.discount_amount) || 0)
   const invTax = taxEnabled ? round2(invLineSub * defaultTaxRate / 100) : 0
   const invEstimatedTotal = round2(invLineSub - invDiscount + invTax)
@@ -551,6 +637,81 @@ export default function SalesPage() {
     </>
   )
 
+  const invoiceLinesEditor = (
+    <div className="space-y-3">
+      <BarcodeScanInput
+        label={t('sales.scanBarcode')}
+        hint={t('sales.scanBarcodeHint')}
+        onScan={(code) => void handleBarcodeScan(code, 'inv')}
+      />
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-black/55">{t('common.lines')}</p>
+        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
+      </div>
+      {inv.lines.map((line, index) => {
+        const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        return (
+          <div key={index} className="rounded-lg border border-black/10 bg-black/[0.02] p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-black/50">{t('common.lineN', { n: index + 1 })}</span>
+              {inv.lines.length > 1 && (
+                <button type="button" className="text-xs text-rose-600" onClick={() => removeInvLine(index)}>
+                  {t('common.removeLine')}
+                </button>
+              )}
+            </div>
+            <Field label={t('common.product')}>
+              <select
+                className={inputClass}
+                value={line.product_id}
+                onChange={(e) => {
+                  const productId = e.target.value
+                  const selected = (products.data || []).find((p) => String(p.id) === productId)
+                  updateInvLine(index, {
+                    product_id: productId,
+                    unit_price: selected ? String(selected.sale_price) : line.unit_price,
+                    serial_no: selected?.track_serial ? line.serial_no : '',
+                    batch_no: selected?.track_batch ? line.batch_no : '',
+                  })
+                  if (productId && inv.warehouse_id && !skipStockAutofill.current) {
+                    void applyStockToInvoiceLine(index, productId, inv.warehouse_id)
+                  }
+                }}
+                required
+              >
+                <option value="">—</option>
+                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            {line.product_id && (
+              <Field label={t('common.unit')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+              </Field>
+            )}
+            <div className="form-grid-2">
+              <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+                <NumericInput value={line.quantity} onChange={(v) => updateInvLine(index, { quantity: v })} />
+                {line.product_id && inv.warehouse_id && (
+                  <div className="mt-1 text-xs text-black/55">
+                    <LineStockHint productId={Number(line.product_id)} warehouseId={Number(inv.warehouse_id)} />
+                  </div>
+                )}
+              </Field>
+              <Field label={t('common.price')}>
+                <NumericInput value={line.unit_price} onChange={(v) => updateInvLine(index, { unit_price: v })} />
+              </Field>
+            </div>
+            {product?.track_serial && (
+              <Field label={t('common.serial')}>
+                <input className={inputClass} value={line.serial_no} onChange={(e) => updateInvLine(index, { serial_no: e.target.value })} required />
+              </Field>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+
   const customerField = <T extends { customer_id: string; warehouse_id?: string; product_id?: string }>(
     state: T,
     setState: Dispatch<SetStateAction<T>>,
@@ -591,6 +752,7 @@ export default function SalesPage() {
 
   const summary = (data: Record<string, unknown>) => {
     const warehouseName = (data.warehouse as { name?: string } | undefined)?.name
+    const branchName = (data.branch as { name?: string } | undefined)?.name
     const lines = ((data.items || data.lines) as {
       product?: { id?: number; name?: string; unit?: { name?: string; symbol?: string } }
       product_id?: number
@@ -607,6 +769,9 @@ export default function SalesPage() {
           <p><b>{t('common.status')}:</b> {documentStatusLabel(String(data.status || ''))}</p>
           <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
           <p><b>{t('common.warehouse')}:</b> {warehouseName || '—'}</p>
+          {tab === 'invoices' && (
+            <p><b>{t('common.branch')}:</b> {branchName || '—'}</p>
+          )}
           <p><b>{t('common.currency')}:</b> {String(data.currency || baseCurrency)}</p>
           {data.exchange_rate != null && String(data.currency || baseCurrency) !== baseCurrency && (
             <p><b>{t('common.exchangeRate')}:</b> {String(data.exchange_rate)}</p>
@@ -771,9 +936,9 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.branch')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string }; branch?: { name?: string } | null }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">
                       <span className="inline-flex items-center gap-1">
@@ -782,6 +947,7 @@ export default function SalesPage() {
                       </span>
                     </td>
                     <td>{i.customer?.name}</td>
+                    <td>{i.branch?.name || '—'}</td>
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'USD'}</td>
@@ -888,7 +1054,7 @@ export default function SalesPage() {
               : modal === 'collect' ? t('sales.collectRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'}
+        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'md'}
         footer={
           modal === 'collect' ? (
             <>
@@ -1012,7 +1178,12 @@ export default function SalesPage() {
           <form id="sales-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={quote.quote_date} onChange={(e) => setQuote({ ...quote, quote_date: e.target.value })} /></Field><Field label={t('common.validUntil')}><input type="date" className={inputClass} value={quote.valid_until} onChange={(e) => setQuote({ ...quote, valid_until: e.target.value })} /></Field>{customerField(quote, setQuote, true, onSalesWarehouseChange(setQuote))}<DocumentCurrencyFields state={quote} setState={setQuote} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(quote, setQuote, (code) => void handleBarcodeScan(code, 'quote'), true)}</>}
             {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>{customerField(order, setOrder, true, onSalesWarehouseChange(setOrder))}<DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}</>}
-            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, onSalesWarehouseChange(setInv))}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invEstimatedTotal} />{productFields(inv, setInv, (code) => void handleBarcodeScan(code, 'inv'), true)}{selectedProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field><PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invEstimatedTotal} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+            {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{customerField(inv, setInv, true, (warehouseId) => {
+              const wh = (warehouses.data || []).find((w) => String(w.id) === warehouseId)
+              if (wh?.branch_id) {
+                setInv((prev) => ({ ...prev, branch_id: String(wh.branch_id) }))
+              }
+            })}<Field label={t('common.branch')}><select className={inputClass} value={inv.branch_id} onChange={(e) => setInv({ ...inv, branch_id: e.target.value })} required={(branches.data || []).length > 0}><option value="">—</option>{(branches.data || []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}</select></Field><DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invEstimatedTotal} />{invoiceLinesEditor}{invHasSerialProduct && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field><PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invEstimatedTotal} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
             {tab === 'receipts' && <><p className="text-xs leading-relaxed text-black/55">{t('common.receiptHint')}</p>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
           </form>

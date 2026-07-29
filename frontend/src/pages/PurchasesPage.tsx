@@ -20,6 +20,18 @@ import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 
 type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
 
+type InvoiceLineDraft = {
+  product_id: string
+  quantity: string
+  unit_cost: string
+  batch_no: string
+  serial_no: string
+}
+
+function emptyInvoiceLine(): InvoiceLineDraft {
+  return { product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '' }
+}
+
 function purchaseLine(productId: string, qty: string, cost: string, batch: string, serial: string, taxRate: number) {
   return {
     product_id: Number(productId),
@@ -103,7 +115,11 @@ export default function PurchasesPage() {
     transport_fees: '',
     fines_amount: '',
     other_fees: '',
-    ...base,
+    supplier_id: '',
+    warehouse_id: '',
+    currency: 'USD',
+    exchange_rate: '1',
+    lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
   })
   const [ret, setRet] = useState({
     return_date: todayYmd(),
@@ -198,8 +214,26 @@ export default function PurchasesPage() {
     + (Number(inv.fines_amount) || 0)
     + (Number(inv.other_fees) || 0),
   )
-  const invoiceLineSub = round2((Number(inv.quantity) || 0) * (Number(inv.unit_cost) || 0))
+  const invoiceLineSub = round2(
+    inv.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0), 0),
+  )
   const invoiceEstTotal = round2(invoiceLineSub * (1 + effectiveTaxRate / 100) + invoiceExtrasSum)
+
+  const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+    setInv((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  const addInvLine = () => setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+
+  const removeInvLine = (index: number) => {
+    setInv((prev) => ({
+      ...prev,
+      lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
+    }))
+  }
 
   const purchaseDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'requests') return `/purchase-requests/${id}`
@@ -232,10 +266,26 @@ export default function PurchasesPage() {
   const openCreate = () => {
     setSelectedId(null)
     setSelectedRow(null)
+    setInv({
+      invoice_date: todayYmd(),
+      status: 'posted',
+      payment_type: 'credit',
+      paid_amount: '',
+      cash_box_id: '',
+      notes: '',
+      customs_amount: '',
+      transport_fees: '',
+      fines_amount: '',
+      other_fees: '',
+      supplier_id: '',
+      warehouse_id: defaultWarehouseId || '',
+      currency: 'USD',
+      exchange_rate: '1',
+      lines: [emptyInvoiceLine()],
+    })
     if (defaultWarehouseId) {
       setReq((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
       setPo((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
-      setInv((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
     }
     setModal('create')
   }
@@ -271,6 +321,10 @@ export default function PurchasesPage() {
 
   const saveInv = useMutation({
     mutationFn: async () => {
+      const filledLines = inv.lines.filter((l) => l.product_id)
+      if (filledLines.length === 0) {
+        throw { response: { data: { message: t('common.linesRequired') } } }
+      }
       const res = await api.post('/purchase-invoices', {
         invoice_date: inv.invoice_date,
         supplier_id: Number(inv.supplier_id),
@@ -286,7 +340,7 @@ export default function PurchasesPage() {
         transport_fees: inv.transport_fees ? Number(inv.transport_fees) : 0,
         fines_amount: inv.fines_amount ? Number(inv.fines_amount) : 0,
         other_fees: inv.other_fees ? Number(inv.other_fees) : 0,
-        lines: [purchaseLine(inv.product_id, inv.quantity, inv.unit_cost, inv.batch_no, inv.serial_no, effectiveTaxRate)],
+        lines: filledLines.map((l) => purchaseLine(l.product_id, l.quantity, l.unit_cost, l.batch_no, l.serial_no, effectiveTaxRate)),
       })
       const id = res.data?.data?.id as number | undefined
       if (id && pendingAttachment) await uploadAttachment('purchase_invoice', id, pendingAttachment)
@@ -414,6 +468,73 @@ export default function PurchasesPage() {
         <Field label={t('common.serial')}><input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required /></Field>
       )}
     </>
+  )
+
+  const invoiceLinesEditor = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-black/55">{t('common.lines')}</p>
+        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
+      </div>
+      {inv.lines.map((line, index) => {
+        const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        return (
+          <div key={index} className="rounded-lg border border-black/10 bg-black/[0.02] p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-black/50">{t('common.lineN', { n: index + 1 })}</span>
+              {inv.lines.length > 1 && (
+                <button type="button" className="text-xs text-rose-600" onClick={() => removeInvLine(index)}>
+                  {t('common.removeLine')}
+                </button>
+              )}
+            </div>
+            <Field label={t('common.product')}>
+              <select
+                className={inputClass}
+                value={line.product_id}
+                onChange={(e) => {
+                  const productId = e.target.value
+                  const selected = (products.data || []).find((p) => String(p.id) === productId)
+                  updateInvLine(index, {
+                    product_id: productId,
+                    unit_cost: selected ? String(selected.cost_price) : line.unit_cost,
+                    serial_no: selected?.track_serial ? line.serial_no : '',
+                    batch_no: selected?.track_batch ? line.batch_no : '',
+                  })
+                }}
+                required
+              >
+                <option value="">—</option>
+                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            {line.product_id && (
+              <Field label={t('common.unit')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+              </Field>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+                <NumericInput value={line.quantity} onChange={(v) => updateInvLine(index, { quantity: v })} />
+              </Field>
+              <Field label={t('common.cost')}>
+                <NumericInput value={line.unit_cost} onChange={(v) => updateInvLine(index, { unit_cost: v })} />
+              </Field>
+            </div>
+            {product?.track_batch && (
+              <Field label={t('common.batch')}>
+                <input className={inputClass} value={line.batch_no} onChange={(e) => updateInvLine(index, { batch_no: e.target.value })} required />
+              </Field>
+            )}
+            {product?.track_serial && (
+              <Field label={t('common.serial')}>
+                <input className={inputClass} value={line.serial_no} onChange={(e) => updateInvLine(index, { serial_no: e.target.value })} required />
+              </Field>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 
   const detailPath = tab === 'requests' ? 'purchase-requests' : tab === 'orders' ? 'purchase-orders' : tab === 'invoices' ? 'purchase-invoices' : tab === 'returns' ? 'purchase-returns' : 'supplier-payments'
@@ -724,7 +845,7 @@ export default function PurchasesPage() {
               : modal === 'pay' ? t('purchases.payRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && modal === 'view' ? 'xl' : 'md'}
+        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'md'}
         footer={
           modal === 'pay' ? (
             <>
@@ -846,7 +967,7 @@ export default function PurchasesPage() {
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
           {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
           {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
-          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invoiceEstTotal} />{productFields(inv, setInv)}
+          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invoiceEstTotal} />{invoiceLinesEditor}
             <div className="rounded-lg border border-dashed border-black/15 bg-black/[0.02] p-3 space-y-2">
               <p className="text-xs font-medium text-black/55">{t('purchases.costExtrasHint')}</p>
               <div className="grid grid-cols-2 gap-2">

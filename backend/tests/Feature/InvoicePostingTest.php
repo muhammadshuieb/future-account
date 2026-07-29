@@ -76,6 +76,46 @@ class InvoicePostingTest extends TestCase
         $this->assertTrue($invoice->journalEntry->isBalanced());
     }
 
+    public function test_sales_invoice_persists_selected_branch(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $branchId = (int) ($warehouse->branch_id ?: \App\Models\Branch::query()->value('id'));
+        $this->assertGreaterThan(0, $branchId);
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 5, 'unit_cost' => 100, 'tax_rate' => 0],
+            ],
+        ])->assertCreated();
+
+        $sales = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'branch_id' => $branchId,
+            'status' => 'posted',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 150, 'tax_rate' => 0],
+            ],
+        ]);
+
+        $sales->assertCreated()
+            ->assertJsonPath('data.branch_id', $branchId)
+            ->assertJsonPath('data.branch.id', $branchId);
+
+        $this->getJson('/api/sales-invoices/'.$sales->json('data.id'))
+            ->assertOk()
+            ->assertJsonPath('data.branch_id', $branchId)
+            ->assertJsonPath('data.branch.id', $branchId);
+    }
+
     public function test_rejects_sales_without_enough_stock(): void
     {
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
@@ -212,5 +252,63 @@ class InvoicePostingTest extends TestCase
 
         $response->assertStatus(422)->assertJsonValidationErrors(['discount_amount']);
         $this->assertSame(0, SalesInvoice::query()->count());
+    }
+
+    public function test_posts_multi_line_purchase_and_sales_invoices(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $productA = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $productB = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $purchase = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [
+                ['product_id' => $productA->id, 'quantity' => 10, 'unit_cost' => 100, 'tax_rate' => 0],
+                ['product_id' => $productB->id, 'quantity' => 5, 'unit_cost' => 50, 'tax_rate' => 0],
+            ],
+        ]);
+
+        $purchase->assertCreated()->assertJsonPath('data.status', 'posted');
+        $purchaseInvoice = PurchaseInvoice::query()->findOrFail($purchase->json('data.id'));
+        $this->assertCount(2, $purchaseInvoice->lines);
+        $this->assertSame(1250.0, (float) $purchaseInvoice->subtotal);
+        $this->assertNotNull($purchaseInvoice->journal_entry_id);
+        $this->assertTrue($purchaseInvoice->journalEntry->isBalanced());
+
+        $this->assertDatabaseHas('stock_levels', [
+            'warehouse_id' => $warehouse->id,
+            'product_id' => $productA->id,
+        ]);
+        $this->assertDatabaseHas('stock_levels', [
+            'warehouse_id' => $warehouse->id,
+            'product_id' => $productB->id,
+        ]);
+
+        $sales = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [
+                ['product_id' => $productA->id, 'quantity' => 2, 'unit_price' => 200, 'tax_rate' => 0],
+                ['product_id' => $productB->id, 'quantity' => 1, 'unit_price' => 80, 'tax_rate' => 0],
+            ],
+        ]);
+
+        $sales->assertCreated()->assertJsonPath('data.status', 'posted');
+        $salesInvoice = SalesInvoice::query()->with('lines')->findOrFail($sales->json('data.id'));
+        $this->assertCount(2, $salesInvoice->lines);
+        $this->assertSame(480.0, (float) $salesInvoice->subtotal);
+        $this->assertNotNull($salesInvoice->journal_entry_id);
+        $this->assertTrue($salesInvoice->journalEntry->isBalanced());
+
+        $this->getJson('/api/sales-invoices/'.$salesInvoice->id)
+            ->assertOk()
+            ->assertJsonCount(2, 'data.lines');
     }
 }
