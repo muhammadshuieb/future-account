@@ -26,6 +26,13 @@ class CashService
 
     public function createTransfer(array $data, User $user): CashTransfer
     {
+        $this->assertSameCurrencyTransfer(
+            $data['from_type'],
+            (int) $data['from_id'],
+            $data['to_type'],
+            (int) $data['to_id'],
+        );
+
         return DB::transaction(function () use ($data, $user) {
             $transfer = CashTransfer::query()->create([
                 'transfer_number' => $this->nextNumber(),
@@ -54,12 +61,20 @@ class CashService
             throw ValidationException::withMessages(['status' => ['التحويل مرحّل مسبقاً.']]);
         }
 
+        $this->assertSameCurrencyTransfer(
+            $transfer->from_type,
+            (int) $transfer->from_id,
+            $transfer->to_type,
+            (int) $transfer->to_id,
+        );
+
         return DB::transaction(function () use ($transfer, $user) {
             $fromAccount = $this->resolveAccount($transfer->from_type, $transfer->from_id);
             $toAccount = $this->resolveAccount($transfer->to_type, $transfer->to_id);
 
             $entry = $this->journals->create([
                 'entry_date' => $transfer->transfer_date->toDateString(),
+                'branch_id' => $this->resolveTransferBranchId($transfer),
                 'description' => 'تحويل نقدي/بنكي '.$transfer->transfer_number,
                 'reference' => $transfer->transfer_number,
                 'status' => 'posted',
@@ -203,6 +218,7 @@ class CashService
 
             $entry = $this->journals->create([
                 'entry_date' => $asOf,
+                'branch_id' => $this->resolveExchangeBranchId($source, $target),
                 'description' => 'صرف عملة '.$exchange->exchange_number,
                 'reference' => $exchange->exchange_number,
                 'status' => 'posted',
@@ -248,6 +264,214 @@ class CashService
         }
 
         return $this->ledgerBalance((int) $accountId, (float) $bank->opening_balance);
+    }
+
+    /**
+     * Balance in the bank's own currency (mirrors cashBoxCurrencyBalance).
+     * Base-currency banks with a dedicated GL account use ledger balance.
+     * Non-base banks are tracked from their own posted bank movements.
+     */
+    public function bankCurrencyBalance(Bank $bank): float
+    {
+        $currency = strtoupper((string) ($bank->currency ?: $this->currencies->baseCurrency()));
+        $base = $this->currencies->baseCurrency();
+
+        if ($currency === $base && $bank->account_id) {
+            return $this->bookBalance($bank);
+        }
+
+        $receiptsIn = Receipt::query()
+            ->where('bank_id', $bank->id)
+            ->where('status', 'posted')
+            ->get()
+            ->sum(fn (Receipt $receipt) => $this->boxMovementAmount(
+                $currency,
+                $receipt->currency,
+                (float) $receipt->amount,
+                $receipt->base_amount !== null ? (float) $receipt->base_amount : null,
+                $receipt->receipt_date?->toDateString()
+            ));
+
+        $paymentsOut = SupplierPayment::query()
+            ->where('bank_id', $bank->id)
+            ->where('status', 'posted')
+            ->get()
+            ->sum(fn (SupplierPayment $payment) => $this->boxMovementAmount(
+                $currency,
+                $payment->currency,
+                (float) $payment->amount,
+                $payment->base_amount !== null ? (float) $payment->base_amount : null,
+                $payment->payment_date?->toDateString()
+            ));
+
+        $transfersIn = (float) CashTransfer::query()
+            ->where('to_type', 'bank')
+            ->where('to_id', $bank->id)
+            ->where('status', 'posted')
+            ->sum('amount');
+
+        $transfersOut = (float) CashTransfer::query()
+            ->where('from_type', 'bank')
+            ->where('from_id', $bank->id)
+            ->where('status', 'posted')
+            ->sum('amount');
+
+        return round(
+            (float) $bank->opening_balance
+            + (float) $receiptsIn
+            - (float) $paymentsOut
+            + $transfersIn
+            - $transfersOut,
+            2
+        );
+    }
+
+    /**
+     * Dashboard / cash-banks totals. Never mixes currencies into one native sum:
+     * filtered currency → totals in that currency; all currencies → native by_currency
+     * plus base-currency equivalents for the headline tiles.
+     *
+     * @return array{
+     *   currency: string,
+     *   cash: float,
+     *   bank: float,
+     *   liquidity: float,
+     *   by_currency: list<array{currency: string, cash: float, bank: float, liquidity: float}>|null,
+     *   boxes: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, balance: float}>,
+     *   banks: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, balance: float}>
+     * }
+     */
+    public function liquiditySummary(?int $branchId = null, ?string $currencyFilter = null): array
+    {
+        $currencyFilter = $currencyFilter !== null && $currencyFilter !== ''
+            ? strtoupper(trim($currencyFilter))
+            : null;
+        $base = $this->currencies->baseCurrency();
+        $asOf = now()->toDateString();
+
+        $boxes = CashBox::query()
+            ->where('is_active', true)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
+            ->orderBy('code')
+            ->get();
+
+        $banks = Bank::query()
+            ->where('is_active', true)
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
+            ->orderBy('code')
+            ->get();
+
+        $boxRows = $boxes->map(function (CashBox $box) {
+            $currency = strtoupper((string) ($box->currency ?: $this->currencies->baseCurrency()));
+
+            return [
+                'id' => (int) $box->id,
+                'code' => (string) $box->code,
+                'name' => (string) $box->name,
+                'currency' => $currency,
+                'branch_id' => $box->branch_id ? (int) $box->branch_id : null,
+                'balance' => $this->cashBoxCurrencyBalance($box),
+            ];
+        })->values()->all();
+
+        $bankRows = $banks->map(function (Bank $bank) {
+            $currency = strtoupper((string) ($bank->currency ?: $this->currencies->baseCurrency()));
+
+            return [
+                'id' => (int) $bank->id,
+                'code' => (string) $bank->code,
+                'name' => (string) $bank->name,
+                'currency' => $currency,
+                'branch_id' => $bank->branch_id ? (int) $bank->branch_id : null,
+                'balance' => $this->bankCurrencyBalance($bank),
+            ];
+        })->values()->all();
+
+        $byCurrencyMap = [];
+        foreach ($boxRows as $row) {
+            $code = $row['currency'];
+            $byCurrencyMap[$code] ??= ['currency' => $code, 'cash' => 0.0, 'bank' => 0.0];
+            $byCurrencyMap[$code]['cash'] += $row['balance'];
+        }
+        foreach ($bankRows as $row) {
+            $code = $row['currency'];
+            $byCurrencyMap[$code] ??= ['currency' => $code, 'cash' => 0.0, 'bank' => 0.0];
+            $byCurrencyMap[$code]['bank'] += $row['balance'];
+        }
+
+        $byCurrency = collect($byCurrencyMap)
+            ->sortBy(function (array $row) use ($base) {
+                return $row['currency'] === $base ? '0'.$row['currency'] : '1'.$row['currency'];
+            })
+            ->values()
+            ->map(function (array $row) {
+                $cash = round($row['cash'], 2);
+                $bank = round($row['bank'], 2);
+
+                return [
+                    'currency' => $row['currency'],
+                    'cash' => $cash,
+                    'bank' => $bank,
+                    'liquidity' => round($cash + $bank, 2),
+                ];
+            })
+            ->all();
+
+        if ($currencyFilter !== null) {
+            $cash = round(array_sum(array_column($boxRows, 'balance')), 2);
+            $bank = round(array_sum(array_column($bankRows, 'balance')), 2);
+
+            return [
+                'currency' => $currencyFilter,
+                'cash' => $cash,
+                'bank' => $bank,
+                'liquidity' => round($cash + $bank, 2),
+                'by_currency' => null,
+                'boxes' => $boxRows,
+                'banks' => $bankRows,
+            ];
+        }
+
+        $cashBase = 0.0;
+        $bankBase = 0.0;
+        foreach ($byCurrency as $row) {
+            $cashBase += $this->toBaseAmount($row['cash'], $row['currency'], $asOf);
+            $bankBase += $this->toBaseAmount($row['bank'], $row['currency'], $asOf);
+        }
+        $cashBase = round($cashBase, 2);
+        $bankBase = round($bankBase, 2);
+
+        return [
+            'currency' => $base,
+            'cash' => $cashBase,
+            'bank' => $bankBase,
+            'liquidity' => round($cashBase + $bankBase, 2),
+            'by_currency' => $byCurrency,
+            'boxes' => $boxRows,
+            'banks' => $bankRows,
+        ];
+    }
+
+    protected function toBaseAmount(float $amount, string $currency, ?string $asOf = null): float
+    {
+        if ($amount == 0.0) {
+            return 0.0;
+        }
+
+        $currency = strtoupper($currency);
+        $base = $this->currencies->baseCurrency();
+        if ($currency === $base) {
+            return round($amount, 2);
+        }
+
+        try {
+            return $this->currencies->convert($amount, $currency, $base, $asOf);
+        } catch (ValidationException) {
+            // Never treat foreign currency as 1:1 with base — that falsely mixes currencies.
+            return 0.0;
+        }
     }
 
     /**
@@ -429,6 +653,65 @@ class CashService
         }
 
         throw ValidationException::withMessages(['type' => ['نوع مصدر/هدف غير صالح.']]);
+    }
+
+    /**
+     * A plain transfer moves one amount between two accounts, so both sides must share a currency.
+     * Cross-currency moves need a documented rate and belong to currency exchange.
+     */
+    protected function assertSameCurrencyTransfer(string $fromType, int $fromId, string $toType, int $toId): void
+    {
+        $fromCurrency = $this->resolveEntityCurrency($fromType, $fromId);
+        $toCurrency = $this->resolveEntityCurrency($toType, $toId);
+
+        if ($fromCurrency !== $toCurrency) {
+            throw ValidationException::withMessages([
+                'to_id' => [
+                    "لا يمكن التحويل بين عملتين مختلفتين ({$fromCurrency} → {$toCurrency}). استخدم صرف العملات لتحديد سعر الصرف.",
+                ],
+            ]);
+        }
+    }
+
+    protected function resolveEntityCurrency(string $type, int $id): string
+    {
+        $currency = match ($type) {
+            'cash_box' => CashBox::query()->whereKey($id)->value('currency'),
+            'bank' => Bank::query()->whereKey($id)->value('currency'),
+            default => throw ValidationException::withMessages(['type' => ['نوع مصدر/هدف غير صالح.']]),
+        };
+
+        return strtoupper((string) ($currency ?: $this->currencies->baseCurrency()));
+    }
+
+    protected function resolveTransferBranchId(CashTransfer $transfer): ?int
+    {
+        $fromBranchId = $this->resolveEntityBranchId($transfer->from_type, (int) $transfer->from_id);
+        $toBranchId = $this->resolveEntityBranchId($transfer->to_type, (int) $transfer->to_id);
+
+        return $fromBranchId ?: $toBranchId;
+    }
+
+    protected function resolveExchangeBranchId(CashBox $source, CashBox $target): ?int
+    {
+        return $source->branch_id ?: $target->branch_id;
+    }
+
+    protected function resolveEntityBranchId(string $type, int $id): ?int
+    {
+        if ($type === 'cash_box') {
+            $branchId = CashBox::query()->whereKey($id)->value('branch_id');
+
+            return $branchId ? (int) $branchId : null;
+        }
+
+        if ($type === 'bank') {
+            $branchId = Bank::query()->whereKey($id)->value('branch_id');
+
+            return $branchId ? (int) $branchId : null;
+        }
+
+        return null;
     }
 
     protected function nextNumber(): string

@@ -10,9 +10,15 @@ use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
+use App\Models\PurchaseReturn;
+use App\Models\Receipt;
 use App\Models\SalesInvoice;
+use App\Models\SalesReturn;
 use App\Models\Setting;
 use App\Models\Supplier;
+use App\Models\SupplierPayment;
+use App\Services\CashService;
+use App\Services\CurrencyService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +26,8 @@ use Illuminate\Support\Collection;
 
 class DashboardController extends Controller
 {
+    protected const USD_BASE_SWITCH_DATE = '2026-07-26';
+
     public function summary(Request $request): JsonResponse
     {
         $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
@@ -32,52 +40,36 @@ class DashboardController extends Controller
 
         $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
         $displayCurrency = $currencyFilter ?: $baseCurrency;
-        $hasDocFilters = $branchId !== null || $currencyFilter !== null;
-
         $days = (int) $request->query('days', 7);
         $days = in_array($days, [7, 30], true) ? $days : 7;
         $fromDate = now()->subDays($days - 1)->startOfDay();
 
-        if ($hasDocFilters) {
-            $revenue = $this->sumDocumentAmounts(
-                $this->applyDocFilters(SalesInvoice::query()->where('status', 'posted'), $branchId, $currencyFilter),
-                $currencyFilter
-            );
-            $expense = $this->sumDocumentAmounts(
-                $this->applyDocFilters(PurchaseInvoice::query()->where('status', 'posted'), $branchId, $currencyFilter),
-                $currencyFilter
-            );
-        } else {
-            $totalsByType = Account::query()
-                ->select('accounts.type')
-                ->selectRaw('COALESCE(SUM(journal_details.debit), 0) as total_debit')
-                ->selectRaw('COALESCE(SUM(journal_details.credit), 0) as total_credit')
-                ->leftJoin('journal_details', 'journal_details.account_id', '=', 'accounts.id')
-                ->leftJoin('journal_entries', function ($join) {
-                    $join->on('journal_entries.id', '=', 'journal_details.journal_entry_id')
-                        ->where('journal_entries.status', '=', 'posted');
-                })
-                ->groupBy('accounts.type')
-                ->get()
-                ->keyBy('type');
+        $revenue = $this->sumDocumentAmounts(
+            $this->applyDocFilters(SalesInvoice::query()->where('status', 'posted'), $branchId, $currencyFilter),
+            $currencyFilter
+        );
+        $expense = $this->sumDocumentAmounts(
+            $this->applyDocFilters(PurchaseInvoice::query()->where('status', 'posted'), $branchId, $currencyFilter),
+            $currencyFilter
+        );
 
-            $revenue = (float) ($totalsByType->get('revenue')?->total_credit ?? 0)
-                - (float) ($totalsByType->get('revenue')?->total_debit ?? 0);
-            $expense = (float) ($totalsByType->get('expense')?->total_debit ?? 0)
-                - (float) ($totalsByType->get('expense')?->total_credit ?? 0);
-        }
-
+        // Returns and unallocated receipts/payments hit the AR/AP control accounts without
+        // changing invoice paid_amount, so they must be netted here to stay in step with the GL.
         $receivables = (float) $this->applyDocFilters(
             SalesInvoice::query()->where('status', 'posted'),
             $branchId,
             $currencyFilter
-        )->get()->sum(fn (SalesInvoice $inv) => $this->unpaidAmount($inv, $currencyFilter));
+        )->get()->sum(fn (SalesInvoice $inv) => $this->unpaidAmount($inv, $currencyFilter))
+            - $this->returnsTotal(SalesReturn::class, 'customer', $branchId, $currencyFilter)
+            - $this->unallocatedSettlementsTotal(Receipt::class, 'customer', 'sales_invoice_id', $branchId, $currencyFilter);
 
         $payables = (float) $this->applyDocFilters(
             PurchaseInvoice::query()->where('status', 'posted'),
             $branchId,
             $currencyFilter
-        )->get()->sum(fn (PurchaseInvoice $inv) => $this->unpaidAmount($inv, $currencyFilter));
+        )->get()->sum(fn (PurchaseInvoice $inv) => $this->unpaidAmount($inv, $currencyFilter))
+            - $this->returnsTotal(PurchaseReturn::class, 'supplier', $branchId, $currencyFilter)
+            - $this->unallocatedSettlementsTotal(SupplierPayment::class, 'supplier', 'purchase_invoice_id', $branchId, $currencyFilter);
 
         $lowStockAlerts = app(\App\Services\InventoryService::class)->lowStockAlerts();
         if ($branchId !== null) {
@@ -221,11 +213,20 @@ class DashboardController extends Controller
             'payables' => round(max($payables, 0), 2),
             'month_sales' => round($monthSales, 2),
             'month_purchases' => round($monthPurchases, 2),
+            'cash' => 0.0,
+            'bank' => 0.0,
+            'liquidity' => 0.0,
         ];
 
+        $liquidity = app(CashService::class)->liquiditySummary($branchId, $currencyFilter);
+
         $byCurrency = $currencyFilter === null
-            ? $this->buildByCurrency($branchId)
+            ? $this->buildByCurrency($branchId, $liquidity['by_currency'] ?? [])
             : null;
+
+        $baseTotals['cash'] = $currencyFilter === null ? $liquidity['cash'] : null;
+        $baseTotals['bank'] = $currencyFilter === null ? $liquidity['bank'] : null;
+        $baseTotals['liquidity'] = $currencyFilter === null ? $liquidity['liquidity'] : null;
 
         return response()->json([
             'data' => [
@@ -245,6 +246,10 @@ class DashboardController extends Controller
                 'payables' => $baseTotals['payables'],
                 'month_sales' => $baseTotals['month_sales'],
                 'month_purchases' => $baseTotals['month_purchases'],
+                'cash' => $liquidity['cash'],
+                'bank' => $liquidity['bank'],
+                'liquidity' => $liquidity['liquidity'],
+                'liquidity_by_currency' => $liquidity['by_currency'],
                 'base_totals' => $currencyFilter === null ? $baseTotals : null,
                 'by_currency' => $byCurrency,
                 'daily_sales' => $dailySales,
@@ -261,6 +266,7 @@ class DashboardController extends Controller
     /**
      * Native-currency stats per currency when «كل العملات» is selected.
      *
+     * @param  list<array{currency: string, cash: float, bank: float, liquidity: float}>  $liquidityByCurrency
      * @return list<array{
      *   currency: string,
      *   revenue: float,
@@ -269,10 +275,13 @@ class DashboardController extends Controller
      *   receivables: float,
      *   payables: float,
      *   month_sales: float,
-     *   month_purchases: float
+     *   month_purchases: float,
+     *   cash: float,
+     *   bank: float,
+     *   liquidity: float
      * }>
      */
-    protected function buildByCurrency(?int $branchId): array
+    protected function buildByCurrency(?int $branchId, array $liquidityByCurrency = []): array
     {
         $sales = $this->applyDocFilters(
             SalesInvoice::query()->where('status', 'posted'),
@@ -289,6 +298,10 @@ class DashboardController extends Controller
         $month = now()->month;
         $year = now()->year;
 
+        $liquidityMap = collect($liquidityByCurrency)->keyBy(
+            fn (array $row) => strtoupper((string) $row['currency'])
+        );
+
         $activeCodes = Currency::query()
             ->where('is_active', true)
             ->pluck('code')
@@ -298,6 +311,7 @@ class DashboardController extends Controller
             ->merge($activeCodes)
             ->merge($sales->pluck('currency')->map(fn ($c) => strtoupper((string) $c)))
             ->merge($purchases->pluck('currency')->map(fn ($c) => strtoupper((string) $c)))
+            ->merge($liquidityMap->keys())
             ->filter()
             ->unique()
             ->values();
@@ -314,7 +328,7 @@ class DashboardController extends Controller
             return strcmp($a, $b);
         })->values();
 
-        return $codes->map(function (string $code) use ($sales, $purchases, $month, $year) {
+        return $codes->map(function (string $code) use ($branchId, $sales, $purchases, $month, $year, $liquidityMap) {
             $salesFor = $this->filterByCurrency($sales, $code);
             $purchasesFor = $this->filterByCurrency($purchases, $code);
 
@@ -322,10 +336,12 @@ class DashboardController extends Controller
             $expense = (float) $purchasesFor->sum(fn (PurchaseInvoice $i) => (float) $i->total);
             $receivables = (float) $salesFor->sum(
                 fn (SalesInvoice $i) => max(0, (float) $i->total - (float) $i->paid_amount)
-            );
+            ) - $this->returnsTotal(SalesReturn::class, 'customer', $branchId, $code)
+                - $this->unallocatedSettlementsTotal(Receipt::class, 'customer', 'sales_invoice_id', $branchId, $code);
             $payables = (float) $purchasesFor->sum(
                 fn (PurchaseInvoice $i) => max(0, (float) $i->total - (float) $i->paid_amount)
-            );
+            ) - $this->returnsTotal(PurchaseReturn::class, 'supplier', $branchId, $code)
+                - $this->unallocatedSettlementsTotal(SupplierPayment::class, 'supplier', 'purchase_invoice_id', $branchId, $code);
             $monthSales = (float) $salesFor
                 ->filter(fn (SalesInvoice $i) => (int) $i->invoice_date->month === $month
                     && (int) $i->invoice_date->year === $year)
@@ -334,6 +350,8 @@ class DashboardController extends Controller
                 ->filter(fn (PurchaseInvoice $i) => (int) $i->invoice_date->month === $month
                     && (int) $i->invoice_date->year === $year)
                 ->sum(fn (PurchaseInvoice $i) => (float) $i->total);
+
+            $liq = $liquidityMap->get($code);
 
             return [
                 'currency' => $code,
@@ -344,6 +362,9 @@ class DashboardController extends Controller
                 'payables' => round($payables, 2),
                 'month_sales' => round($monthSales, 2),
                 'month_purchases' => round($monthPurchases, 2),
+                'cash' => round((float) ($liq['cash'] ?? 0), 2),
+                'bank' => round((float) ($liq['bank'] ?? 0), 2),
+                'liquidity' => round((float) ($liq['liquidity'] ?? 0), 2),
             ];
         })->all();
     }
@@ -357,6 +378,90 @@ class DashboardController extends Controller
         return $rows->filter(
             fn (SalesInvoice|PurchaseInvoice $inv) => strtoupper((string) $inv->currency) === $code
         )->values();
+    }
+
+    /**
+     * Posted return value, in the display currency, for the given return model.
+     * Returns carry no branch column, so the partner's branch is used.
+     *
+     * @param  class-string<SalesReturn|PurchaseReturn>  $model
+     */
+    protected function returnsTotal(string $model, string $partnerRelation, ?int $branchId, ?string $currencyFilter): float
+    {
+        return (float) $model::query()
+            ->where('status', 'posted')
+            ->when(
+                $branchId !== null,
+                fn ($q) => $q->whereHas($partnerRelation, fn ($p) => $p->where('branch_id', $branchId))
+            )
+            ->when($currencyFilter !== null, fn ($q) => $q->where('currency', $currencyFilter))
+            ->get()
+            ->sum(fn ($ret) => $this->returnAmount($ret, $currencyFilter));
+    }
+
+    /**
+     * Settlements posted against the partner (not a specific invoice) reduce the control
+     * account without changing invoice paid_amount.
+     *
+     * @param  class-string<Receipt|SupplierPayment>  $model
+     */
+    protected function unallocatedSettlementsTotal(
+        string $model,
+        string $partnerRelation,
+        string $invoiceForeignKey,
+        ?int $branchId,
+        ?string $currencyFilter
+    ): float {
+        return (float) $model::query()
+            ->where('status', 'posted')
+            ->whereNull($invoiceForeignKey)
+            ->when(
+                $branchId !== null,
+                fn ($q) => $q->whereHas($partnerRelation, fn ($p) => $p->where('branch_id', $branchId))
+            )
+            ->when($currencyFilter !== null, fn ($q) => $q->where('currency', $currencyFilter))
+            ->get()
+            ->sum(fn (Receipt|SupplierPayment $doc) => $this->settlementAmount($doc, $currencyFilter));
+    }
+
+    protected function settlementAmount(Receipt|SupplierPayment $doc, ?string $currencyFilter): float
+    {
+        $total = round((float) $doc->amount, 2);
+
+        if ($currencyFilter !== null || $total <= 0) {
+            return $total;
+        }
+
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
+        if (strtoupper((string) ($doc->currency ?: $baseCurrency)) === $baseCurrency) {
+            return $total;
+        }
+
+        if ($doc->base_amount !== null && (float) $doc->base_amount > 0) {
+            return round((float) $doc->base_amount, 2);
+        }
+
+        return round($total * (float) ($doc->exchange_rate ?: 1), 2);
+    }
+
+    protected function returnAmount(SalesReturn|PurchaseReturn $ret, ?string $currencyFilter): float
+    {
+        $total = round((float) $ret->total, 2);
+
+        if ($currencyFilter !== null || $total <= 0) {
+            return $total;
+        }
+
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
+        if (strtoupper((string) ($ret->currency ?: $baseCurrency)) === $baseCurrency) {
+            return $total;
+        }
+
+        if ($ret->base_amount !== null && (float) $ret->base_amount > 0) {
+            return round((float) $ret->base_amount, 2);
+        }
+
+        return round($total * (float) ($ret->exchange_rate ?: 1), 2);
     }
 
     /**
@@ -377,7 +482,8 @@ class DashboardController extends Controller
 
     /**
      * Selected currency: totals in that currency (document total).
-     * All currencies: convert to base using base_amount / exchange_rate.
+     * All currencies: convert the native amount to the current base currency.
+     * Legacy documents created before the USD switch cannot trust stored base_amount.
      */
     protected function documentAmount(SalesInvoice|PurchaseInvoice $inv, ?string $currencyFilter): float
     {
@@ -385,13 +491,7 @@ class DashboardController extends Controller
             return (float) $inv->total;
         }
 
-        if ($inv->base_amount !== null && $inv->base_amount !== '') {
-            return (float) $inv->base_amount;
-        }
-
-        $rate = (float) ($inv->exchange_rate ?: 1);
-
-        return round((float) $inv->total * $rate, 2);
+        return $this->toCurrentBaseAmount($inv, (float) $inv->total);
     }
 
     protected function unpaidAmount(SalesInvoice|PurchaseInvoice $inv, ?string $currencyFilter): float
@@ -401,9 +501,7 @@ class DashboardController extends Controller
             return $unpaid;
         }
 
-        $rate = (float) ($inv->exchange_rate ?: 1);
-
-        return round($unpaid * $rate, 2);
+        return $this->toCurrentBaseAmount($inv, $unpaid);
     }
 
     /**
@@ -414,6 +512,68 @@ class DashboardController extends Controller
         return (float) $query->get()->sum(
             fn (SalesInvoice|PurchaseInvoice $inv) => $this->documentAmount($inv, $currencyFilter)
         );
+    }
+
+    protected function toCurrentBaseAmount(SalesInvoice|PurchaseInvoice $inv, float $amount): float
+    {
+        if ($amount <= 0) {
+            return 0.0;
+        }
+
+        $baseCurrency = strtoupper((string) Setting::getValue('currency', 'USD'));
+        $documentCurrency = strtoupper((string) ($inv->currency ?: $baseCurrency));
+
+        if ($documentCurrency === $baseCurrency) {
+            return round($amount, 2);
+        }
+
+        $invoiceDate = $inv->invoice_date?->toDateString() ?: now()->toDateString();
+
+        if ($this->documentUsesCurrentBase($inv, $baseCurrency)) {
+            $storedBaseAmount = $this->storedBaseAmountForPortion($inv, $amount);
+            if ($storedBaseAmount !== null) {
+                return $storedBaseAmount;
+            }
+        }
+
+        try {
+            return app(CurrencyService::class)->convert($amount, $documentCurrency, $baseCurrency, $invoiceDate);
+        } catch (\Throwable) {
+            $storedBaseAmount = $this->storedBaseAmountForPortion($inv, $amount);
+            if ($storedBaseAmount !== null) {
+                return $storedBaseAmount;
+            }
+
+            $rate = (float) ($inv->exchange_rate ?: 1);
+
+            return round($amount * $rate, 2);
+        }
+    }
+
+    protected function documentUsesCurrentBase(SalesInvoice|PurchaseInvoice $inv, string $baseCurrency): bool
+    {
+        $invoiceDate = $inv->invoice_date?->toDateString();
+        if ($invoiceDate === null) {
+            return false;
+        }
+
+        if (strtoupper((string) ($inv->currency ?: '')) === $baseCurrency) {
+            return true;
+        }
+
+        return $invoiceDate >= self::USD_BASE_SWITCH_DATE;
+    }
+
+    protected function storedBaseAmountForPortion(SalesInvoice|PurchaseInvoice $inv, float $amount): ?float
+    {
+        $storedBaseAmount = $inv->base_amount;
+        $total = (float) $inv->total;
+
+        if ($storedBaseAmount === null || $storedBaseAmount === '' || $total <= 0) {
+            return null;
+        }
+
+        return round(((float) $storedBaseAmount) * ($amount / $total), 2);
     }
 
     protected function fillDailyGaps(array $rows, int $days): array

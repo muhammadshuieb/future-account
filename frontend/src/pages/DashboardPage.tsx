@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeftRight, ChevronLeft, Package, Users } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, ChevronLeft, Package, Users, Wallet } from 'lucide-react'
 import api from '@/lib/api'
 import { resolveAlertHref } from '@/lib/alertLinks'
 import type { DashboardCurrencyStats, DashboardSummary } from '@/types'
@@ -77,10 +77,10 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
     <Panel>
       <div className="border-b border-[var(--color-line)] px-5 py-3">
         <h2 className="font-semibold">حسب العملة</h2>
-        <p className="mt-0.5 text-xs text-black/50">مبالغ أصلية لكل عملة بدون تحويل</p>
+        <p className="mt-0.5 text-xs text-black/50">مبالغ أصلية لكل عملة بدون تحويل — الصناديق والبنوك منفصلة عن الذمم</p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead>
             <tr className="border-b border-[var(--color-line)] bg-mist/60 text-right text-xs text-black/55">
               <th className="px-4 py-2.5 font-medium">العملة</th>
@@ -89,6 +89,9 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
               <th className="px-4 py-2.5 font-medium">صافي</th>
               <th className="px-4 py-2.5 font-medium">ذمم مدينة</th>
               <th className="px-4 py-2.5 font-medium">ذمم دائنة</th>
+              <th className="px-4 py-2.5 font-medium">صناديق</th>
+              <th className="px-4 py-2.5 font-medium">بنوك</th>
+              <th className="px-4 py-2.5 font-medium">سيولة</th>
               <th className="px-4 py-2.5 font-medium">مبيعات الشهر</th>
               <th className="px-4 py-2.5 font-medium">مشتريات الشهر</th>
             </tr>
@@ -102,6 +105,9 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.net_income, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.receivables, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.payables, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.cash ?? 0, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatMoney(row.bank ?? 0, row.currency)}</td>
+                <td className="px-4 py-3 tabular-nums font-medium">{formatMoney(row.liquidity ?? 0, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.month_sales, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.month_purchases, row.currency)}</td>
               </tr>
@@ -173,12 +179,36 @@ export default function DashboardPage() {
     payables: data.payables ?? 0,
     month_sales: data.month_sales ?? 0,
     month_purchases: data.month_purchases ?? 0,
+    cash: data.cash ?? 0,
+    bank: data.bank ?? 0,
+    liquidity: data.liquidity ?? 0,
   }
 
   const primary = [
     { label: 'إيرادات الفترة', value: formatMoney(data.revenue, currency), tone: 'success' as const },
     { label: 'مصروفات الفترة', value: formatMoney(data.expense, currency), tone: 'amber' as const },
     { label: 'صافي الربح', value: formatMoney(data.net_income, currency), tone: 'teal' as const },
+  ]
+
+  const liquidityTiles = [
+    {
+      label: 'الصناديق',
+      value: formatMoney(data.cash ?? 0, currency),
+      hint: 'أرصدة الصناديق النقدية فقط — لا تشمل الذمم',
+      tone: 'teal' as const,
+    },
+    {
+      label: 'البنوك',
+      value: formatMoney(data.bank ?? 0, currency),
+      hint: 'أرصدة الحسابات البنكية فقط',
+      tone: 'success' as const,
+    },
+    {
+      label: 'السيولة',
+      value: formatMoney(data.liquidity ?? 0, currency),
+      hint: 'صناديق + بنوك (بدون ذمم مدينة/دائنة)',
+      tone: 'default' as const,
+    },
   ]
 
   const secondary = [
@@ -194,6 +224,27 @@ export default function DashboardPage() {
     { label: 'صافي الربح', value: formatMoney(base.net_income, baseCurrency), tone: 'teal' as const },
   ]
 
+  const baseLiquidityTiles = [
+    {
+      label: 'الصناديق',
+      value: formatMoney(base.cash ?? 0, baseCurrency),
+      hint: 'مكافئ بالعملة الأساسية لمجموع أرصدة الصناديق',
+      tone: 'teal' as const,
+    },
+    {
+      label: 'البنوك',
+      value: formatMoney(base.bank ?? 0, baseCurrency),
+      hint: 'مكافئ بالعملة الأساسية لمجموع أرصدة البنوك',
+      tone: 'success' as const,
+    },
+    {
+      label: 'السيولة',
+      value: formatMoney(base.liquidity ?? 0, baseCurrency),
+      hint: 'صناديق + بنوك بالعملة الأساسية (بدون ذمم)',
+      tone: 'default' as const,
+    },
+  ]
+
   const baseSecondary = [
     { label: 'ذمم مدينة', value: formatMoney(base.receivables, baseCurrency), hint: 'مستحق من العملاء' },
     { label: 'ذمم دائنة', value: formatMoney(base.payables, baseCurrency), hint: 'مستحق للموردين' },
@@ -202,7 +253,7 @@ export default function DashboardPage() {
   ]
 
   const currencyHint = showAllCurrencies
-    ? 'عرض الإحصائيات حسب كل عملة'
+    ? `عرض الإحصائيات حسب كل عملة مع إجمالي مكافئ بالعملة الأساسية (${baseCurrency})`
     : `عرض المبالغ بعملة ${currency}`
 
   return (
@@ -275,12 +326,17 @@ export default function DashboardPage() {
 
           <section className="space-y-3">
             <div>
-              <h2 className="text-sm font-semibold text-black/70">ما يعادل بالليرة ({baseCurrency})</h2>
-              <p className="text-xs text-black/45">إجمالي محوّل للعملة الأساسية للمقارنة السريعة</p>
+              <h2 className="text-sm font-semibold text-black/70">الإجمالي بالعملة الأساسية ({baseCurrency})</h2>
+              <p className="text-xs text-black/45">محسوب من قيمة المستند الأصلية بعد تحويلها إلى العملة الأساسية الحالية</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {basePrimary.map((c) => (
                 <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+              ))}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {baseLiquidityTiles.map((c) => (
+                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} tone={c.tone} />
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -295,6 +351,12 @@ export default function DashboardPage() {
           <section className="grid gap-3 sm:grid-cols-3">
             {primary.map((c) => (
               <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+            ))}
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-3">
+            {liquidityTiles.map((c) => (
+              <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} tone={c.tone} />
             ))}
           </section>
 
@@ -374,6 +436,9 @@ export default function DashboardPage() {
             <h2 className="font-semibold">اختصارات</h2>
           </div>
           <div className="grid gap-2 p-4">
+            <Link to="/cash-banks" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">
+              <Wallet size={16} className="text-teal" /> الصناديق والبنوك
+            </Link>
             <Link to="/sales" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-mist">
               <ArrowLeftRight size={16} className="text-teal" /> {t('sales.title')}
             </Link>

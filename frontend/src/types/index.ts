@@ -54,6 +54,9 @@ export type DashboardCurrencyStats = {
   payables: number
   month_sales: number
   month_purchases: number
+  cash?: number
+  bank?: number
+  liquidity?: number
 }
 
 export type DashboardSummary = {
@@ -73,6 +76,10 @@ export type DashboardSummary = {
   payables?: number
   month_sales?: number
   month_purchases?: number
+  cash?: number
+  bank?: number
+  liquidity?: number
+  liquidity_by_currency?: { currency: string; cash: number; bank: number; liquidity: number }[] | null
   base_totals?: DashboardCurrencyStats | null
   by_currency?: DashboardCurrencyStats[] | null
   daily_sales?: { date: string; total: number; count: number }[]

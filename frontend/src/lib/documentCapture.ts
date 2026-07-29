@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas-pro'
 import { jsPDF } from 'jspdf'
 
 export type CaptureFormat = 'pdf' | 'png'
@@ -8,6 +8,222 @@ export type CapturedFile = {
   fileName: string
   mimeType: string
   format: CaptureFormat
+}
+
+/**
+ * Modern CSS color functions that classic html2canvas cannot parse.
+ * We use html2canvas-pro (oklab-aware) AND still sanitize as belt-and-suspenders
+ * for CSS variables / shadows / gradients that some parsers still choke on.
+ */
+const UNSUPPORTED_COLOR_FN =
+  /(?:oklab|oklch|lab|lch|color)\s*\(|color-mix\s*\(/i
+
+const COLOR_STYLE_PROPS = [
+  'color',
+  'background-color',
+  'border-top-color',
+  'border-right-color',
+  'border-bottom-color',
+  'border-left-color',
+  'outline-color',
+  'text-decoration-color',
+  'column-rule-color',
+  'caret-color',
+  'fill',
+  'stroke',
+  'stop-color',
+  'flood-color',
+  'lighting-color',
+] as const
+
+const COMPLEX_COLOR_PROPS = [
+  'box-shadow',
+  'text-shadow',
+  'background-image',
+  'border-image-source',
+  'filter',
+  'backdrop-filter',
+  'outline',
+  'border',
+  'border-top',
+  'border-right',
+  'border-bottom',
+  'border-left',
+  'background',
+] as const
+
+/** Resolve any CSS color (including oklab/oklch) to a hex/rgb string via canvas. */
+function cssColorToRgb(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === 'transparent' || trimmed === 'none' || trimmed === 'currentcolor') {
+    return trimmed
+  }
+  // Already a safe legacy form.
+  if (/^(#|rgb\b|rgba\b|hsl\b|hsla\b|gray\b|transparent|none)/i.test(trimmed) && !UNSUPPORTED_COLOR_FN.test(trimmed)) {
+    return trimmed
+  }
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return '#000000'
+    ctx.fillStyle = '#000000'
+    ctx.fillStyle = trimmed
+    const resolved = String(ctx.fillStyle)
+    // If the browser rejected the color, fillStyle stays black — still safer than oklab.
+    return resolved
+  } catch {
+    return '#000000'
+  }
+}
+
+function replaceUnsupportedColorsInValue(value: string): string {
+  if (!UNSUPPORTED_COLOR_FN.test(value)) return value
+
+  const fnNames = /(?:oklab|oklch|lab|lch|color-mix|color)\s*\(/gi
+  let result = ''
+  let last = 0
+  let match: RegExpExecArray | null
+  const re = new RegExp(fnNames.source, 'gi')
+  while ((match = re.exec(value)) !== null) {
+    const start = match.index
+    let i = start + match[0].length
+    let depth = 1
+    while (i < value.length && depth > 0) {
+      const ch = value[i]
+      if (ch === '(') depth += 1
+      else if (ch === ')') depth -= 1
+      i += 1
+    }
+    const full = value.slice(start, i)
+    result += value.slice(last, start)
+    try {
+      result += cssColorToRgb(full)
+    } catch {
+      result += '#000000'
+    }
+    last = i
+    re.lastIndex = i
+  }
+  result += value.slice(last)
+  return result
+}
+
+function sanitizeStyleDeclaration(style: CSSStyleDeclaration) {
+  for (const prop of Array.from(style)) {
+    const val = style.getPropertyValue(prop)
+    if (!val || !UNSUPPORTED_COLOR_FN.test(val)) continue
+    if (COLOR_STYLE_PROPS.includes(prop as (typeof COLOR_STYLE_PROPS)[number])) {
+      style.setProperty(prop, cssColorToRgb(val), style.getPropertyPriority(prop) || undefined)
+      continue
+    }
+    const fixed = replaceUnsupportedColorsInValue(val)
+    if (UNSUPPORTED_COLOR_FN.test(fixed)) {
+      style.removeProperty(prop)
+    } else {
+      style.setProperty(prop, fixed, style.getPropertyPriority(prop) || undefined)
+    }
+  }
+}
+
+function sanitizeCssCustomProperties(el: HTMLElement, computed: CSSStyleDeclaration) {
+  // Tailwind v4 puts oklch into CSS variables; force resolved rgb on the clone.
+  for (let i = 0; i < computed.length; i++) {
+    const name = computed[i]
+    if (!name.startsWith('--')) continue
+    const val = computed.getPropertyValue(name)
+    if (!val || !UNSUPPORTED_COLOR_FN.test(val)) continue
+    const fixed = replaceUnsupportedColorsInValue(val)
+    el.style.setProperty(name, UNSUPPORTED_COLOR_FN.test(fixed) ? '#000000' : fixed, 'important')
+  }
+}
+
+/**
+ * Force resolved rgb/hex inline styles on the cloned document before paint.
+ * Covers color props, shadows/gradients, CSS variables, and stylesheet rules.
+ */
+function sanitizeCloneForHtml2Canvas(clonedDoc: Document) {
+  const win = clonedDoc.defaultView
+  if (!win) return
+
+  const root = clonedDoc.documentElement
+  const nodes: Element[] = [root, ...Array.from(clonedDoc.querySelectorAll('*'))]
+
+  for (const node of nodes) {
+    const el = node as HTMLElement
+    if (!el.style) continue
+
+    let computed: CSSStyleDeclaration
+    try {
+      computed = win.getComputedStyle(el)
+    } catch {
+      continue
+    }
+
+    sanitizeCssCustomProperties(el, computed)
+
+    for (const prop of COLOR_STYLE_PROPS) {
+      const val = computed.getPropertyValue(prop)
+      if (!val) continue
+      // Always rewrite when modern color fns appear; also rewrite non-rgb forms
+      // that some older parsers mishandle (e.g. color(srgb ...)).
+      if (UNSUPPORTED_COLOR_FN.test(val) || /^color\s*\(/i.test(val.trim())) {
+        el.style.setProperty(prop, cssColorToRgb(val), 'important')
+      }
+    }
+
+    for (const prop of COMPLEX_COLOR_PROPS) {
+      const val = computed.getPropertyValue(prop)
+      if (!val || val === 'none' || !UNSUPPORTED_COLOR_FN.test(val)) continue
+      const fixed = replaceUnsupportedColorsInValue(val)
+      el.style.setProperty(
+        prop,
+        UNSUPPORTED_COLOR_FN.test(fixed) ? 'none' : fixed,
+        'important',
+      )
+    }
+
+    // Inline style attribute may still contain raw oklab from source markup.
+    if (el.getAttribute('style') && UNSUPPORTED_COLOR_FN.test(el.getAttribute('style') || '')) {
+      sanitizeStyleDeclaration(el.style)
+    }
+  }
+
+  // Neutralize stylesheet rules / style tags that still embed modern color functions.
+  try {
+    for (const sheet of Array.from(clonedDoc.styleSheets)) {
+      let rules: CSSRuleList
+      try {
+        rules = sheet.cssRules
+      } catch {
+        continue
+      }
+      for (let i = rules.length - 1; i >= 0; i--) {
+        const rule = rules[i]
+        if (rule instanceof CSSStyleRule) {
+          if (UNSUPPORTED_COLOR_FN.test(rule.cssText)) sanitizeStyleDeclaration(rule.style)
+        } else if (typeof CSSSupportsRule !== 'undefined' && rule instanceof CSSSupportsRule) {
+          // Drop @supports blocks that gate on modern color functions — they confuse parsers.
+          if (/oklab|oklch|color-mix|lab\(|lch\(/i.test(rule.conditionText || '')) {
+            try {
+              sheet.deleteRule(i)
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // Cross-origin or browser quirks — inline overrides above are the primary fix.
+  }
+
+  // Rewrite <style> text that still contains unsupported color functions.
+  for (const styleEl of Array.from(clonedDoc.querySelectorAll('style'))) {
+    const text = styleEl.textContent || ''
+    if (!UNSUPPORTED_COLOR_FN.test(text)) continue
+    styleEl.textContent = replaceUnsupportedColorsInValue(text)
+  }
 }
 
 function sleep(ms: number) {
@@ -99,17 +315,45 @@ function canvasToMultiPagePdf(canvas: HTMLCanvasElement): Blob {
   return pdf.output('blob')
 }
 
+function friendlyCaptureError(err: unknown): Error {
+  const msg = err instanceof Error ? err.message : String(err)
+  if (/unsupported color function|oklab|oklch|color-mix/i.test(msg)) {
+    return new Error(
+      'فشل تصدير المستند بسبب ألوان CSS حديثة — حدّث الصفحة (Ctrl+F5) ثم أعد المحاولة',
+    )
+  }
+  return err instanceof Error ? err : new Error(msg || 'فشل التقاط المستند')
+}
+
 export async function captureElement(
   element: HTMLElement,
   opts: { format: CaptureFormat; fileName: string },
 ): Promise<CapturedFile> {
-  const canvas = await html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-  })
+  let canvas: HTMLCanvasElement
+  try {
+    canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      // Prefer standard canvas path; foreignObject can reintroduce oklab via SVG.
+      foreignObjectRendering: false,
+      imageTimeout: 15_000,
+      onclone: (_clonedDoc, clonedElement) => {
+        const doc = clonedElement.ownerDocument || _clonedDoc
+        sanitizeCloneForHtml2Canvas(doc)
+      },
+      ignoreElements: (el) => {
+        if (!(el instanceof HTMLElement)) return false
+        if (el.classList.contains('print-hide')) return true
+        const tag = el.tagName
+        return tag === 'SCRIPT' || tag === 'NOSCRIPT' || tag === 'IFRAME'
+      },
+    })
+  } catch (err) {
+    throw friendlyCaptureError(err)
+  }
 
   const baseName = opts.fileName.replace(/\.(pdf|png)$/i, '') || 'document'
 

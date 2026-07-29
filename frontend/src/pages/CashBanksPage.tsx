@@ -33,7 +33,15 @@ type CashBox = {
   currency?: string
   balance?: number
 }
-type Bank = { id: number; code: string; name: string; account_number?: string; opening_balance?: number; currency?: string }
+type Bank = {
+  id: number
+  code: string
+  name: string
+  account_number?: string
+  opening_balance?: number
+  currency?: string
+  balance?: number
+}
 type Transfer = { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }
 type CurrencyExchange = {
   id: number
@@ -61,7 +69,7 @@ type Reconciliation = {
 }
 
 const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD' }
-const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0' }
+const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0', currency: 'USD' }
 const emptyTr = {
   transfer_date: todayYmd(),
   from_type: 'cash_box',
@@ -275,7 +283,12 @@ export default function CashBanksPage() {
   })
   const saveBank = useMutation({
     mutationFn: () => {
-      const payload = { ...bankForm, opening_balance: Number(bankForm.opening_balance), currency: 'SAR', is_active: true }
+      const payload = {
+        ...bankForm,
+        opening_balance: Number(bankForm.opening_balance),
+        currency: (bankForm.currency || 'USD').toUpperCase(),
+        is_active: true,
+      }
       if (editingId) return api.put(`/banks/${editingId}`, payload)
       return api.post('/banks', payload)
     },
@@ -492,7 +505,14 @@ export default function CashBanksPage() {
           {!banks.isLoading && bankRows.length > 0 && (
             <table className="w-full text-sm">
               <thead className="bg-mist text-right text-black/60">
-                <tr><th className="px-4 py-3">رمز</th><th className="px-4 py-3">اسم</th><th className="px-4 py-3">رقم الحساب</th></tr>
+                <tr>
+                  <th className="px-4 py-3">رمز</th>
+                  <th className="px-4 py-3">اسم</th>
+                  <th className="px-4 py-3">رقم الحساب</th>
+                  <th className="px-4 py-3">العملة</th>
+                  <th className="px-4 py-3">الرصيد</th>
+                  <th className="px-4 py-3">افتتاحي</th>
+                </tr>
               </thead>
               <tbody>
                 {bankRows.map((b) => (
@@ -506,6 +526,7 @@ export default function CashBanksPage() {
                         name: b.name,
                         account_number: b.account_number || '',
                         opening_balance: String(b.opening_balance ?? 0),
+                        currency: b.currency || 'USD',
                       })
                       setModalOpen(true)
                     }}
@@ -514,6 +535,9 @@ export default function CashBanksPage() {
                     <td className="px-4 py-3 font-mono">{b.code}</td>
                     <td className="px-4 py-3">{b.name}</td>
                     <td className="px-4 py-3">{b.account_number || '—'}</td>
+                    <td className="px-4 py-3 font-mono">{b.currency || 'USD'}</td>
+                    <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance ?? 0, b.currency || 'USD')}</td>
+                    <td className="px-4 py-3">{formatMoney(b.opening_balance ?? 0, b.currency || 'USD')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -677,6 +701,17 @@ export default function CashBanksPage() {
           <Field label="رمز"><input className={inputClass} value={bankForm.code} onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={bankForm.name} onChange={(e) => setBankForm({ ...bankForm, name: e.target.value })} required /></Field>
           <Field label="رقم الحساب"><input className={inputClass} value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} /></Field>
+          <Field label="العملة">
+            <select className={inputClass} value={bankForm.currency} onChange={(e) => setBankForm({ ...bankForm, currency: e.target.value })}>
+              {(currencyList.length ? currencyList : [
+                { id: 1, code: 'USD', name: 'دولار', is_active: true },
+                { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
+                { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+              ]).map((c) => (
+                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="رصيد افتتاحي"><NumericInput value={bankForm.opening_balance} onChange={(v) => setBankForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
         </div>
       </Modal>

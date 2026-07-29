@@ -20,7 +20,14 @@ class BankController extends ApiController
             'branch' => ['name', 'code'],
         ]);
 
-        return $this->ok($query->get());
+        $banks = $query->get()
+            ->map(function (Bank $bank) {
+                $bank->setAttribute('balance', $this->cash->bankCurrencyBalance($bank));
+
+                return $bank;
+            });
+
+        return $this->ok($banks);
     }
 
     public function store(Request $request): JsonResponse
@@ -38,13 +45,18 @@ class BankController extends ApiController
             'is_active' => ['boolean'],
         ]);
 
-        return $this->ok(Bank::query()->create($data)->load(['branch', 'account']), 201);
+        $data['currency'] = strtoupper((string) ($data['currency'] ?? 'USD'));
+
+        $bank = Bank::query()->create($data)->load(['branch', 'account']);
+        $bank->setAttribute('balance', $this->cash->bankCurrencyBalance($bank));
+
+        return $this->ok($bank, 201);
     }
 
     public function update(Request $request, Bank $bank): JsonResponse
     {
         $this->authorizePermission('cash.manage');
-        $bank->update($request->validate([
+        $data = $request->validate([
             'code' => ['required', 'string', 'max:32', 'unique:banks,code,'.$bank->id],
             'name' => ['required', 'string', 'max:255'],
             'branch_id' => ['nullable', 'exists:branches,id'],
@@ -54,9 +66,17 @@ class BankController extends ApiController
             'opening_balance' => ['numeric'],
             'currency' => ['nullable', 'string', 'max:8'],
             'is_active' => ['boolean'],
-        ]));
+        ]);
 
-        return $this->ok($bank->fresh(['branch', 'account']));
+        if (isset($data['currency'])) {
+            $data['currency'] = strtoupper($data['currency']);
+        }
+
+        $bank->update($data);
+        $fresh = $bank->fresh(['branch', 'account']);
+        $fresh->setAttribute('balance', $this->cash->bankCurrencyBalance($fresh));
+
+        return $this->ok($fresh);
     }
 
     public function destroy(Bank $bank): JsonResponse
@@ -71,6 +91,10 @@ class BankController extends ApiController
     {
         $this->authorizePermission('cash.view');
 
-        return $this->ok(['book_balance' => $this->cash->bookBalance($bank)]);
+        return $this->ok([
+            'book_balance' => $this->cash->bookBalance($bank),
+            'balance' => $this->cash->bankCurrencyBalance($bank),
+            'currency' => strtoupper((string) ($bank->currency ?: 'USD')),
+        ]);
     }
 }

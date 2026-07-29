@@ -12,7 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "axios": "^1.18.1",
-    "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^1.6.7",
     "i18next": "^26.3.6",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
