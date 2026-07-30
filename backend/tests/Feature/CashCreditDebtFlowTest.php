@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CashBox;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\PurchaseInvoice;
 use App\Models\SalesInvoice;
 use App\Models\Supplier;
 use App\Models\User;
@@ -341,6 +342,51 @@ class CashCreditDebtFlowTest extends TestCase
         $this->assertEqualsWithDelta($cashBefore - 1000, $cash->cashBoxCurrencyBalance($cashBox->fresh()), 0.01);
         $apAfter = (float) $this->getJson("/api/suppliers/{$supplier->id}")->json('data.balance');
         $this->assertEqualsWithDelta(0, $apAfter, 0.01);
+    }
+
+    public function test_pay_remaining_allows_multiple_partial_payments(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+
+        $invoice = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 4, 'unit_cost' => 250, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $this->postJson("/api/purchase-invoices/{$invoice['id']}/pay-remaining", [
+            'amount' => 300,
+            'cash_box_id' => $cashBox->id,
+        ])->assertCreated();
+
+        $inv = PurchaseInvoice::query()->findOrFail($invoice['id']);
+        $this->assertEqualsWithDelta(300, (float) $inv->paid_amount, 0.01);
+
+        $this->postJson("/api/purchase-invoices/{$invoice['id']}/pay-remaining", [
+            'amount' => 400,
+            'cash_box_id' => $cashBox->id,
+        ])->assertCreated();
+
+        $inv->refresh();
+        $this->assertEqualsWithDelta(700, (float) $inv->paid_amount, 0.01);
+
+        $this->postJson("/api/purchase-invoices/{$invoice['id']}/pay-remaining", [
+            'cash_box_id' => $cashBox->id,
+        ])->assertCreated();
+
+        $inv->refresh();
+        $this->assertEqualsWithDelta(1000, (float) $inv->paid_amount, 0.01);
+
+        $this->postJson("/api/purchase-invoices/{$invoice['id']}/pay-remaining")->assertStatus(422);
+
+        $stillOpen = $this->getJson('/api/purchase-invoices?unsettled=1')->assertOk()->json('data');
+        $this->assertFalse(collect($stillOpen)->contains(fn ($r) => (int) $r['id'] === (int) $invoice['id']));
     }
 
     public function test_credit_sale_ignores_cash_box_and_paid_amount_payload(): void

@@ -202,8 +202,11 @@
     "receiptSaved": "Receipt recorded",
     "collectRemaining": "Collect remaining",
     "collectAndClose": "Collect & close",
-    "collectHint": "Enter the remaining amount or part of it. A receipt is created, cash increases, and customer AR decreases. When remaining reaches zero the invoice is settled.",
-    "collectSaved": "Amount collected and invoice updated"
+    "collectHint": "Enter the remaining amount or part of it. A receipt is created, cash increases, and customer AR decreases. You can collect in multiple partial payments until remaining is zero and the invoice is settled.",
+    "collectSaved": "Amount collected and invoice updated",
+    "filterSettlement": "Filter invoices",
+    "filterAllInvoices": "All invoices",
+    "filterUnsettled": "Unsettled (open AR)"
   },
   "purchases": {
     "title": "Purchases",
@@ -227,8 +230,11 @@
     "paymentPosted": "Payment posted",
     "payRemaining": "Pay remaining",
     "payAndClose": "Pay & close",
-    "payRemainingHint": "Enter the remaining amount or part of it. A supplier payment is created, cash decreases, and AP decreases. When remaining reaches zero the invoice is settled.",
+    "payRemainingHint": "Enter the remaining amount or part of it. A supplier payment is created, cash decreases, and AP decreases. You can pay in multiple partial payments until remaining is zero and the invoice is settled.",
     "payRemainingSaved": "Amount paid and invoice updated",
+    "filterSettlement": "Filter invoices",
+    "filterAllInvoices": "All invoices",
+    "filterUnsettled": "Unsettled (open AP)",
     "customs": "Customs",
     "transportFees": "Transport fees",
     "fines": "Fines / violations",
@@ -305,7 +311,11 @@
     "branch": "Branch",
     "currency": "Currency",
     "allBranches": "All branches",
-    "allCurrencies": "All currencies"
+    "allCurrencies": "All currencies",
+    "receivables": "Accounts receivable",
+    "payables": "Accounts payable",
+    "receivablesHint": "Owed to us",
+    "payablesHint": "We owe"
   },
   "roleNames": {
     "admin": "System Admin",

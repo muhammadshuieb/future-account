@@ -20,6 +20,7 @@ class SalesInvoiceController extends ApiController
             'customer' => ['name', 'code'],
             'branch' => ['name', 'code'],
         ]);
+        ListSearch::applyUnsettledInvoiceFilter($query, $request);
 
         return $this->ok($query->get());
     }

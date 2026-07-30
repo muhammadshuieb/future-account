@@ -49,10 +49,16 @@ export default function PurchasesPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
+  const [unsettledOnly, setUnsettledOnly] = useState(false)
   const [modal, setModal] = useState<'create' | 'view' | 'edit' | 'pay' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
   const [payForm, setPayForm] = useState({ amount: '', cash_box_id: '', payment_date: todayYmd() })
+
+  const invoiceListParams = {
+    ...search.params,
+    ...(unsettledOnly ? { unsettled: 1, sort: 'remaining_desc' } : {}),
+  }
 
   const requests = useQuery({
     queryKey: ['purchase-requests', search.debouncedQ],
@@ -65,8 +71,8 @@ export default function PurchasesPage() {
     enabled: tab === 'orders',
   })
   const invoices = useQuery({
-    queryKey: ['purchase-invoices', search.debouncedQ],
-    queryFn: async () => (await api.get('/purchase-invoices', { params: search.params })).data.data,
+    queryKey: ['purchase-invoices', search.debouncedQ, unsettledOnly],
+    queryFn: async () => (await api.get('/purchase-invoices', { params: invoiceListParams })).data.data,
   })
   const returns = useQuery({
     queryKey: ['purchase-returns', search.debouncedQ],
@@ -664,6 +670,17 @@ export default function PurchasesPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ListSearchInput value={search.q} onChange={search.setQ} />
+            {tab === 'invoices' && (
+              <select
+                className={`${inputClass} w-auto min-w-[10rem]`}
+                value={unsettledOnly ? 'unsettled' : 'all'}
+                onChange={(e) => setUnsettledOnly(e.target.value === 'unsettled')}
+                aria-label={t('purchases.filterSettlement')}
+              >
+                <option value="all">{t('purchases.filterAllInvoices')}</option>
+                <option value="unsettled">{t('purchases.filterUnsettled')}</option>
+              </select>
+            )}
             <ExcelExportButton path={`/exports/${excelModuleForPurchasesTab(tab)}`} />
             {tab === 'invoices' && (
               <PdfExportButton

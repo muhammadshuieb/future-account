@@ -200,8 +200,11 @@
     "receiptSaved": "Tahsilat kaydedildi",
     "collectRemaining": "Kalanı tahsil et",
     "collectAndClose": "Tahsil et ve kapat",
-    "collectHint": "Kalan tutarı veya bir kısmını girin. Tahsilat fişi oluşur, kasa artar ve müşteri borcu azalır. Kalan sıfırlanınca fatura kapanır.",
-    "collectSaved": "Tutar tahsil edildi ve fatura güncellendi"
+    "collectHint": "Kalan tutarı veya bir kısmını girin. Tahsilat fişi oluşur, kasa artar ve müşteri borcu azalır. Birden fazla kısmi tahsilat yapabilirsiniz; kalan sıfırlanınca fatura kapanır.",
+    "collectSaved": "Tutar tahsil edildi ve fatura güncellendi",
+    "filterSettlement": "Faturaları filtrele",
+    "filterAllInvoices": "Tüm faturalar",
+    "filterUnsettled": "Ödenmemiş (açık alacak)"
   },
   "purchases": {
     "title": "Satın Alma",
@@ -225,8 +228,11 @@
     "paymentPosted": "Ödeme onaylandı",
     "payRemaining": "Kalanı öde",
     "payAndClose": "Öde ve kapat",
-    "payRemainingHint": "Kalan tutarı veya bir kısmını girin. Tedarikçi ödemesi oluşur, kasa azalır ve borç azalır. Kalan sıfırlanınca fatura kapanır.",
+    "payRemainingHint": "Kalan tutarı veya bir kısmını girin. Tedarikçi ödemesi oluşur, kasa azalır ve borç azalır. Birden fazla kısmi ödeme yapabilirsiniz; kalan sıfırlanınca fatura kapanır.",
     "payRemainingSaved": "Tutar ödendi ve fatura güncellendi",
+    "filterSettlement": "Faturaları filtrele",
+    "filterAllInvoices": "Tüm faturalar",
+    "filterUnsettled": "Ödenmemiş (açık borç)",
     "customs": "Gümrük",
     "transportFees": "Nakliye ücretleri",
     "fines": "Cezalar",
@@ -294,7 +300,11 @@
     "dailySales": "Günlük Satışlar",
     "dailyPurchases": "Günlük Alımlar",
     "last7Days": "Son 7 gün",
-    "last30Days": "Son 30 gün"
+    "last30Days": "Son 30 gün",
+    "receivables": "Alacaklar",
+    "payables": "Borçlar",
+    "receivablesHint": "Bize borçlu",
+    "payablesHint": "Biz borçluyuz"
   },
   "roleNames": {
     "admin": "Sistem Yöneticisi",

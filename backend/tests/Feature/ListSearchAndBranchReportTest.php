@@ -162,6 +162,155 @@ class ListSearchAndBranchReportTest extends TestCase
             ]);
     }
 
+    public function test_sales_invoice_unsettled_filter_returns_only_open_balances(): void
+    {
+        $dam = Branch::query()->where('code', 'DAM')->firstOrFail();
+        $wh = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $userId = User::query()->first()->id;
+
+        SalesInvoice::query()->create([
+            'invoice_number' => 'SI-UNSETTLED-OPEN',
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $wh->id,
+            'branch_id' => $dam->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 500,
+            'subtotal' => 500,
+            'tax_amount' => 0,
+            'total' => 500,
+            'paid_amount' => 100,
+            'created_by' => $userId,
+            'posted_at' => now(),
+        ]);
+
+        SalesInvoice::query()->create([
+            'invoice_number' => 'SI-UNSETTLED-PAID',
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $wh->id,
+            'branch_id' => $dam->id,
+            'status' => 'posted',
+            'payment_type' => 'cash',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 200,
+            'subtotal' => 200,
+            'tax_amount' => 0,
+            'total' => 200,
+            'paid_amount' => 200,
+            'created_by' => $userId,
+            'posted_at' => now(),
+        ]);
+
+        SalesInvoice::query()->create([
+            'invoice_number' => 'SI-UNSETTLED-DRAFT',
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $wh->id,
+            'branch_id' => $dam->id,
+            'status' => 'draft',
+            'payment_type' => 'credit',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 300,
+            'subtotal' => 300,
+            'tax_amount' => 0,
+            'total' => 300,
+            'paid_amount' => 0,
+            'created_by' => $userId,
+        ]);
+
+        $filtered = $this->getJson('/api/sales-invoices?unsettled=1');
+        $filtered->assertOk();
+        $numbers = collect($filtered->json('data'))->pluck('invoice_number');
+        $this->assertTrue($numbers->contains('SI-UNSETTLED-OPEN'));
+        $this->assertFalse($numbers->contains('SI-UNSETTLED-PAID'));
+        $this->assertFalse($numbers->contains('SI-UNSETTLED-DRAFT'));
+
+        $byStatus = $this->getJson('/api/sales-invoices?payment_status=open');
+        $byStatus->assertOk();
+        $this->assertTrue(collect($byStatus->json('data'))->contains(fn ($r) => $r['invoice_number'] === 'SI-UNSETTLED-OPEN'));
+    }
+
+    public function test_purchase_invoice_unsettled_filter_returns_only_open_balances(): void
+    {
+        $wh = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = \App\Models\Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $userId = User::query()->first()->id;
+
+        \App\Models\PurchaseInvoice::query()->create([
+            'invoice_number' => 'PI-UNSETTLED-OPEN',
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $wh->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 800,
+            'subtotal' => 800,
+            'tax_amount' => 0,
+            'total' => 800,
+            'paid_amount' => 250,
+            'created_by' => $userId,
+            'posted_at' => now(),
+        ]);
+
+        \App\Models\PurchaseInvoice::query()->create([
+            'invoice_number' => 'PI-UNSETTLED-PAID',
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $wh->id,
+            'status' => 'posted',
+            'payment_type' => 'cash',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 150,
+            'subtotal' => 150,
+            'tax_amount' => 0,
+            'total' => 150,
+            'paid_amount' => 150,
+            'created_by' => $userId,
+            'posted_at' => now(),
+        ]);
+
+        $filtered = $this->getJson('/api/purchase-invoices?unsettled=1&sort=remaining_desc');
+        $filtered->assertOk();
+        $numbers = collect($filtered->json('data'))->pluck('invoice_number');
+        $this->assertTrue($numbers->contains('PI-UNSETTLED-OPEN'));
+        $this->assertFalse($numbers->contains('PI-UNSETTLED-PAID'));
+
+        $open = collect($filtered->json('data'))->firstWhere('invoice_number', 'PI-UNSETTLED-OPEN');
+        $this->assertNotNull($open);
+        $this->assertEqualsWithDelta(550, (float) $open['total'] - (float) $open['paid_amount'], 0.01);
+    }
+
+    /**
+     * Several list endpoints declare searchable columns that do not exist on their table
+     * (for example `notes` on the returns tables), which used to raise a 500 on search.
+     */
+    public function test_every_searchable_list_endpoint_survives_a_search_term(): void
+    {
+        $endpoints = [
+            'accounts', 'journal-entries', 'products', 'customers', 'suppliers', 'warehouses',
+            'categories', 'units', 'sales-quotes', 'sales-orders', 'sales-invoices', 'sales-returns',
+            'receipts', 'purchase-requests', 'purchase-orders', 'purchase-invoices', 'purchase-returns',
+            'supplier-payments', 'cash-boxes', 'banks', 'cash-transfers', 'currency-exchanges',
+            'bank-reconciliations', 'stock-levels', 'stock-movements', 'warehouse-transfers',
+            'inventory-counts', 'employees', 'attendances', 'leave-requests', 'salary-records',
+            'companies', 'branches', 'audit-logs', 'users',
+        ];
+
+        foreach ($endpoints as $endpoint) {
+            $this->getJson("/api/{$endpoint}?q=a")->assertOk();
+        }
+    }
+
     public function test_product_search_accepts_q_alias(): void
     {
         $product = Product::query()->orderBy('id')->first();

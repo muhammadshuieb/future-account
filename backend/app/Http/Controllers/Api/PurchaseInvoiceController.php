@@ -19,6 +19,7 @@ class PurchaseInvoiceController extends ApiController
         ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
             'supplier' => ['name', 'code'],
         ]);
+        ListSearch::applyUnsettledInvoiceFilter($query, $request);
 
         return $this->ok($query->get());
     }
