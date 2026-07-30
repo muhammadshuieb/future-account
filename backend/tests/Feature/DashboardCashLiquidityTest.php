@@ -93,6 +93,39 @@ class DashboardCashLiquidityTest extends TestCase
             0.01
         );
 
+        $dashBoxes = collect($dashboard['cash_boxes'] ?? []);
+        $dashBanks = collect($dashboard['banks'] ?? []);
+        $this->assertCount($boxes->count(), $dashBoxes);
+        $this->assertCount($banks->count(), $dashBanks);
+        foreach ($boxes as $box) {
+            $row = $dashBoxes->firstWhere('id', $box->id);
+            $this->assertNotNull($row, 'missing dashboard cash_boxes row for '.$box->code);
+            $this->assertEqualsWithDelta(
+                $cash->cashBoxCurrencyBalance($box),
+                (float) $row['balance'],
+                0.01,
+                'dashboard cash box mismatch for '.$box->code
+            );
+        }
+        foreach ($banks as $bank) {
+            $row = $dashBanks->firstWhere('id', $bank->id);
+            $this->assertNotNull($row, 'missing dashboard banks row for '.$bank->code);
+            $this->assertEqualsWithDelta(
+                $cash->bankCurrencyBalance($bank),
+                (float) $row['balance'],
+                0.01,
+                'dashboard bank mismatch for '.$bank->code
+            );
+        }
+
+        // Revenues must stay independent of cash/bank balances.
+        $this->assertArrayHasKey('revenue', $dashboard);
+        $this->assertNotEquals(
+            round((float) $dashboard['revenue'], 2),
+            round((float) $dashboard['cash'], 2),
+            'dashboard cash must not equal revenue'
+        );
+
         $byCurrency = collect($dashboard['by_currency'] ?? []);
         foreach ($expectedByCurrency as $code => $row) {
             $dashRow = $byCurrency->firstWhere('currency', $code);
@@ -112,6 +145,12 @@ class DashboardCashLiquidityTest extends TestCase
         $this->assertEqualsWithDelta($usdSummary['bank'], (float) $usdOnly['bank'], 0.01);
         $this->assertNull($usdOnly['by_currency']);
         $this->assertNull($usdOnly['liquidity_by_currency']);
+        foreach ($usdOnly['cash_boxes'] ?? [] as $row) {
+            $this->assertSame('USD', strtoupper((string) $row['currency']));
+        }
+        foreach ($usdOnly['banks'] ?? [] as $row) {
+            $this->assertSame('USD', strtoupper((string) $row['currency']));
+        }
     }
 
     public function test_credit_sale_does_not_inflate_dashboard_cash(): void

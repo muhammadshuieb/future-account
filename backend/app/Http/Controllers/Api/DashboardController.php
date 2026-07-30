@@ -250,6 +250,9 @@ class DashboardController extends Controller
                 'bank' => $liquidity['bank'],
                 'liquidity' => $liquidity['liquidity'],
                 'liquidity_by_currency' => $liquidity['by_currency'],
+                // Same balances as /cash-boxes and /banks (CashService) — not revenues.
+                'cash_boxes' => $liquidity['boxes'] ?? [],
+                'banks' => $liquidity['banks'] ?? [],
                 'base_totals' => $currencyFilter === null ? $baseTotals : null,
                 'by_currency' => $byCurrency,
                 'daily_sales' => $dailySales,

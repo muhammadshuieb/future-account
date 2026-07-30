@@ -37,7 +37,7 @@ $banks = Bank::query()->orderBy('code')->get()->map(function (Bank $bank) use ($
         'account_id' => $bank->account_id,
         'opening_balance' => (float) $bank->opening_balance,
         'is_active' => (bool) $bank->is_active,
-        'balance' => $cash->bookBalance($bank),
+        'balance' => $cash->bankCurrencyBalance($bank),
     ];
 })->values();
 

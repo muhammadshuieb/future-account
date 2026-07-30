@@ -61,6 +61,14 @@ function DailyBarChart({
   )
 }
 
+type LiquidityAccount = {
+  id: number
+  code: string
+  name: string
+  currency: string
+  balance: number
+}
+
 function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
   if (!rows.length) {
     return (
@@ -77,7 +85,9 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
     <Panel>
       <div className="border-b border-[var(--color-line)] px-5 py-3">
         <h2 className="font-semibold">حسب العملة</h2>
-        <p className="mt-0.5 text-xs text-black/50">مبالغ أصلية لكل عملة بدون تحويل — الصناديق والبنوك منفصلة عن الذمم</p>
+        <p className="mt-0.5 text-xs text-black/50">
+          مبالغ أصلية لكل عملة بدون تحويل — أعمدة الصناديق/البنوك من أرصدة السيولة وليست إيرادات
+        </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[52rem] text-sm">
@@ -116,6 +126,122 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
         </table>
       </div>
     </Panel>
+  )
+}
+
+function CashBanksSection({
+  boxes,
+  banks,
+  cashTotal,
+  bankTotal,
+  liquidityTotal,
+  displayCurrency,
+  baseCurrency,
+  showBaseEquivalent,
+}: {
+  boxes: LiquidityAccount[]
+  banks: LiquidityAccount[]
+  cashTotal: number
+  bankTotal: number
+  liquidityTotal: number
+  displayCurrency: string
+  baseCurrency: string
+  showBaseEquivalent: boolean
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-black/70">الصناديق والبنوك</h2>
+          <p className="text-xs text-black/45">
+            أرصدة فعلية من وحدة الصناديق والبنوك — منفصلة تماماً عن إيرادات الفترة
+          </p>
+        </div>
+        <Link to="/cash-banks" className="text-xs font-medium text-teal hover:underline">
+          فتح الصناديق والبنوك
+        </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile
+          label="الصناديق"
+          value={formatMoney(cashTotal, displayCurrency)}
+          hint={
+            showBaseEquivalent
+              ? `مكافئ ${baseCurrency} — ليس إيراداً`
+              : 'رصيد الصناديق فقط — ليس إيراداً'
+          }
+          tone="teal"
+        />
+        <StatTile
+          label="البنوك"
+          value={formatMoney(bankTotal, displayCurrency)}
+          hint={
+            showBaseEquivalent
+              ? `مكافئ ${baseCurrency} — ليس إيراداً`
+              : 'رصيد البنوك فقط — ليس إيراداً'
+          }
+          tone="success"
+        />
+        <StatTile
+          label="السيولة"
+          value={formatMoney(liquidityTotal, displayCurrency)}
+          hint="صناديق + بنوك (بدون إيرادات أو ذمم)"
+        />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel>
+          <div className="border-b border-[var(--color-line)] px-5 py-3">
+            <h3 className="font-semibold">الصناديق</h3>
+          </div>
+          {boxes.length === 0 ? (
+            <EmptyState title="لا توجد صناديق نشطة" description="أضف صندوقاً من صفحة الصناديق والبنوك." />
+          ) : (
+            <ul className="divide-y divide-[var(--color-line)]">
+              {boxes.map((box) => (
+                <li key={box.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{box.name}</p>
+                    <p className="text-xs text-black/45">
+                      {box.code} · {box.currency}
+                    </p>
+                  </div>
+                  <p className="shrink-0 tabular-nums font-semibold">
+                    {formatMoney(box.balance, box.currency)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel>
+          <div className="border-b border-[var(--color-line)] px-5 py-3">
+            <h3 className="font-semibold">البنوك</h3>
+          </div>
+          {banks.length === 0 ? (
+            <EmptyState title="لا توجد بنوك نشطة" description="أضف حساباً بنكياً من صفحة الصناديق والبنوك." />
+          ) : (
+            <ul className="divide-y divide-[var(--color-line)]">
+              {banks.map((bank) => (
+                <li key={bank.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{bank.name}</p>
+                    <p className="text-xs text-black/45">
+                      {bank.code} · {bank.currency}
+                    </p>
+                  </div>
+                  <p className="shrink-0 tabular-nums font-semibold">
+                    {formatMoney(bank.balance, bank.currency)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+    </section>
   )
 }
 
@@ -190,27 +316,6 @@ export default function DashboardPage() {
     { label: 'صافي الربح', value: formatMoney(data.net_income, currency), tone: 'teal' as const },
   ]
 
-  const liquidityTiles = [
-    {
-      label: 'الصناديق',
-      value: formatMoney(data.cash ?? 0, currency),
-      hint: 'أرصدة الصناديق النقدية فقط — لا تشمل الذمم',
-      tone: 'teal' as const,
-    },
-    {
-      label: 'البنوك',
-      value: formatMoney(data.bank ?? 0, currency),
-      hint: 'أرصدة الحسابات البنكية فقط',
-      tone: 'success' as const,
-    },
-    {
-      label: 'السيولة',
-      value: formatMoney(data.liquidity ?? 0, currency),
-      hint: 'صناديق + بنوك (بدون ذمم مدينة/دائنة)',
-      tone: 'default' as const,
-    },
-  ]
-
   const secondary = [
     { label: 'ذمم مدينة', value: formatMoney(data.receivables ?? 0, currency), hint: 'مستحق من العملاء' },
     { label: 'ذمم دائنة', value: formatMoney(data.payables ?? 0, currency), hint: 'مستحق للموردين' },
@@ -224,33 +329,21 @@ export default function DashboardPage() {
     { label: 'صافي الربح', value: formatMoney(base.net_income, baseCurrency), tone: 'teal' as const },
   ]
 
-  const baseLiquidityTiles = [
-    {
-      label: 'الصناديق',
-      value: formatMoney(base.cash ?? 0, baseCurrency),
-      hint: 'مكافئ بالعملة الأساسية لمجموع أرصدة الصناديق',
-      tone: 'teal' as const,
-    },
-    {
-      label: 'البنوك',
-      value: formatMoney(base.bank ?? 0, baseCurrency),
-      hint: 'مكافئ بالعملة الأساسية لمجموع أرصدة البنوك',
-      tone: 'success' as const,
-    },
-    {
-      label: 'السيولة',
-      value: formatMoney(base.liquidity ?? 0, baseCurrency),
-      hint: 'صناديق + بنوك بالعملة الأساسية (بدون ذمم)',
-      tone: 'default' as const,
-    },
-  ]
-
   const baseSecondary = [
     { label: 'ذمم مدينة', value: formatMoney(base.receivables, baseCurrency), hint: 'مستحق من العملاء' },
     { label: 'ذمم دائنة', value: formatMoney(base.payables, baseCurrency), hint: 'مستحق للموردين' },
     { label: 'مبيعات الشهر', value: formatMoney(base.month_sales, baseCurrency) },
     { label: 'مشتريات الشهر', value: formatMoney(base.month_purchases, baseCurrency) },
   ]
+
+  const cashBoxes = (data.cash_boxes || []) as LiquidityAccount[]
+  const banksList = (data.banks || []) as LiquidityAccount[]
+  const cashTotal = showAllCurrencies ? (base.cash ?? data.cash ?? 0) : (data.cash ?? 0)
+  const bankTotal = showAllCurrencies ? (base.bank ?? data.bank ?? 0) : (data.bank ?? 0)
+  const liquidityTotal = showAllCurrencies
+    ? (base.liquidity ?? data.liquidity ?? 0)
+    : (data.liquidity ?? 0)
+  const liquidityCurrency = showAllCurrencies ? baseCurrency : currency
 
   const currencyHint = showAllCurrencies
     ? `عرض الإحصائيات حسب كل عملة مع إجمالي مكافئ بالعملة الأساسية (${baseCurrency})`
@@ -320,23 +413,31 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <CashBanksSection
+        boxes={cashBoxes}
+        banks={banksList}
+        cashTotal={cashTotal}
+        bankTotal={bankTotal}
+        liquidityTotal={liquidityTotal}
+        displayCurrency={liquidityCurrency}
+        baseCurrency={baseCurrency}
+        showBaseEquivalent={showAllCurrencies}
+      />
+
       {showAllCurrencies ? (
         <>
           <CurrencyBreakdownTable rows={byCurrency} />
 
           <section className="space-y-3">
             <div>
-              <h2 className="text-sm font-semibold text-black/70">الإجمالي بالعملة الأساسية ({baseCurrency})</h2>
-              <p className="text-xs text-black/45">محسوب من قيمة المستند الأصلية بعد تحويلها إلى العملة الأساسية الحالية</p>
+              <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات ({baseCurrency})</h2>
+              <p className="text-xs text-black/45">
+                من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك
+              </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               {basePrimary.map((c) => (
                 <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
-              ))}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {baseLiquidityTiles.map((c) => (
-                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} tone={c.tone} />
               ))}
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -348,22 +449,21 @@ export default function DashboardPage() {
         </>
       ) : (
         <>
-          <section className="grid gap-3 sm:grid-cols-3">
-            {primary.map((c) => (
-              <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
-            ))}
-          </section>
-
-          <section className="grid gap-3 sm:grid-cols-3">
-            {liquidityTiles.map((c) => (
-              <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} tone={c.tone} />
-            ))}
-          </section>
-
-          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {secondary.map((c) => (
-              <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
-            ))}
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات</h2>
+              <p className="text-xs text-black/45">من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك</p>
+            </div>
+            <section className="grid gap-3 sm:grid-cols-3">
+              {primary.map((c) => (
+                <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+              ))}
+            </section>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {secondary.map((c) => (
+                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
+              ))}
+            </section>
           </section>
         </>
       )}
