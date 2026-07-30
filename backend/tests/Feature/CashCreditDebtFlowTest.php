@@ -342,4 +342,84 @@ class CashCreditDebtFlowTest extends TestCase
         $apAfter = (float) $this->getJson("/api/suppliers/{$supplier->id}")->json('data.balance');
         $this->assertEqualsWithDelta(0, $apAfter, 0.01);
     }
+
+    public function test_credit_sale_ignores_cash_box_and_paid_amount_payload(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cash = app(CashService::class);
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $cashBefore = $cash->cashBoxCurrencyBalance($cashBox->fresh());
+        $debtBefore = (float) $this->getJson("/api/customers/{$customer->id}")->json('data.balance');
+
+        // Malicious / buggy client: credit + cash_box_id + paid_amount must NOT hit cash.
+        $invoice = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'cash_box_id' => $cashBox->id,
+            'paid_amount' => 750,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 750, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $this->assertSame('credit', $invoice['payment_type']);
+        $this->assertNull($invoice['cash_box_id'] ?? null);
+        $this->assertEqualsWithDelta(0, (float) $invoice['paid_amount'], 0.01);
+        $this->assertEqualsWithDelta($cashBefore, $cash->cashBoxCurrencyBalance($cashBox->fresh()), 0.01);
+        $debtAfter = (float) $this->getJson("/api/customers/{$customer->id}")->json('data.balance');
+        $this->assertEqualsWithDelta($debtBefore + 750, $debtAfter, 0.01);
+        $this->assertSame(0, \App\Models\Receipt::query()->where('sales_invoice_id', $invoice['id'])->count());
+    }
+
+    public function test_partial_sale_only_paid_portion_hits_cash(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cash = app(CashService::class);
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $cashBefore = $cash->cashBoxCurrencyBalance($cashBox->fresh());
+        $debtBefore = (float) $this->getJson("/api/customers/{$customer->id}")->json('data.balance');
+
+        $invoice = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'partial',
+            'paid_amount' => 300,
+            'cash_box_id' => $cashBox->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1000, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $this->assertEqualsWithDelta(300, (float) $invoice['paid_amount'], 0.01);
+        $this->assertEqualsWithDelta($cashBefore + 300, $cash->cashBoxCurrencyBalance($cashBox->fresh()), 0.01);
+        $debtAfter = (float) $this->getJson("/api/customers/{$customer->id}")->json('data.balance');
+        $this->assertEqualsWithDelta($debtBefore + 700, $debtAfter, 0.01);
+    }
 }

@@ -109,6 +109,11 @@ class PurchaseService
                 };
             }
 
+            // Unpaid credit purchases must never create a cash payment.
+            if ($paymentType === 'credit') {
+                $intendedPaid = 0.0;
+            }
+
             $invoice->update(['paid_amount' => 0]);
 
             $ap = $invoice->supplier->account_id
@@ -256,6 +261,11 @@ class PurchaseService
         $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
             ? (int) $data['cash_box_id']
             : null;
+
+        // Credit (آجل) never touches cash: ignore any cash_box_id / paid_amount from the client.
+        if ($paymentType === 'credit') {
+            return ['credit', 0.0, null];
+        }
 
         if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
             $cashBoxId = $this->cash->resolveDefaultCashBoxId();

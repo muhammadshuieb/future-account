@@ -130,6 +130,11 @@ class SalesService
                 };
             }
 
+            // Unpaid credit sales must never create a cash receipt.
+            if ($paymentType === 'credit') {
+                $intendedPaid = 0.0;
+            }
+
             // Reset paid_amount before auto-receipt increments it.
             $invoice->update(['paid_amount' => 0]);
 
@@ -286,6 +291,11 @@ class SalesService
         $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
             ? (int) $data['cash_box_id']
             : null;
+
+        // Credit (آجل) never touches cash: ignore any cash_box_id / paid_amount from the client.
+        if ($paymentType === 'credit') {
+            return ['credit', 0.0, null];
+        }
 
         if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
             $cashBoxId = $this->cash->resolveDefaultCashBoxId();
