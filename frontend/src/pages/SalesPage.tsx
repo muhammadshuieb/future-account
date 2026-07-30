@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { todayYmd } from '@/lib/dates'
+import { formatInvoiceDateTime, todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
@@ -768,6 +768,12 @@ export default function SalesPage() {
         <div className="grid gap-3 sm:grid-cols-2">
           <p><b>{t('common.number')}:</b> {String(data.quote_number || data.order_number || data.invoice_number || data.return_number || data.receipt_number || '—')}</p>
           <p><b>{t('common.status')}:</b> {documentStatusLabel(String(data.status || ''))}</p>
+          {tab === 'invoices' && (data.invoice_date != null || data.created_at != null) && (
+            <p><b>{t('common.dateTime')}:</b> {formatInvoiceDateTime(
+              data.invoice_date != null ? String(data.invoice_date) : undefined,
+              data.created_at != null ? String(data.created_at) : undefined,
+            )}</p>
+          )}
           <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
           <p><b>{t('common.warehouse')}:</b> {warehouseName || '—'}</p>
           {tab === 'invoices' && (
@@ -937,9 +943,9 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.branch')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.dateTime')}</th><th>{t('common.customer')}</th><th>{t('common.branch')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th><th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string }; branch?: { name?: string } | null }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; invoice_date?: string; created_at?: string; total: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; customer?: { name: string; phone?: string }; branch?: { name?: string } | null }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">
                       <span className="inline-flex items-center gap-1">
@@ -947,6 +953,7 @@ export default function SalesPage() {
                         <AttachmentIcon count={i.attachments_count} />
                       </span>
                     </td>
+                    <td className="whitespace-nowrap text-xs tabular-nums">{formatInvoiceDateTime(i.invoice_date, i.created_at)}</td>
                     <td>{i.customer?.name}</td>
                     <td>{i.branch?.name || '—'}</td>
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>

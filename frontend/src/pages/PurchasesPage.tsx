@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { todayYmd } from '@/lib/dates'
+import { formatInvoiceDateTime, todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
@@ -733,9 +733,9 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.dateTime')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; total: number; tax_amount?: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; invoice_date?: string; created_at?: string; total: number; tax_amount?: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">
                       <span className="inline-flex items-center gap-1">
@@ -743,6 +743,7 @@ export default function PurchasesPage() {
                         <AttachmentIcon count={i.attachments_count} />
                       </span>
                     </td>
+                    <td className="whitespace-nowrap text-xs tabular-nums">{formatInvoiceDateTime(i.invoice_date, i.created_at)}</td>
                     <td>{i.supplier?.name}</td>
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>

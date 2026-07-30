@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
+import { formatInvoiceDateTime } from '@/lib/dates'
 import { unitFromProduct } from '@/lib/productUnit'
 
 export type SalesInvoicePrintData = {
   invoice_number: string
   invoice_date: string
+  created_at?: string | null
   e_invoice_uuid?: string
   total: number
   tax_amount: number
@@ -33,6 +35,7 @@ export type SalesInvoicePrintData = {
 export type PurchaseInvoicePrintData = {
   invoice_number: string
   invoice_date: string
+  created_at?: string | null
   total: number
   tax_amount?: number
   subtotal?: number
@@ -90,6 +93,7 @@ function InvoiceBrandHeader({
   documentLabel,
   invoiceNumber,
   invoiceDate,
+  createdAt,
   companyName,
   taxNumber,
   extra,
@@ -97,6 +101,7 @@ function InvoiceBrandHeader({
   documentLabel: string
   invoiceNumber: string
   invoiceDate: string
+  createdAt?: string | null
   companyName?: string
   taxNumber?: string
   extra?: ReactNode
@@ -107,16 +112,16 @@ function InvoiceBrandHeader({
     : `${t('app.name')} — Syna Co`
 
   return (
-    <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+    <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2">
       {/* First in RTL → visual right: company + report title */}
       <div className="min-w-0 text-start">
-        <p className="text-lg font-bold">{brandLine}</p>
+        <p className="text-base font-bold leading-tight">{brandLine}</p>
         {taxNumber && (
-          <p className="text-xs text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
+          <p className="text-[11px] text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
         )}
-        <p className="mt-1 text-xs font-semibold text-teal">{documentLabel}</p>
-        <p className="font-mono text-base font-bold">{invoiceNumber}</p>
-        <p>{String(invoiceDate).slice(0, 10)}</p>
+        <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
+        <p className="font-mono text-sm font-bold">{invoiceNumber}</p>
+        <p className="text-xs">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
         {extra}
       </div>
       {/* Second in RTL → visual left: logo */}
@@ -140,28 +145,29 @@ export function SalesInvoicePrintView({
 
   useEffect(() => {
     if (canvasRef.current && payload) {
-      void QRCode.toCanvas(canvasRef.current, payload, { width: 140, margin: 1 })
+      void QRCode.toCanvas(canvasRef.current, payload, { width: 96, margin: 1 })
     }
   }, [payload])
 
   return (
-    <div className="space-y-4 text-sm" dir="rtl">
+    <div className="space-y-2 text-xs" dir="rtl">
       <InvoiceBrandHeader
         documentLabel={t('sales.invoices')}
         invoiceNumber={invoice.invoice_number}
         invoiceDate={invoice.invoice_date}
+        createdAt={invoice.created_at}
         companyName={companyName}
         taxNumber={structured?.seller?.tax_number}
       />
 
       {(payload || invoice.e_invoice_uuid || eInvoice?.e_invoice_uuid || structured?.uuid) && (
-        <div className="rounded-lg border-2 border-teal/30 bg-teal/5 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="rounded border border-teal/30 bg-teal/5 p-2">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-teal">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal">
                 {t('sales.eInvoice')} — future-account-einvoice/1.0
               </p>
-              <p className="mt-1 font-mono text-xs text-black/60">
+              <p className="mt-0.5 font-mono text-[10px] text-black/60">
                 UUID: {structured?.uuid || eInvoice?.e_invoice_uuid || invoice.e_invoice_uuid || '—'}
               </p>
             </div>
@@ -170,7 +176,7 @@ export function SalesInvoicePrintView({
         </div>
       )}
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1 sm:grid-cols-2">
         <p>
           <span className="text-black/55">{t('common.customer')}: </span>
           {invoice.customer?.name || '—'}
@@ -212,13 +218,13 @@ export function SalesInvoicePrintView({
       </div>
 
       {invoice.notes ? (
-        <div className="rounded border border-black/10 bg-black/[0.02] p-3">
-          <p className="text-xs font-semibold text-black/55">ملاحظات</p>
-          <p className="mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
+          <p className="text-[11px] font-semibold text-black/55">ملاحظات</p>
+          <p className="mt-0.5 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       ) : null}
 
-      <table className="data-table">
+      <table className="data-table text-[11px]">
         <thead>
           <tr>
             <th>{t('common.product')}</th>
@@ -237,7 +243,7 @@ export function SalesInvoicePrintView({
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
               {(invoice.lines || []).some((row) => row.serial_no) && (
-                <td className="font-mono text-xs">{l.serial_no || '—'}</td>
+                <td className="font-mono text-[10px]">{l.serial_no || '—'}</td>
               )}
               <td className="tabular-nums">{l.line_total}</td>
             </tr>
@@ -246,17 +252,17 @@ export function SalesInvoicePrintView({
       </table>
 
       {(structured?.tax_breakdown || []).filter((tb) => tb.tax > 0).length > 0 && (
-        <div className="rounded border border-black/10 p-3">
-          <p className="mb-2 text-xs font-semibold">تفصيل الضريبة</p>
+        <div className="rounded border border-black/10 p-2">
+          <p className="mb-1 text-[11px] font-semibold">تفصيل الضريبة</p>
           {(structured?.tax_breakdown || []).filter((tb) => tb.tax > 0).map((tb, i) => (
-            <p key={i} className="text-xs">
+            <p key={i} className="text-[11px]">
               {tb.rate}% — خاضع {tb.taxable}، ضريبة {tb.tax}
             </p>
           ))}
         </div>
       )}
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
         <p>
           <span className="text-black/55">{t('common.subtotal')}: </span>
           <span className="tabular-nums">{invoice.subtotal}</span>
@@ -273,7 +279,7 @@ export function SalesInvoicePrintView({
             <span className="tabular-nums">{invoice.tax_amount}</span>
           </p>
         )}
-        <p className="text-base font-bold">
+        <p className="text-sm font-bold">
           {t('common.total')} ({invoice.currency || 'USD'}):{' '}
           <span className="tabular-nums">{invoice.total}</span>
         </p>
@@ -287,14 +293,15 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
   const lines = invoice.lines || invoice.items || []
 
   return (
-    <div className="space-y-4 text-sm" dir="rtl">
+    <div className="space-y-2 text-xs" dir="rtl">
       <InvoiceBrandHeader
         documentLabel={t('purchases.invoices')}
         invoiceNumber={invoice.invoice_number}
         invoiceDate={invoice.invoice_date}
+        createdAt={invoice.created_at}
       />
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1 sm:grid-cols-2">
         <p>
           <span className="text-black/55">{t('common.supplier')}: </span>
           {invoice.supplier?.name || '—'}
@@ -330,13 +337,13 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
       </div>
 
       {invoice.notes ? (
-        <div className="rounded border border-black/10 bg-black/[0.02] p-3">
-          <p className="text-xs font-semibold text-black/55">ملاحظات</p>
-          <p className="mt-1 whitespace-pre-wrap">{invoice.notes}</p>
+        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
+          <p className="text-[11px] font-semibold text-black/55">ملاحظات</p>
+          <p className="mt-0.5 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       ) : null}
 
-      <table className="data-table">
+      <table className="data-table text-[11px]">
         <thead>
           <tr>
             <th>{t('common.product')}</th>
@@ -354,14 +361,14 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_cost ?? l.unit_price ?? '—'}</td>
-              <td className="font-mono text-xs">{l.batch_no || l.serial_no || '—'}</td>
+              <td className="font-mono text-[10px]">{l.batch_no || l.serial_no || '—'}</td>
               <td className="tabular-nums">{l.line_total}</td>
             </tr>
           ))}
         </tbody>
       </table>
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
         {invoice.subtotal != null && (
           <p>
             <span className="text-black/55">{t('common.subtotal')}: </span>
@@ -398,7 +405,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
             <span className="tabular-nums">{invoice.other_fees}</span>
           </p>
         )}
-        <p className="text-base font-bold">
+        <p className="text-sm font-bold">
           {t('common.total')} ({invoice.currency || 'USD'}):{' '}
           <span className="tabular-nums">{invoice.total}</span>
         </p>

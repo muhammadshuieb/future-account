@@ -65,6 +65,7 @@
     "status": "Status",
     "total": "Total",
     "date": "Date",
+    "dateTime": "Date & time",
     "customer": "Customer",
     "supplier": "Supplier",
     "warehouse": "Warehouse",

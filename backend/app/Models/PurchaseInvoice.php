@@ -22,7 +22,8 @@ class PurchaseInvoice extends Model
     protected function casts(): array
     {
         return [
-            'invoice_date' => 'date',
+            // Y-m-d avoids UTC midnight JSON shift (Asia/Damascus → previous calendar day).
+            'invoice_date' => 'date:Y-m-d',
             'posted_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'tax_amount' => 'decimal:2',

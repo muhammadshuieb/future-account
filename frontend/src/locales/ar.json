@@ -65,6 +65,7 @@
     "status": "حالة",
     "total": "الإجمالي",
     "date": "التاريخ",
+    "dateTime": "التاريخ والوقت",
     "customer": "عميل",
     "supplier": "مورد",
     "warehouse": "مخزن",

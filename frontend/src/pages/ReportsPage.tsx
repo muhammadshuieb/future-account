@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
-import { todayYmd, yearStartYmd } from '@/lib/dates'
+import { formatDateLocal, todayYmd, yearStartYmd } from '@/lib/dates'
 import { LOGO } from '@/lib/brand'
 import { openPrintPopup } from '@/lib/printPopup'
 import { statementTypeLabel } from '@/components/StatementPrintView'
@@ -522,7 +522,7 @@ export default function ReportsPage() {
                     }) => (
                       <tr key={r.id}>
                         <td className="font-mono">{r.invoice_number}</td>
-                        <td>{String(r.invoice_date).slice(0, 10)}</td>
+                        <td>{formatDateLocal(r.invoice_date)}</td>
                         <td>{r.customer?.name || r.supplier?.name}</td>
                         <td>{r.currency || base}</td>
                         <td className="tabular-nums">{r.total}</td>
