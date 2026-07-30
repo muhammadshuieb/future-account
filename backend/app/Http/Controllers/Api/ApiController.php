@@ -16,6 +16,30 @@ abstract class ApiController extends Controller
         }
     }
 
+    /**
+     * @param  list<string>  $permissions
+     */
+    protected function authorizeAnyPermission(array $permissions): void
+    {
+        $user = auth()->user();
+
+        if (! $user || $user->hasRole('admin')) {
+            if (! $user) {
+                abort(403, 'ليس لديك صلاحية.');
+            }
+
+            return;
+        }
+
+        foreach ($permissions as $permission) {
+            if ($user->can($permission)) {
+                return;
+            }
+        }
+
+        abort(403, 'ليس لديك صلاحية.');
+    }
+
     protected function ok(mixed $data, int $status = 200): JsonResponse
     {
         return response()->json(['data' => $data], $status);

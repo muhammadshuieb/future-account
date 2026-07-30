@@ -246,7 +246,8 @@
     "postCount": "ترحيل الفروقات",
     "trackBatch": "تتبع الدفعات",
     "trackSerial": "تتبع التسلسلي",
-    "warehouseBalance": "رصيد المخزن"
+    "warehouseBalance": "رصيد المخزن",
+    "openingQuantity": "كمية افتتاحية"
   },
   "reports": {
     "generalLedger": "دفتر الأستاذ العام",
@@ -285,9 +286,13 @@
     "company": "الشركة",
     "branchName": "اسم الفرع",
     "city": "المدينة",
+    "address": "العنوان",
     "mainBranch": "فرع رئيسي",
     "newCompany": "شركة جديدة",
     "newBranch": "فرع جديد",
+    "addBranch": "إضافة فرع",
+    "noBranches": "لا توجد فروع بعد",
+    "noBranchesHint": "أضف فرعاً لربطه بالفواتير والتقارير ولوحة التحكم.",
     "saved": "تم حفظ الشركة",
     "branchSaved": "تم حفظ الفرع"
   },

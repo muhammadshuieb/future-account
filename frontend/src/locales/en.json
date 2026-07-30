@@ -246,7 +246,8 @@
     "postCount": "Post Variances",
     "trackBatch": "Track Batches",
     "trackSerial": "Track Serials",
-    "warehouseBalance": "Warehouse balance"
+    "warehouseBalance": "Warehouse balance",
+    "openingQuantity": "Opening quantity"
   },
   "reports": {
     "generalLedger": "General Ledger",
@@ -285,9 +286,13 @@
     "company": "Company",
     "branchName": "Branch name",
     "city": "City",
+    "address": "Address",
     "mainBranch": "Main branch",
     "newCompany": "New company",
     "newBranch": "New branch",
+    "addBranch": "Add branch",
+    "noBranches": "No branches yet",
+    "noBranchesHint": "Add a branch to use it on invoices, reports, and the dashboard.",
     "saved": "Company saved",
     "branchSaved": "Branch saved"
   },

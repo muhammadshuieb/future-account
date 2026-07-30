@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import api from '@/lib/api'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, Tabs, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -28,11 +29,13 @@ type BranchRow = {
 }
 
 const emptyCo = { code: '', name: '', name_en: '', tax_number: '', currency: 'USD' }
-const emptyBr = { company_id: '', code: '', name: '', city: '', address: '', is_main: false }
+const emptyBr = { company_id: '', code: '', name: '', city: '', address: '', is_main: false, is_active: true }
 
 export default function CompaniesPage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<'companies' | 'branches'>('companies')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') === 'branches' ? 'branches' : 'companies'
+  const [tab, setTab] = useState<'companies' | 'branches'>(initialTab)
   const qc = useQueryClient()
   const msg = useFormMessage()
   const [modalOpen, setModalOpen] = useState(false)
@@ -40,6 +43,11 @@ export default function CompaniesPage() {
   const [coForm, setCoForm] = useState(emptyCo)
   const [brForm, setBrForm] = useState(emptyBr)
   const search = useListSearch()
+
+  useEffect(() => {
+    const next = searchParams.get('tab') === 'branches' ? 'branches' : 'companies'
+    setTab(next)
+  }, [searchParams])
 
   const companies = useQuery({
     queryKey: ['companies', tab === 'companies' ? search.debouncedQ : ''],
@@ -57,10 +65,22 @@ export default function CompaniesPage() {
     setEditingId(null)
   }
 
+  function setActiveTab(id: 'companies' | 'branches') {
+    setTab(id)
+    closeModal()
+    const next = new URLSearchParams(searchParams)
+    if (id === 'branches') next.set('tab', 'branches')
+    else next.delete('tab')
+    setSearchParams(next, { replace: true })
+  }
+
   function openCreate() {
     setEditingId(null)
     if (tab === 'companies') setCoForm(emptyCo)
-    else setBrForm(emptyBr)
+    else {
+      const firstCompanyId = String((companies.data || [])[0]?.id || '')
+      setBrForm({ ...emptyBr, company_id: firstCompanyId })
+    }
     msg.setError('')
     setModalOpen(true)
   }
@@ -86,6 +106,7 @@ export default function CompaniesPage() {
       city: b.city || '',
       address: b.address || '',
       is_main: !!b.is_main,
+      is_active: b.is_active !== false,
     })
     setModalOpen(true)
   }
@@ -109,7 +130,8 @@ export default function CompaniesPage() {
       const payload = {
         ...brForm,
         company_id: Number(brForm.company_id),
-        is_active: true,
+        is_active: !!brForm.is_active,
+        is_main: !!brForm.is_main,
       }
       if (editingId) return api.put(`/branches/${editingId}`, payload)
       return api.post('/branches', payload)
@@ -123,6 +145,9 @@ export default function CompaniesPage() {
     onError: msg.fromErr,
   })
 
+  const branchList = branches.data || []
+  const showBranchEmpty = tab === 'branches' && !branches.isLoading && !search.debouncedQ && branchList.length === 0
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -131,7 +156,9 @@ export default function CompaniesPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ListSearchInput value={search.q} onChange={search.setQ} />
-            <Button variant="primary" onClick={openCreate}>{t('common.add')}</Button>
+            <Button variant="primary" onClick={openCreate}>
+              {tab === 'branches' ? t('companies.addBranch') : t('common.add')}
+            </Button>
           </div>
         }
       />
@@ -141,17 +168,14 @@ export default function CompaniesPage() {
           { id: 'branches', label: t('companies.tabBranches') },
         ]}
         active={tab}
-        onChange={(id) => {
-          setTab(id as typeof tab)
-          closeModal()
-        }}
+        onChange={(id) => setActiveTab(id as typeof tab)}
       />
       <Msg message={msg.message} error={msg.error} />
 
       {search.debouncedQ && tab === 'companies' && !(companies.data || []).length ? (
         <EmptyState title={t('common.noSearchResults')} />
       ) : null}
-      {search.debouncedQ && tab === 'branches' && !(branches.data || []).length ? (
+      {search.debouncedQ && tab === 'branches' && !branchList.length ? (
         <EmptyState title={t('common.noSearchResults')} />
       ) : null}
 
@@ -189,7 +213,11 @@ export default function CompaniesPage() {
         </Panel>
       )}
 
-      {tab === 'branches' && (
+      {tab === 'branches' && showBranchEmpty ? (
+        <EmptyState title={t('companies.noBranches')} description={t('companies.noBranchesHint')} />
+      ) : null}
+
+      {tab === 'branches' && !showBranchEmpty && !(search.debouncedQ && !branchList.length) ? (
         <Panel>
           <div className="table-wrap">
             <table className="data-table">
@@ -199,10 +227,12 @@ export default function CompaniesPage() {
                   <th>{t('companies.branchName')}</th>
                   <th>{t('companies.company')}</th>
                   <th>{t('companies.city')}</th>
+                  <th>{t('companies.address')}</th>
+                  <th>{t('common.active')}</th>
                 </tr>
               </thead>
               <tbody>
-                {(branches.data || []).map((b) => (
+                {branchList.map((b) => (
                   <tr
                     key={b.id}
                     className="row-clickable"
@@ -215,13 +245,15 @@ export default function CompaniesPage() {
                     <td>{b.name}{b.is_main ? ' ★' : ''}</td>
                     <td>{b.company?.name || '—'}</td>
                     <td>{b.city || '—'}</td>
+                    <td>{b.address || '—'}</td>
+                    <td>{b.is_active !== false ? t('common.active') : t('common.inactive')}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </Panel>
-      )}
+      ) : null}
 
       <Modal
         open={modalOpen && tab === 'companies'}
@@ -261,7 +293,7 @@ export default function CompaniesPage() {
       <Modal
         open={modalOpen && tab === 'branches'}
         onClose={closeModal}
-        title={editingId ? t('common.edit') : t('companies.newBranch')}
+        title={editingId ? t('common.edit') : t('companies.addBranch')}
         footer={
           <>
             <Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button>
@@ -295,9 +327,16 @@ export default function CompaniesPage() {
           <Field label={t('companies.city')}>
             <input className={inputClass} value={brForm.city} onChange={(e) => setBrForm({ ...brForm, city: e.target.value })} />
           </Field>
+          <Field label={t('companies.address')}>
+            <input className={inputClass} value={brForm.address} onChange={(e) => setBrForm({ ...brForm, address: e.target.value })} />
+          </Field>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={brForm.is_main} onChange={(e) => setBrForm({ ...brForm, is_main: e.target.checked })} />
             {t('companies.mainBranch')}
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={brForm.is_active} onChange={(e) => setBrForm({ ...brForm, is_active: e.target.checked })} />
+            {t('common.active')}
           </label>
         </form>
       </Modal>

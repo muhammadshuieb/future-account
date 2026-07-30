@@ -6,14 +6,25 @@ use App\Models\Branch;
 use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class BranchController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $this->authorizePermission('settings.manage');
+        // Lookup for sales/dashboard/reports selectors; manage stays on settings.manage.
+        $this->authorizeAnyPermission([
+            'settings.manage',
+            'dashboard.view',
+            'sales.view',
+            'purchases.view',
+            'reports.view',
+            'warehouse.view',
+            'cash.view',
+        ]);
+
         $query = Branch::query()->with('company')->orderBy('code');
-        ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'city', 'address'], [
+        ListSearch::apply($query, $request, ['code', 'name', 'city', 'address'], [
             'company' => ['name', 'code'],
         ]);
 
@@ -25,7 +36,12 @@ class BranchController extends ApiController
         $this->authorizePermission('settings.manage');
         $data = $request->validate([
             'company_id' => ['required', 'exists:companies,id'],
-            'code' => ['required', 'string', 'max:32'],
+            'code' => [
+                'required',
+                'string',
+                'max:32',
+                Rule::unique('branches', 'code')->where(fn ($q) => $q->where('company_id', $request->integer('company_id'))),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string'],
@@ -39,15 +55,23 @@ class BranchController extends ApiController
     public function update(Request $request, Branch $branch): JsonResponse
     {
         $this->authorizePermission('settings.manage');
-        $branch->update($request->validate([
+        $data = $request->validate([
             'company_id' => ['required', 'exists:companies,id'],
-            'code' => ['required', 'string', 'max:32'],
+            'code' => [
+                'required',
+                'string',
+                'max:32',
+                Rule::unique('branches', 'code')
+                    ->where(fn ($q) => $q->where('company_id', $request->integer('company_id')))
+                    ->ignore($branch->id),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string'],
             'is_main' => ['boolean'],
             'is_active' => ['boolean'],
-        ]));
+        ]);
+        $branch->update($data);
 
         return $this->ok($branch->fresh('company'));
     }
