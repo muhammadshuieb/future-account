@@ -57,6 +57,8 @@ const emptyPr = {
   reorder_level: '0',
   track_batch: false,
   track_serial: false,
+  warehouse_id: '',
+  opening_quantity: '0',
 }
 const emptyMv = {
   type: 'in',
@@ -188,7 +190,11 @@ export default function WarehousePage() {
     setViewRow(null)
     setStockInfo(null)
     if (tab === 'warehouses') setWhForm(emptyWh)
-    if (tab === 'products') setPrForm(emptyPr)
+    if (tab === 'products') {
+      const whList = (warehouses.data || []) as { id: number }[]
+      const defaultWh = filterWarehouseId || (whList[0] ? String(whList[0].id) : '')
+      setPrForm({ ...emptyPr, warehouse_id: defaultWh })
+    }
     if (tab === 'categories') setCatForm(emptyCat)
     if (tab === 'units') setUnitForm(emptyUnit)
     if (tab === 'movements') setMvForm(emptyMv)
@@ -218,6 +224,8 @@ export default function WarehousePage() {
         reorder_level: String(found.reorder_level ?? 0),
         track_batch: !!found.track_batch,
         track_serial: !!found.track_serial,
+        warehouse_id: '',
+        opening_quantity: '0',
       })
       setTab('products')
       setModalOpen(true)
@@ -290,8 +298,10 @@ export default function WarehousePage() {
 
   const savePr = useMutation({
     mutationFn: () => {
-      const payload = {
-        ...prForm,
+      const payload: Record<string, unknown> = {
+        sku: prForm.sku,
+        barcode: prForm.barcode || null,
+        name: prForm.name,
         category_id: prForm.category_id || null,
         unit_id: prForm.unit_id || null,
         cost_price: Number(prForm.cost_price),
@@ -301,10 +311,20 @@ export default function WarehousePage() {
         track_serial: prForm.track_serial,
         is_active: true,
       }
+      if (!editingId) {
+        payload.warehouse_id = Number(prForm.warehouse_id)
+        payload.opening_quantity = Number(prForm.opening_quantity || 0)
+      }
       if (editingId) return api.put(`/products/${editingId}`, payload)
       return api.post('/products', payload)
     },
-    onSuccess: () => { msg.setMessage('تم حفظ الصنف'); closeModal(); void qc.invalidateQueries({ queryKey: ['products'] }) },
+    onSuccess: () => {
+      msg.setMessage('تم حفظ الصنف')
+      closeModal()
+      void qc.invalidateQueries({ queryKey: ['products'] })
+      void qc.invalidateQueries({ queryKey: ['stock-levels'] })
+      void qc.invalidateQueries({ queryKey: ['stock-movements'] })
+    },
     onError: msg.fromErr,
   })
 
@@ -523,6 +543,8 @@ export default function WarehousePage() {
                         reorder_level: String(p.reorder_level ?? 0),
                         track_batch: !!p.track_batch,
                         track_serial: !!p.track_serial,
+                        warehouse_id: '',
+                        opening_quantity: '0',
                       })
                       setModalOpen(true)
                     }}
@@ -758,6 +780,26 @@ export default function WarehousePage() {
           <Field label="SKU"><input className={inputClass} value={prForm.sku} onChange={(e) => setPrForm({ ...prForm, sku: e.target.value })} required /></Field>
           <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>
           <Field label="الاسم"><input className={inputClass} value={prForm.name} onChange={(e) => setPrForm({ ...prForm, name: e.target.value })} required /></Field>
+          {!editingId && (
+            <div className="form-grid-2">
+              <Field label="المخزن">
+                <select
+                  className={inputClass}
+                  value={prForm.warehouse_id}
+                  onChange={(e) => setPrForm({ ...prForm, warehouse_id: e.target.value })}
+                  required
+                >
+                  <option value="">—</option>
+                  {(warehouses.data || []).map((w: { id: number; name: string }) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="كمية افتتاحية">
+                <NumericInput value={prForm.opening_quantity} onChange={(v) => setPrForm((prev) => ({ ...prev, opening_quantity: v }))} />
+              </Field>
+            </div>
+          )}
           <Field label="فئة"><select className={inputClass} value={prForm.category_id} onChange={(e) => setPrForm({ ...prForm, category_id: e.target.value })}><option value="">—</option>{(categories.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
           <div className="form-grid-3">

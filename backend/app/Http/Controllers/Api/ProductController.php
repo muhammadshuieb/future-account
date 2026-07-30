@@ -19,6 +19,7 @@ use App\Services\InventoryService;
 use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProductController extends ApiController
@@ -65,7 +66,45 @@ class ProductController extends ApiController
     {
         $this->authorizePermission('warehouse.manage');
 
-        return $this->ok(Product::query()->create($this->validated($request))->load(['category', 'unit']), 201);
+        $data = $this->validated($request);
+        $stock = $request->validate([
+            'warehouse_id' => ['required', 'exists:warehouses,id'],
+            'opening_quantity' => ['nullable', 'numeric', 'min:0'],
+        ]);
+
+        $product = DB::transaction(function () use ($request, $data, $stock) {
+            $product = Product::query()->create($data);
+            $warehouseId = (int) $stock['warehouse_id'];
+            $openingQty = round((float) ($stock['opening_quantity'] ?? 0), 3);
+
+            if ($openingQty > 0) {
+                $this->inventory->adjustStock(
+                    $warehouseId,
+                    $product->id,
+                    $openingQty,
+                    'in',
+                    $request->user(),
+                    [
+                        'unit_cost' => $product->cost_price,
+                        'notes' => 'رصيد افتتاحي عند إنشاء الصنف',
+                    ]
+                );
+            } else {
+                // Register the product in the chosen warehouse with zero qty so it appears in stock views.
+                StockLevel::query()->firstOrCreate(
+                    [
+                        'warehouse_id' => $warehouseId,
+                        'product_id' => $product->id,
+                        'batch_no' => '',
+                    ],
+                    ['quantity' => 0]
+                );
+            }
+
+            return $product;
+        });
+
+        return $this->ok($product->load(['category', 'unit', 'stockLevels.warehouse']), 201);
     }
 
     public function show(Product $product): JsonResponse
