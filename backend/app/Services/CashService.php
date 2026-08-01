@@ -268,17 +268,11 @@ class CashService
 
     /**
      * Balance in the bank's own currency (mirrors cashBoxCurrencyBalance).
-     * Base-currency banks with a dedicated GL account use ledger balance.
-     * Non-base banks are tracked from their own posted bank movements.
+     * Native movements only — GL base_amount is for accounting, not a transfer.
      */
     public function bankCurrencyBalance(Bank $bank): float
     {
         $currency = strtoupper((string) ($bank->currency ?: $this->currencies->baseCurrency()));
-        $base = $this->currencies->baseCurrency();
-
-        if ($currency === $base && $bank->account_id) {
-            return $this->bookBalance($bank);
-        }
 
         $receiptsIn = Receipt::query()
             ->where('bank_id', $bank->id)
@@ -337,8 +331,8 @@ class CashService
      *   bank: float,
      *   liquidity: float,
      *   by_currency: list<array{currency: string, cash: float, bank: float, liquidity: float}>|null,
-     *   boxes: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, balance: float}>,
-     *   banks: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, balance: float}>
+     *   boxes: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, is_shared: bool, balance: float}>,
+     *   banks: list<array{id: int, code: string, name: string, currency: string, branch_id: int|null, is_shared: bool, balance: float}>
      * }
      */
     public function liquiditySummary(?int $branchId = null, ?string $currencyFilter = null): array
@@ -349,42 +343,56 @@ class CashService
         $base = $this->currencies->baseCurrency();
         $asOf = now()->toDateString();
 
+        // Unassigned (null branch_id) cash/banks are company-wide: include them for every
+        // branch filter so "all branches" vs a single branch stay consistent.
         $boxes = CashBox::query()
             ->where('is_active', true)
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($branchId !== null, function ($q) use ($branchId) {
+                $q->where(function ($inner) use ($branchId) {
+                    $inner->where('branch_id', $branchId)->orWhereNull('branch_id');
+                });
+            })
             ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
             ->orderBy('code')
             ->get();
 
         $banks = Bank::query()
             ->where('is_active', true)
-            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($branchId !== null, function ($q) use ($branchId) {
+                $q->where(function ($inner) use ($branchId) {
+                    $inner->where('branch_id', $branchId)->orWhereNull('branch_id');
+                });
+            })
             ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
             ->orderBy('code')
             ->get();
 
         $boxRows = $boxes->map(function (CashBox $box) {
             $currency = strtoupper((string) ($box->currency ?: $this->currencies->baseCurrency()));
+            $shared = $box->branch_id === null;
 
             return [
                 'id' => (int) $box->id,
                 'code' => (string) $box->code,
                 'name' => (string) $box->name,
                 'currency' => $currency,
-                'branch_id' => $box->branch_id ? (int) $box->branch_id : null,
+                'branch_id' => $shared ? null : (int) $box->branch_id,
+                'is_shared' => $shared,
                 'balance' => $this->cashBoxCurrencyBalance($box),
             ];
         })->values()->all();
 
         $bankRows = $banks->map(function (Bank $bank) {
             $currency = strtoupper((string) ($bank->currency ?: $this->currencies->baseCurrency()));
+            $shared = $bank->branch_id === null;
 
             return [
                 'id' => (int) $bank->id,
                 'code' => (string) $bank->code,
                 'name' => (string) $bank->name,
                 'currency' => $currency,
-                'branch_id' => $bank->branch_id ? (int) $bank->branch_id : null,
+                'branch_id' => $shared ? null : (int) $bank->branch_id,
+                'is_shared' => $shared,
                 'balance' => $this->bankCurrencyBalance($bank),
             ];
         })->values()->all();
@@ -477,9 +485,25 @@ class CashService
     /**
      * Resolve the main/default cash box:
      * explicit id → setting default_cash_box_id → is_default → CASH-01 → first active.
+     * When $currency is set, only boxes in that currency are considered (avoids SYP/TRY
+     * landing in the USD box as base-currency cents).
      */
-    public function resolveDefaultCashBoxId(?int $cashBoxId = null): ?int
+    public function resolveDefaultCashBoxId(?int $cashBoxId = null, ?string $currency = null): ?int
     {
+        $currency = $currency !== null && $currency !== ''
+            ? strtoupper(trim($currency))
+            : null;
+        $base = $this->currencies->baseCurrency();
+
+        $scoped = function ($query) use ($currency, $base) {
+            return $query
+                ->where('is_active', true)
+                ->when(
+                    $currency !== null,
+                    fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currency])
+                );
+        };
+
         if ($cashBoxId) {
             $exists = CashBox::query()->whereKey($cashBoxId)->where('is_active', true)->exists();
 
@@ -489,24 +513,78 @@ class CashService
         $setting = Setting::getValue('default_cash_box_id');
         if ($setting) {
             $id = (int) $setting;
-            if ($id > 0 && CashBox::query()->whereKey($id)->where('is_active', true)->exists()) {
+            if ($id > 0 && $scoped(CashBox::query()->whereKey($id))->exists()) {
                 return $id;
             }
         }
 
-        $flagged = CashBox::query()->where('is_default', true)->where('is_active', true)->value('id');
+        $flagged = $scoped(CashBox::query()->where('is_default', true))->value('id');
         if ($flagged) {
             return (int) $flagged;
         }
 
-        $cash01 = CashBox::query()->where('code', 'CASH-01')->where('is_active', true)->value('id');
+        $cash01 = $scoped(CashBox::query()->where('code', 'CASH-01'))->value('id');
         if ($cash01) {
             return (int) $cash01;
         }
 
-        $first = CashBox::query()->where('is_active', true)->orderBy('id')->value('id');
+        $first = $scoped(CashBox::query())->orderBy('id')->value('id');
 
         return $first ? (int) $first : null;
+    }
+
+    /**
+     * Cash box currency must match the document currency.
+     * Cross-currency cash belongs on CurrencyExchange, not on a mismatched receipt/invoice.
+     */
+    public function assertCashBoxCurrency(?int $cashBoxId, ?string $documentCurrency): void
+    {
+        if (! $cashBoxId) {
+            return;
+        }
+
+        $box = CashBox::query()->find($cashBoxId);
+        if (! $box) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => ['الصندوق المحدد غير موجود.'],
+            ]);
+        }
+
+        $boxCurrency = strtoupper((string) ($box->currency ?: $this->currencies->baseCurrency()));
+        $docCurrency = strtoupper((string) ($documentCurrency ?: $this->currencies->baseCurrency()));
+
+        if ($boxCurrency !== $docCurrency) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => [
+                    "عملة الصندوق ({$boxCurrency}) لا تطابق عملة المستند ({$docCurrency}). اختر صندوق {$docCurrency} أو استخدم صرف العملات.",
+                ],
+            ]);
+        }
+    }
+
+    public function assertBankCurrency(?int $bankId, ?string $documentCurrency): void
+    {
+        if (! $bankId) {
+            return;
+        }
+
+        $bank = Bank::query()->find($bankId);
+        if (! $bank) {
+            throw ValidationException::withMessages([
+                'bank_id' => ['الحساب البنكي المحدد غير موجود.'],
+            ]);
+        }
+
+        $bankCurrency = strtoupper((string) ($bank->currency ?: $this->currencies->baseCurrency()));
+        $docCurrency = strtoupper((string) ($documentCurrency ?: $this->currencies->baseCurrency()));
+
+        if ($bankCurrency !== $docCurrency) {
+            throw ValidationException::withMessages([
+                'bank_id' => [
+                    "عملة الحساب البنكي ({$bankCurrency}) لا تطابق عملة المستند ({$docCurrency}).",
+                ],
+            ]);
+        }
     }
 
     public function cashBoxBalance(CashBox $box): float
@@ -522,19 +600,16 @@ class CashService
     }
 
     /**
-     * Balance in the cash box's own currency.
-     * Base-currency boxes with a dedicated GL account use ledger balance.
-     * Non-base boxes are tracked from their own posted box movements.
+     * Balance in the cash box's own currency (native units only).
+     *
+     * Always derived from same-currency box movements — never from a shared GL
+     * account. GL may store base_amount for accounting, but that must not move
+     * value into another currency's cash box. Cross-currency moves belong only
+     * on CurrencyExchange (صرف عملة).
      */
     public function cashBoxCurrencyBalance(CashBox $box): float
     {
-        $currency = strtoupper((string) ($box->currency ?: 'USD'));
-        $base = $this->currencies->baseCurrency();
-
-        if ($currency === $base && $box->account_id) {
-            // Ledger already reflects posted movements in the system base currency.
-            return $this->cashBoxBalance($box);
-        }
+        $currency = strtoupper((string) ($box->currency ?: $this->currencies->baseCurrency()));
 
         $receiptsIn = Receipt::query()
             ->where('cash_box_id', $box->id)
@@ -605,19 +680,11 @@ class CashService
             return round($amount, 2);
         }
 
-        if ($baseAmount !== null && $baseAmount > 0) {
-            try {
-                return $this->currencies->convert($baseAmount, $this->currencies->baseCurrency(), $boxCurrency, $asOf);
-            } catch (ValidationException) {
-                return round($amount, 2);
-            }
-        }
-
-        try {
-            return $this->currencies->convert($amount, $documentCurrency, $boxCurrency, $asOf);
-        } catch (ValidationException) {
-            return round($amount, 2);
-        }
+        // Never convert foreign documents into this box's native balance.
+        // That produced "USD cents" on the dashboard when SYP/TRY receipts
+        // were wrongly attached to a USD box (base_amount ≈ amount / rate).
+        // Cross-currency moves are tracked via CurrencyExchange only.
+        return 0.0;
     }
 
     protected function ledgerBalance(int $accountId, float $opening): float

@@ -312,10 +312,17 @@
     "currency": "العملة",
     "allBranches": "كل الفروع",
     "allCurrencies": "كل العملات",
-    "receivables": "الذمم المدينة",
-    "payables": "الذمم الدائنة",
+    "receivables": "الذمم المدينة (عليه)",
+    "payables": "الذمم الدائنة (علينا)",
     "receivablesHint": "عليه",
-    "payablesHint": "علينا"
+    "payablesHint": "علينا",
+    "sharedCashBox": "مشترك لكل الفروع",
+    "nativeBalances": "أرصدة أصلية حسب العملة",
+    "baseEquivalentHint": "≈ {{amount}} {{currency}} مكافئ بسعر الصرف — ليس رصيد {{currency}} فعلي في الصندوق",
+    "cashBoxesTitle": "الصناديق",
+    "banksTitle": "البنوك",
+    "liquidityTitle": "السيولة",
+    "cashBanksSubtitle": "أرصدة فعلية من وحدة الصناديق والبنوك — منفصلة تماماً عن إيرادات الفترة"
   },
   "roleNames": {
     "admin": "مدير النظام",

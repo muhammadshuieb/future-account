@@ -312,10 +312,17 @@
     "currency": "Currency",
     "allBranches": "All branches",
     "allCurrencies": "All currencies",
-    "receivables": "Accounts receivable",
-    "payables": "Accounts payable",
+    "receivables": "Accounts receivable (owed to us)",
+    "payables": "Accounts payable (we owe)",
     "receivablesHint": "Owed to us",
-    "payablesHint": "We owe"
+    "payablesHint": "We owe",
+    "sharedCashBox": "Shared across branches",
+    "nativeBalances": "Native balances by currency",
+    "baseEquivalentHint": "≈ {{amount}} {{currency}} FX equivalent — not actual {{currency}} cash in a box",
+    "cashBoxesTitle": "Cash boxes",
+    "banksTitle": "Banks",
+    "liquidityTitle": "Liquidity",
+    "cashBanksSubtitle": "Live balances from Cash & Banks — separate from period revenue"
   },
   "roleNames": {
     "admin": "System Admin",

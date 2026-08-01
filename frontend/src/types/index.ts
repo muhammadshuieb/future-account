@@ -80,8 +80,24 @@ export type DashboardSummary = {
   bank?: number
   liquidity?: number
   liquidity_by_currency?: { currency: string; cash: number; bank: number; liquidity: number }[] | null
-  cash_boxes?: { id: number; code: string; name: string; currency: string; branch_id?: number | null; balance: number }[]
-  banks?: { id: number; code: string; name: string; currency: string; branch_id?: number | null; balance: number }[]
+  cash_boxes?: {
+    id: number
+    code: string
+    name: string
+    currency: string
+    branch_id?: number | null
+    is_shared?: boolean
+    balance: number
+  }[]
+  banks?: {
+    id: number
+    code: string
+    name: string
+    currency: string
+    branch_id?: number | null
+    is_shared?: boolean
+    balance: number
+  }[]
   base_totals?: DashboardCurrencyStats | null
   by_currency?: DashboardCurrencyStats[] | null
   daily_sales?: { date: string; total: number; count: number }[]

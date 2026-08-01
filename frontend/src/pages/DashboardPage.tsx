@@ -67,6 +67,22 @@ type LiquidityAccount = {
   name: string
   currency: string
   balance: number
+  is_shared?: boolean
+}
+
+function formatNativeLiquidity(
+  rows: { currency: string; cash?: number; bank?: number; liquidity?: number }[],
+  field: 'cash' | 'bank' | 'liquidity',
+): string {
+  const parts = rows
+    .map((row) => {
+      const amount = Number(row[field] ?? 0)
+      if (!amount) return null
+      return formatMoney(amount, row.currency)
+    })
+    .filter(Boolean) as string[]
+
+  return parts.length ? parts.join(' · ') : formatMoney(0, rows[0]?.currency || 'USD')
 }
 
 function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
@@ -140,6 +156,7 @@ function CashBanksSection({
   displayCurrency,
   baseCurrency,
   showBaseEquivalent,
+  nativeByCurrency,
 }: {
   boxes: LiquidityAccount[]
   banks: LiquidityAccount[]
@@ -149,15 +166,31 @@ function CashBanksSection({
   displayCurrency: string
   baseCurrency: string
   showBaseEquivalent: boolean
+  nativeByCurrency: { currency: string; cash: number; bank: number; liquidity: number }[]
 }) {
+  const { t } = useTranslation()
+  const hasNativeBreakdown = showBaseEquivalent && nativeByCurrency.length > 0
+  const cashValue = hasNativeBreakdown
+    ? formatNativeLiquidity(nativeByCurrency, 'cash')
+    : formatMoney(cashTotal, displayCurrency)
+  const bankValue = hasNativeBreakdown
+    ? formatNativeLiquidity(nativeByCurrency, 'bank')
+    : formatMoney(bankTotal, displayCurrency)
+  const liquidityValue = hasNativeBreakdown
+    ? formatNativeLiquidity(nativeByCurrency, 'liquidity')
+    : formatMoney(liquidityTotal, displayCurrency)
+  const equivalentHint = (amount: number) =>
+    t('dashboard.baseEquivalentHint', {
+      amount: amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      currency: baseCurrency,
+    })
+
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-black/70">الصناديق والبنوك</h2>
-          <p className="text-xs text-black/45">
-            أرصدة فعلية من وحدة الصناديق والبنوك — منفصلة تماماً عن إيرادات الفترة
-          </p>
+          <h2 className="text-sm font-semibold text-black/70">{t('nav.cash')}</h2>
+          <p className="text-xs text-black/45">{t('dashboard.cashBanksSubtitle')}</p>
         </div>
         <Link to="/cash-banks" className="text-xs font-medium text-teal hover:underline">
           فتح الصناديق والبنوك
@@ -166,36 +199,35 @@ function CashBanksSection({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile
-          label="الصناديق"
-          value={formatMoney(cashTotal, displayCurrency)}
-          hint={
-            showBaseEquivalent
-              ? `مكافئ ${baseCurrency} — ليس إيراداً`
-              : 'رصيد الصناديق فقط — ليس إيراداً'
-          }
+          label={t('dashboard.cashBoxesTitle')}
+          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          value={cashValue}
+          hint={hasNativeBreakdown ? equivalentHint(cashTotal) : 'رصيد الصناديق فقط — ليس إيراداً'}
           tone="teal"
         />
         <StatTile
-          label="البنوك"
-          value={formatMoney(bankTotal, displayCurrency)}
-          hint={
-            showBaseEquivalent
-              ? `مكافئ ${baseCurrency} — ليس إيراداً`
-              : 'رصيد البنوك فقط — ليس إيراداً'
-          }
+          label={t('dashboard.banksTitle')}
+          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          value={bankValue}
+          hint={hasNativeBreakdown ? equivalentHint(bankTotal) : 'رصيد البنوك فقط — ليس إيراداً'}
           tone="success"
         />
         <StatTile
-          label="السيولة"
-          value={formatMoney(liquidityTotal, displayCurrency)}
-          hint="صناديق + بنوك (بدون إيرادات أو ذمم)"
+          label={t('dashboard.liquidityTitle')}
+          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          value={liquidityValue}
+          hint={
+            hasNativeBreakdown
+              ? equivalentHint(liquidityTotal)
+              : 'صناديق + بنوك (بدون إيرادات أو ذمم)'
+          }
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <div className="border-b border-[var(--color-line)] px-5 py-3">
-            <h3 className="font-semibold">الصناديق</h3>
+            <h3 className="font-semibold">{t('dashboard.cashBoxesTitle')}</h3>
           </div>
           {boxes.length === 0 ? (
             <EmptyState title="لا توجد صناديق نشطة" description="أضف صندوقاً من صفحة الصناديق والبنوك." />
@@ -207,6 +239,7 @@ function CashBanksSection({
                     <p className="truncate font-medium">{box.name}</p>
                     <p className="text-xs text-black/45">
                       {box.code} · {box.currency}
+                      {box.is_shared ? ` · ${t('dashboard.sharedCashBox')}` : ''}
                     </p>
                   </div>
                   <p className="shrink-0 tabular-nums font-semibold">
@@ -220,7 +253,7 @@ function CashBanksSection({
 
         <Panel>
           <div className="border-b border-[var(--color-line)] px-5 py-3">
-            <h3 className="font-semibold">البنوك</h3>
+            <h3 className="font-semibold">{t('dashboard.banksTitle')}</h3>
           </div>
           {banks.length === 0 ? (
             <EmptyState title="لا توجد بنوك نشطة" description="أضف حساباً بنكياً من صفحة الصناديق والبنوك." />
@@ -232,6 +265,7 @@ function CashBanksSection({
                     <p className="truncate font-medium">{bank.name}</p>
                     <p className="text-xs text-black/45">
                       {bank.code} · {bank.currency}
+                      {bank.is_shared ? ` · ${t('dashboard.sharedCashBox')}` : ''}
                     </p>
                   </div>
                   <p className="shrink-0 tabular-nums font-semibold">
@@ -347,6 +381,14 @@ export default function DashboardPage() {
     ? (base.liquidity ?? data.liquidity ?? 0)
     : (data.liquidity ?? 0)
   const liquidityCurrency = showAllCurrencies ? baseCurrency : currency
+  const nativeLiquidity =
+    data.liquidity_by_currency ||
+    byCurrency.map((row) => ({
+      currency: row.currency,
+      cash: row.cash ?? 0,
+      bank: row.bank ?? 0,
+      liquidity: row.liquidity ?? 0,
+    }))
 
   const currencyHint = showAllCurrencies
     ? `عرض الإحصائيات حسب كل عملة مع إجمالي مكافئ بالعملة الأساسية (${baseCurrency})`
@@ -425,6 +467,7 @@ export default function DashboardPage() {
         displayCurrency={liquidityCurrency}
         baseCurrency={baseCurrency}
         showBaseEquivalent={showAllCurrencies}
+        nativeByCurrency={nativeLiquidity}
       />
 
       {showAllCurrencies ? (
