@@ -199,22 +199,31 @@ function CashBanksSection({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <StatTile
-          label={t('dashboard.cashBoxesTitle')}
-          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          label={
+            hasNativeBreakdown
+              ? `${t('dashboard.cashBoxesTitle')} — ${t('dashboard.nativeBalances')}`
+              : t('dashboard.cashBoxesTitle')
+          }
           value={cashValue}
           hint={hasNativeBreakdown ? equivalentHint(cashTotal) : 'رصيد الصناديق فقط — ليس إيراداً'}
           tone="teal"
         />
         <StatTile
-          label={t('dashboard.banksTitle')}
-          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          label={
+            hasNativeBreakdown
+              ? `${t('dashboard.banksTitle')} — ${t('dashboard.nativeBalances')}`
+              : t('dashboard.banksTitle')
+          }
           value={bankValue}
           hint={hasNativeBreakdown ? equivalentHint(bankTotal) : 'رصيد البنوك فقط — ليس إيراداً'}
           tone="success"
         />
         <StatTile
-          label={t('dashboard.liquidityTitle')}
-          subtitle={hasNativeBreakdown ? t('dashboard.nativeBalances') : undefined}
+          label={
+            hasNativeBreakdown
+              ? `${t('dashboard.liquidityTitle')} — ${t('dashboard.nativeBalances')}`
+              : t('dashboard.liquidityTitle')
+          }
           value={liquidityValue}
           hint={
             hasNativeBreakdown
