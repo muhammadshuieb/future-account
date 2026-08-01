@@ -57,5 +57,25 @@ class CurrencyConversionTest extends TestCase
         $this->assertEqualsWithDelta(1.0, $svc->getRate('USD', 'USD'), 0.0000001);
         $this->assertEqualsWithDelta(1 / 15000, $svc->getRate('SYP', 'USD'), 0.0000001);
         $this->assertEqualsWithDelta(450 / 15000, $svc->getRate('TRY', 'USD'), 0.0000001);
+        $this->assertEqualsWithDelta(1 / 6.75, $svc->getRate('CNY', 'USD'), 0.0000001);
+    }
+
+    public function test_cny_is_seeded_and_listed(): void
+    {
+        $svc = app(CurrencyService::class);
+        $this->assertContains('CNY', $svc->supportedCodes());
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('admin');
+        Sanctum::actingAs($user);
+
+        $res = $this->getJson('/api/currencies');
+        $res->assertOk();
+        $codes = collect($res->json('data.currencies'))->pluck('code')->all();
+        $this->assertContains('CNY', $codes);
+
+        $cny = collect($res->json('data.currencies'))->firstWhere('code', 'CNY');
+        $this->assertSame('اليوان الصيني', $cny['name']);
+        $this->assertEqualsWithDelta(1 / 6.75, (float) $cny['rate_to_base'], 0.0000001);
     }
 }

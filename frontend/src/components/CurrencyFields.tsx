@@ -56,6 +56,7 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
           { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
           { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
           { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
+          { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true, rate_to_base: 0 },
         ]
   const rate = Number(state.exchange_rate) || 0
   const isBase = state.currency === baseCurrency
@@ -124,6 +125,7 @@ export function PaymentCurrencyFields<T extends PaymentFxState>({
           { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
           { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
           { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
+          { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true, rate_to_base: 0 },
         ]
   const isBase = state.currency === baseCurrency
   const rate = Number(state.exchange_rate) || 0

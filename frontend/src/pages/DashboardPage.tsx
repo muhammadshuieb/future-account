@@ -70,6 +70,8 @@ type LiquidityAccount = {
 }
 
 function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
+  const { t } = useTranslation()
+
   if (!rows.length) {
     return (
       <Panel>
@@ -97,8 +99,8 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
               <th className="px-4 py-2.5 font-medium">إيرادات</th>
               <th className="px-4 py-2.5 font-medium">مصروفات</th>
               <th className="px-4 py-2.5 font-medium">صافي</th>
-              <th className="px-4 py-2.5 font-medium">ذمم مدينة</th>
-              <th className="px-4 py-2.5 font-medium">ذمم دائنة</th>
+              <th className="px-4 py-2.5 font-medium">{t('dashboard.receivables')}</th>
+              <th className="px-4 py-2.5 font-medium">{t('dashboard.payables')}</th>
               <th className="px-4 py-2.5 font-medium">صناديق</th>
               <th className="px-4 py-2.5 font-medium">بنوك</th>
               <th className="px-4 py-2.5 font-medium">سيولة</th>
@@ -272,6 +274,7 @@ export default function DashboardPage() {
         { code: 'USD', name: 'دولار أمريكي' },
         { code: 'SYP', name: 'ليرة سورية' },
         { code: 'TRY', name: 'ليرة تركية' },
+        { code: 'CNY', name: 'اليوان الصيني' },
       ]
 
   const { data, isLoading, error, isFetching } = useQuery({
@@ -317,8 +320,8 @@ export default function DashboardPage() {
   ]
 
   const secondary = [
-    { label: 'ذمم مدينة', value: formatMoney(data.receivables ?? 0, currency), hint: 'مستحق من العملاء' },
-    { label: 'ذمم دائنة', value: formatMoney(data.payables ?? 0, currency), hint: 'مستحق للموردين' },
+    { label: t('dashboard.receivables'), value: formatMoney(data.receivables ?? 0, currency) },
+    { label: t('dashboard.payables'), value: formatMoney(data.payables ?? 0, currency) },
     { label: 'مبيعات الشهر', value: formatMoney(data.month_sales ?? 0, currency) },
     { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, currency) },
   ]
@@ -330,8 +333,8 @@ export default function DashboardPage() {
   ]
 
   const baseSecondary = [
-    { label: 'ذمم مدينة', value: formatMoney(base.receivables, baseCurrency), hint: 'مستحق من العملاء' },
-    { label: 'ذمم دائنة', value: formatMoney(base.payables, baseCurrency), hint: 'مستحق للموردين' },
+    { label: t('dashboard.receivables'), value: formatMoney(base.receivables, baseCurrency) },
+    { label: t('dashboard.payables'), value: formatMoney(base.payables, baseCurrency) },
     { label: 'مبيعات الشهر', value: formatMoney(base.month_sales, baseCurrency) },
     { label: 'مشتريات الشهر', value: formatMoney(base.month_purchases, baseCurrency) },
   ]
@@ -442,7 +445,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {baseSecondary.map((c) => (
-                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
+                <StatTile key={c.label} label={c.label} value={c.value} />
               ))}
             </div>
           </section>
@@ -461,7 +464,7 @@ export default function DashboardPage() {
             </section>
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {secondary.map((c) => (
-                <StatTile key={c.label} label={c.label} value={c.value} hint={c.hint} />
+                <StatTile key={c.label} label={c.label} value={c.value} />
               ))}
             </section>
           </section>

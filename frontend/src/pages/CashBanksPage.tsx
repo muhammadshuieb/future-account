@@ -196,6 +196,7 @@ export default function CashBanksPage() {
       { id: 1, code: 'USD', name: 'الدولار الأمريكي', is_active: true, rate_to_base: 1 },
       { id: 2, code: 'SYP', name: 'الليرة السورية', is_active: true, rate_to_base: 0 },
       { id: 3, code: 'TRY', name: 'الليرة التركية', is_active: true, rate_to_base: 0 },
+      { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true, rate_to_base: 0 },
     ] as CurrencyOption[]
   }, [currencyList])
 
@@ -677,6 +678,7 @@ export default function CashBanksPage() {
                 { id: 1, code: 'USD', name: 'دولار', is_active: true },
                 { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
                 { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+                { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
               ]).map((c) => (
                 <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
               ))}
@@ -707,6 +709,7 @@ export default function CashBanksPage() {
                 { id: 1, code: 'USD', name: 'دولار', is_active: true },
                 { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
                 { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+                { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
               ]).map((c) => (
                 <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
               ))}

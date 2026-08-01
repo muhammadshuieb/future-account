@@ -468,6 +468,7 @@ export default function SettingsPage() {
                       { code: 'USD', name: 'الدولار الأمريكي' },
                       { code: 'SYP', name: 'الليرة السورية' },
                       { code: 'TRY', name: 'الليرة التركية' },
+                      { code: 'CNY', name: 'اليوان الصيني' },
                     ]).map((c) => (
                       <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
                     ))}
@@ -559,12 +560,16 @@ export default function SettingsPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t('settings.from')}>
                 <select className={inputClass} value={rateForm.from_currency} onChange={(e) => setRateForm({ ...rateForm, from_currency: e.target.value })}>
-                  {['SYP', 'TRY', 'USD'].map((c) => <option key={c} value={c}>{c}</option>)}
+                  {(currencies.data?.currencies || [{ code: 'USD' }, { code: 'SYP' }, { code: 'TRY' }, { code: 'CNY' }]).map((c) => (
+                    <option key={c.code} value={c.code}>{c.code}</option>
+                  ))}
                 </select>
               </Field>
               <Field label={t('settings.to')}>
                 <select className={inputClass} value={rateForm.to_currency} onChange={(e) => setRateForm({ ...rateForm, to_currency: e.target.value })}>
-                  {['SYP', 'TRY', 'USD'].map((c) => <option key={c} value={c}>{c}</option>)}
+                  {(currencies.data?.currencies || [{ code: 'USD' }, { code: 'SYP' }, { code: 'TRY' }, { code: 'CNY' }]).map((c) => (
+                    <option key={c.code} value={c.code}>{c.code}</option>
+                  ))}
                 </select>
               </Field>
               <Field label={t('settings.rate')}>
