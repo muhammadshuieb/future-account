@@ -198,6 +198,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('supplier-payments/{supplierPayment}', [SupplierPaymentController::class, 'destroy']);
 
     // Phase 4 — Cash & Reports
+    Route::get('cash-boxes/suggest-account', [CashBoxController::class, 'suggestAccount']);
     Route::apiResource('cash-boxes', CashBoxController::class)->except(['show']);
     Route::apiResource('banks', BankController::class)->except(['show']);
     Route::get('banks/{bank}/book-balance', [BankController::class, 'bookBalance']);

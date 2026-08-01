@@ -160,12 +160,13 @@ class ErpDemoSeeder extends Seeder
             ]
         );
 
+        $sypCashAcc = Account::query()->where('code', '1105')->value('id') ?: $cashAcc;
         CashBox::query()->updateOrCreate(
             ['code' => 'CASH-01'],
             [
                 'name' => 'الصندوق الرئيسي',
                 'branch_id' => $branch->id,
-                'account_id' => $cashAcc,
+                'account_id' => $sypCashAcc,
                 'opening_balance' => 10000,
                 'currency' => 'SYP',
                 'is_active' => true,
@@ -175,13 +176,12 @@ class ErpDemoSeeder extends Seeder
 
         $mainCashId = CashBox::query()->where('code', 'CASH-01')->value('id');
 
-        $fxCashAcc = Account::query()->where('code', '1105')->value('id');
         CashBox::query()->updateOrCreate(
             ['code' => 'CASH-USD'],
             [
                 'name' => 'صندوق الدولار',
                 'branch_id' => $branch->id,
-                'account_id' => $fxCashAcc,
+                'account_id' => $cashAcc,
                 'opening_balance' => 0,
                 'currency' => 'USD',
                 'is_active' => true,

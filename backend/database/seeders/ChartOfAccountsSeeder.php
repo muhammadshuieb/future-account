@@ -12,12 +12,15 @@ class ChartOfAccountsSeeder extends Seeder
         $tree = [
             ['code' => '1', 'name' => 'الأصول', 'name_en' => 'Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
                 ['code' => '11', 'name' => 'الأصول المتداولة', 'name_en' => 'Current Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
-                    ['code' => '1101', 'name' => 'الصندوق', 'name_en' => 'Cash on Hand', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1101', 'name' => 'صندوق نقدية دولار', 'name_en' => 'Cash USD', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1102', 'name' => 'البنك', 'name_en' => 'Bank', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1103', 'name' => 'العملاء', 'name_en' => 'Accounts Receivable', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1104', 'name' => 'المخزون', 'name_en' => 'Inventory', 'type' => 'asset', 'nature' => 'debit'],
-                    ['code' => '1105', 'name' => 'صندوق العملات الأجنبية', 'name_en' => 'Foreign Currency Cash', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1105', 'name' => 'صندوق نقدية ليرة سورية', 'name_en' => 'Cash SYP', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1106', 'name' => 'ضريبة مشتريات (مدخلات)', 'name_en' => 'VAT Input', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1107', 'name' => 'صندوق نقدية ليرة تركية', 'name_en' => 'Cash TRY', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1108', 'name' => 'صندوق نقدية يوان صيني', 'name_en' => 'Cash CNY', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1109', 'name' => 'صندوق نقدية يورو', 'name_en' => 'Cash EUR', 'type' => 'asset', 'nature' => 'debit'],
                 ]],
                 ['code' => '12', 'name' => 'الأصول الثابتة', 'name_en' => 'Fixed Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
                     ['code' => '1201', 'name' => 'الأثاث والمعدات', 'name_en' => 'Furniture & Equipment', 'type' => 'asset', 'nature' => 'debit'],

@@ -107,24 +107,26 @@ Artisan::command('syna:backup', function () {
     return 0;
 })->purpose('Create scheduled Syna Co database backup');
 
-Artisan::command('syna:check-backup-health', function () {
-    $distribution = app(BackupDistributionService::class);
-    $notify = app(AppNotificationService::class);
+Artisan::command('syna:backfill-cash-box-gl {--dry-run : Preview links without saving}', function () {
+    $gl = app(\App\Services\CashBoxGlService::class);
+    $dry = (bool) $this->option('dry-run');
+    $report = $gl->backfillAll(dryRun: $dry);
 
-    if ($distribution->googleDriveConfigured()) {
-        $this->info('Google Drive is configured.');
-
-        return 0;
-    }
-
-    $notify->notifyAdminsOnceDaily(
-        'backup_drive_missing',
-        'Google Drive غير مربوط',
-        'تحذير يومي: لم يتم ربط Google Drive للنسخ الاحتياطي. اربطه من الإعدادات ← النسخ الاحتياطي (أو عبر متغيرات البيئة كاحتياطي).',
-        ['google_drive' => false],
+    $this->info($dry ? 'Dry-run: cash box ↔ GL account links' : 'Applied: cash box ↔ GL account links');
+    $this->table(
+        ['id', 'code', 'currency', 'account_id', 'account_code', 'action'],
+        collect($report)->map(fn (array $row) => [
+            $row['id'],
+            $row['code'],
+            $row['currency'],
+            $row['account_id'],
+            $row['account_code'],
+            $row['action'],
+        ])->all()
     );
 
-    $this->warn('Google Drive is not configured — admin notified.');
+    $linked = collect($report)->whereIn('action', ['link', 'relink'])->count();
+    $this->comment("Boxes needing change: {$linked} / ".count($report));
 
     return 0;
-})->purpose('Warn admins when Google Drive backup is disconnected');
+})->purpose('Link each cash box to an independent GL account for currency exchange');

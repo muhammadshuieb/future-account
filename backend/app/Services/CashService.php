@@ -22,6 +22,7 @@ class CashService
         protected JournalEntryService $journals,
         protected AuditLogger $audit,
         protected CurrencyService $currencies,
+        protected CashBoxGlService $cashBoxGl,
     ) {}
 
     public function createTransfer(array $data, User $user): CashTransfer
@@ -190,14 +191,9 @@ class CashService
                 $asOf
             );
 
-            $sourceAccount = $this->resolveAccount('cash_box', $source->id);
-            $targetAccount = $this->resolveAccount('cash_box', $target->id);
-
-            if ($sourceAccount->id === $targetAccount->id) {
-                throw ValidationException::withMessages([
-                    'target_cash_box_id' => ['يجب ربط كل صندوق عملة بحساب محاسبي مستقل لترحيل الصرف.'],
-                ]);
-            }
+            $this->cashBoxGl->assertDistinctAccounts($source, $target);
+            $sourceAccount = $this->cashBoxGl->requireLinkedAccount($source);
+            $targetAccount = $this->cashBoxGl->requireLinkedAccount($target);
 
             $difference = round($targetBase - $sourceBase, 2);
 
@@ -582,14 +578,19 @@ class CashService
 
     public function cashBoxBalance(CashBox $box): float
     {
-        $accountId = $box->account_id
-            ?? Account::query()->where('code', '1101')->value('id');
+        $account = $box->account_id
+            ? Account::query()->find($box->account_id)
+            : null;
 
-        if (! $accountId) {
-            return (float) $box->opening_balance;
+        if (! $account) {
+            try {
+                $account = $this->cashBoxGl->ensureBoxAccount($box);
+            } catch (ValidationException) {
+                return (float) $box->opening_balance;
+            }
         }
 
-        return $this->ledgerBalance((int) $accountId, (float) $box->opening_balance);
+        return $this->ledgerBalance((int) $account->id, (float) $box->opening_balance);
     }
 
     /**
@@ -694,14 +695,20 @@ class CashService
         return round($opening + $debit - $credit, 2);
     }
 
+    /**
+     * GL account used when posting cash movements for this box (never a shared fallback).
+     */
+    public function resolveCashBoxAccount(CashBox $box): Account
+    {
+        return $this->cashBoxGl->ensureBoxAccount($box);
+    }
+
     protected function resolveAccount(string $type, int $id): Account
     {
         if ($type === 'cash_box') {
             $box = CashBox::query()->findOrFail($id);
 
-            return $box->account_id
-                ? Account::query()->findOrFail($box->account_id)
-                : Account::query()->where('code', '1101')->firstOrFail();
+            return $this->resolveCashBoxAccount($box);
         }
 
         if ($type === 'bank') {

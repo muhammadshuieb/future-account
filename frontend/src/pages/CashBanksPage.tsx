@@ -34,6 +34,8 @@ type CashBox = {
   balance?: number
   branch_id?: number | null
   branch?: { id: number; name: string; code?: string } | null
+  account_id?: number | null
+  account?: { id: number; code: string; name: string } | null
 }
 type Bank = {
   id: number
@@ -45,8 +47,11 @@ type Bank = {
   balance?: number
   branch_id?: number | null
   branch?: { id: number; name: string; code?: string } | null
+  account_id?: number | null
+  account?: { id: number; code: string; name: string } | null
 }
 type BranchOption = { id: number; name: string; code?: string; is_main?: boolean; is_active?: boolean }
+type GlAccount = { id: number; code: string; name: string; type?: string; is_group?: boolean; is_active?: boolean }
 type Transfer = { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }
 type CurrencyExchange = {
   id: number
@@ -73,8 +78,8 @@ type Reconciliation = {
   bank?: { name: string }
 }
 
-const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD', branch_id: '' }
-const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0', currency: 'USD', branch_id: '' }
+const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD', branch_id: '', account_id: '' }
+const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0', currency: 'USD', branch_id: '', account_id: '' }
 const emptyTr = {
   transfer_date: todayYmd(),
   from_type: 'cash_box',
@@ -165,6 +170,10 @@ export default function CashBanksPage() {
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as CurrencyOption[],
   })
+  const glAccounts = useQuery({
+    queryKey: ['accounts', 'postable', 'asset'],
+    queryFn: async () => (await api.get('/accounts', { params: { postable_only: true, type: 'asset' } })).data.data as GlAccount[],
+  })
   const settings = useQuery({
     queryKey: ['settings'],
     queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[],
@@ -191,6 +200,7 @@ export default function CashBanksPage() {
   const exchangeRows = listOrEmpty(exchanges.data)
   const reconcileRows = listOrEmpty(reconciliations.data)
   const currencyList = listOrEmpty(currencies.data)
+  const accountRows = listOrEmpty(glAccounts.data).filter((a) => a.is_group !== true && a.is_active !== false)
   const activeBranches = listOrEmpty(branches.data).filter((b) => b.is_active !== false)
   const defaultBranchId = settings.data?.find((s) => s.key === 'default_branch_id')?.value
     || String(activeBranches.find((b) => b.is_main)?.id || activeBranches[0]?.id || '')
@@ -276,7 +286,11 @@ export default function CashBanksPage() {
     setEditingId(null)
     setViewRow(null)
     setPendingAttachment(null)
-    if (tab === 'boxes') setBoxForm({ ...emptyBox, branch_id: defaultBranchId || '', currency: baseCurrency })
+    if (tab === 'boxes') {
+      const next = { ...emptyBox, branch_id: defaultBranchId || '', currency: baseCurrency }
+      setBoxForm(next)
+      void suggestBoxAccount(next.currency)
+    }
     if (tab === 'banks') setBankForm({ ...emptyBank, branch_id: defaultBranchId || '', currency: baseCurrency })
     if (tab === 'transfers') setTrForm(emptyTr)
     if (tab === 'exchange') setExForm(emptyEx)
@@ -284,13 +298,31 @@ export default function CashBanksPage() {
     setModalOpen(true)
   }
 
+  async function suggestBoxAccount(currency: string, excludeBoxId?: number | null) {
+    try {
+      const res = await api.get('/cash-boxes/suggest-account', {
+        params: { currency, exclude_box_id: excludeBoxId || undefined },
+      })
+      const account = res.data?.data?.account as GlAccount | null | undefined
+      if (account?.id) {
+        setBoxForm((prev) => ({ ...prev, account_id: String(account.id) }))
+      }
+    } catch {
+      // optional helper — user can still pick manually
+    }
+  }
+
   const saveBox = useMutation({
     mutationFn: () => {
+      if (!boxForm.account_id) {
+        throw { response: { data: { message: 'الحساب المحاسبي مطلوب — اربط كل صندوق بحساب مستقل.' } } }
+      }
       const payload = {
         ...boxForm,
         opening_balance: Number(boxForm.opening_balance),
         currency: boxForm.currency || 'USD',
         branch_id: boxForm.branch_id ? Number(boxForm.branch_id) : null,
+        account_id: Number(boxForm.account_id),
         is_active: true,
       }
       if (editingId) return api.put(`/cash-boxes/${editingId}`, payload)
@@ -482,6 +514,7 @@ export default function CashBanksPage() {
                   <th className="px-4 py-3">اسم</th>
                   <th className="px-4 py-3">فرع</th>
                   <th className="px-4 py-3">عملة</th>
+                  <th className="px-4 py-3">حساب محاسبي</th>
                   <th className="px-4 py-3">رصيد</th>
                   <th className="px-4 py-3">افتتاحي</th>
                 </tr>
@@ -499,6 +532,7 @@ export default function CashBanksPage() {
                         opening_balance: String(b.opening_balance),
                         currency: b.currency || 'USD',
                         branch_id: b.branch_id != null ? String(b.branch_id) : '',
+                        account_id: b.account_id != null ? String(b.account_id) : '',
                       })
                       setModalOpen(true)
                     }}
@@ -508,6 +542,9 @@ export default function CashBanksPage() {
                     <td className="px-4 py-3">{b.name}</td>
                     <td className="px-4 py-3">{b.branch?.name || (b.branch_id ? `#${b.branch_id}` : '—')}</td>
                     <td className="px-4 py-3 font-mono">{b.currency || 'USD'}</td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      {b.account ? `${b.account.code} — ${b.account.name}` : (b.account_id ? `#${b.account_id}` : '— غير مربوط')}
+                    </td>
                     <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance, b.currency || 'USD')}</td>
                     <td className="px-4 py-3">{formatMoney(b.opening_balance, b.currency || 'USD')}</td>
                   </tr>
@@ -709,7 +746,15 @@ export default function CashBanksPage() {
             </select>
           </Field>
           <Field label="العملة">
-            <select className={inputClass} value={boxForm.currency} onChange={(e) => setBoxForm({ ...boxForm, currency: e.target.value })}>
+            <select
+              className={inputClass}
+              value={boxForm.currency}
+              onChange={(e) => {
+                const currency = e.target.value
+                setBoxForm((prev) => ({ ...prev, currency }))
+                void suggestBoxAccount(currency, editingId)
+              }}
+            >
               {(currencyList.length ? currencyList : [
                 { id: 1, code: 'USD', name: 'دولار', is_active: true },
                 { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
@@ -720,6 +765,22 @@ export default function CashBanksPage() {
               ))}
             </select>
           </Field>
+          <Field label="الحساب المحاسبي *">
+            <select
+              className={inputClass}
+              value={boxForm.account_id}
+              onChange={(e) => setBoxForm({ ...boxForm, account_id: e.target.value })}
+              required
+            >
+              <option value="">— اختر حساباً مستقلاً للصندوق —</option>
+              {accountRows.map((a) => (
+                <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+              ))}
+            </select>
+          </Field>
+          <p className="text-xs text-black/50">
+            كل صندوق عملة يحتاج حساباً محاسبياً مستقلاً لترحيل صرف العملات (مدين الهدف / دائن المصدر).
+          </p>
           <Field label="رصيد افتتاحي"><NumericInput value={boxForm.opening_balance} onChange={(v) => setBoxForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
         </div>
       </Modal>

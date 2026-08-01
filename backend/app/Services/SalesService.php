@@ -38,14 +38,14 @@ class SalesService
             $discount = $this->normalizeDiscountAmount($data['discount_amount'] ?? 0, $subtotal);
             $total = round($subtotal - $discount + $tax, 2);
 
-            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total);
-
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? null,
                 isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
                 $data['invoice_date'] ?? null,
             );
+
+            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total, $fx['currency']);
 
             if (($data['status'] ?? 'draft') === 'posted') {
                 // Credit limit applies to the unpaid remainder, expressed in base currency.
@@ -245,13 +245,15 @@ class SalesService
             if ($intendedPaid > 0) {
                 $cashBoxId = $invoice->cash_box_id
                     ? (int) $invoice->cash_box_id
-                    : $this->cash->resolveDefaultCashBoxId();
+                    : $this->cash->resolveDefaultCashBoxId(null, $invoice->currency);
 
                 if (! $cashBoxId) {
                     throw ValidationException::withMessages([
-                        'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+                        'cash_box_id' => ['يجب تحديد صندوق بعملة '.$invoice->currency.' عند الدفع نقداً أو بدفعة جزئية.'],
                     ]);
                 }
+
+                $this->cash->assertCashBoxCurrency($cashBoxId, $invoice->currency);
 
                 if (! $invoice->cash_box_id) {
                     $invoice->update(['cash_box_id' => $cashBoxId]);
@@ -281,7 +283,7 @@ class SalesService
     /**
      * @return array{0: string, 1: float, 2: ?int}
      */
-    protected function normalizePaymentTerms(array $data, float $total): array
+    protected function normalizePaymentTerms(array $data, float $total, ?string $currency = null): array
     {
         $paymentType = strtolower((string) ($data['payment_type'] ?? 'credit'));
         if (! in_array($paymentType, ['cash', 'credit', 'partial'], true)) {
@@ -297,8 +299,10 @@ class SalesService
             return ['credit', 0.0, null];
         }
 
+        $docCurrency = strtoupper((string) ($currency ?: ($data['currency'] ?? $this->currencies->baseCurrency())));
+
         if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
-            $cashBoxId = $this->cash->resolveDefaultCashBoxId();
+            $cashBoxId = $this->cash->resolveDefaultCashBoxId(null, $docCurrency);
         }
 
         $intendedPaid = match ($paymentType) {
@@ -317,8 +321,12 @@ class SalesService
 
         if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
             throw ValidationException::withMessages([
-                'cash_box_id' => ['يجب تحديد الصندوق عند الدفع نقداً أو بدفعة جزئية.'],
+                'cash_box_id' => ['يجب تحديد صندوق بعملة '.$docCurrency.' عند الدفع نقداً أو بدفعة جزئية.'],
             ]);
+        }
+
+        if ($cashBoxId) {
+            $this->cash->assertCashBoxCurrency($cashBoxId, $docCurrency);
         }
 
         return [$paymentType, $intendedPaid, $cashBoxId];
@@ -499,11 +507,24 @@ class SalesService
             $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
                 ? (int) $data['cash_box_id']
                 : null;
+            $bankId = isset($data['bank_id']) && $data['bank_id'] !== '' && $data['bank_id'] !== null
+                ? (int) $data['bank_id']
+                : null;
 
-            // Cash collections without an explicit box go to the main cash box.
-            if (! $cashBoxId && $method === 'cash' && empty($data['bank_id'])) {
-                $cashBoxId = $this->cash->resolveDefaultCashBoxId();
+            // Cash stays in the same-currency box — never auto-route into the base USD box.
+            if ($method === 'cash' && ! $bankId) {
+                if (! $cashBoxId) {
+                    $cashBoxId = $this->cash->resolveDefaultCashBoxId(null, $fx['currency']);
+                }
+                if (! $cashBoxId) {
+                    throw ValidationException::withMessages([
+                        'cash_box_id' => ['يجب تحديد صندوق بعملة '.$fx['currency'].'. المبلغ يبقى في صندوق عملته ولا يُحوَّل تلقائياً.'],
+                    ]);
+                }
             }
+
+            $this->cash->assertCashBoxCurrency($cashBoxId, $fx['currency']);
+            $this->cash->assertBankCurrency($bankId, $fx['currency']);
 
             $receipt = Receipt::query()->create([
                 'receipt_number' => $this->nextNumber('RC'),
@@ -511,7 +532,7 @@ class SalesService
                 'customer_id' => $data['customer_id'],
                 'sales_invoice_id' => $data['sales_invoice_id'] ?? null,
                 'cash_box_id' => $cashBoxId,
-                'bank_id' => $data['bank_id'] ?? null,
+                'bank_id' => $bankId,
                 'method' => $method,
                 'amount' => $amount,
                 'currency' => $fx['currency'],
@@ -587,6 +608,16 @@ class SalesService
             $receipt->load('customer');
             $cashAccountCode = $receipt->method === 'bank' ? '1102' : '1101';
 
+            // Enforce again at post time: cash never lands in a mismatched box.
+            $this->cash->assertCashBoxCurrency(
+                $receipt->cash_box_id ? (int) $receipt->cash_box_id : null,
+                $receipt->currency
+            );
+            $this->cash->assertBankCurrency(
+                $receipt->bank_id ? (int) $receipt->bank_id : null,
+                $receipt->currency
+            );
+
             if ($receipt->method === 'bank' && $receipt->bank_id) {
                 $bank = \App\Models\Bank::query()->findOrFail($receipt->bank_id);
                 $debitAccount = $bank->account_id
@@ -594,9 +625,7 @@ class SalesService
                     : Account::query()->where('code', '1102')->firstOrFail();
             } elseif ($receipt->cash_box_id) {
                 $box = \App\Models\CashBox::query()->findOrFail($receipt->cash_box_id);
-                $debitAccount = $box->account_id
-                    ? Account::query()->findOrFail($box->account_id)
-                    : Account::query()->where('code', $cashAccountCode)->firstOrFail();
+                $debitAccount = $this->cash->resolveCashBoxAccount($box);
             } else {
                 $debitAccount = Account::query()->where('code', $cashAccountCode)->firstOrFail();
             }
