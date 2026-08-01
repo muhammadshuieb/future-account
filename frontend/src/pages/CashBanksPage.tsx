@@ -588,6 +588,7 @@ export default function CashBanksPage() {
                         opening_balance: String(b.opening_balance ?? 0),
                         currency: b.currency || 'USD',
                         branch_id: b.branch_id != null ? String(b.branch_id) : '',
+                        account_id: b.account_id != null ? String(b.account_id) : '',
                       })
                       setModalOpen(true)
                     }}
