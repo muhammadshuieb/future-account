@@ -230,6 +230,93 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/**
+ * html2canvas paints Arabic letter-by-letter when letter-spacing ≠ normal
+ * (e.g. Tailwind tracking-*), which disconnects glyphs and can reverse runs.
+ * Force shaping-safe text CSS on the clone before paint.
+ */
+function resolveCaptureDirection(source: HTMLElement): 'rtl' | 'ltr' {
+  const attrDir = source.closest('[dir]')?.getAttribute('dir')
+  if (attrDir === 'rtl' || attrDir === 'ltr') return attrDir
+  const docDir = source.ownerDocument?.documentElement.getAttribute('dir')
+  if (docDir === 'rtl' || docDir === 'ltr') return docDir
+  try {
+    const computed = getComputedStyle(source).direction
+    if (computed === 'ltr' || computed === 'rtl') return computed
+  } catch {
+    /* ignore */
+  }
+  return 'rtl'
+}
+
+function applyArabicSafeCaptureStyles(doc: Document, clonedElement: HTMLElement, direction: 'rtl' | 'ltr') {
+  const html = doc.documentElement
+  const body = doc.body
+  if (html) {
+    html.setAttribute('dir', direction)
+    html.setAttribute('lang', direction === 'rtl' ? 'ar' : html.getAttribute('lang') || 'en')
+    html.style.setProperty('direction', direction)
+  }
+  if (body) {
+    body.setAttribute('dir', direction)
+    body.style.setProperty('direction', direction)
+    body.style.setProperty(
+      'font-family',
+      '"Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif',
+    )
+  }
+
+  clonedElement.setAttribute('dir', direction)
+  clonedElement.style.setProperty('direction', direction, 'important')
+  clonedElement.style.setProperty('unicode-bidi', 'isolate', 'important')
+  clonedElement.style.setProperty(
+    'font-family',
+    '"Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif',
+    'important',
+  )
+
+  if (!doc.getElementById('pdf-capture-arabic-style')) {
+    const style = doc.createElement('style')
+    style.id = 'pdf-capture-arabic-style'
+    style.textContent = `
+      .pdf-capture-root {
+        direction: ${direction} !important;
+        unicode-bidi: isolate !important;
+        font-family: "Cairo", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif !important;
+      }
+      /* Per-glyph painting breaks Arabic joining — keep whole-run shaping. */
+      .pdf-capture-root,
+      .pdf-capture-root * {
+        letter-spacing: normal !important;
+        word-spacing: normal !important;
+        word-break: normal !important;
+        overflow-wrap: break-word !important;
+        word-wrap: break-word !important;
+        font-kerning: normal !important;
+        font-variant-ligatures: common-ligatures contextual !important;
+        font-feature-settings: "liga" 1, "calt" 1, "kern" 1 !important;
+        text-rendering: optimizeLegibility !important;
+      }
+      .pdf-capture-root [dir="ltr"],
+      .pdf-capture-root .font-mono {
+        unicode-bidi: isolate !important;
+      }
+    `
+    doc.head.appendChild(style)
+  }
+}
+
+async function waitForDocumentFonts(doc: Document) {
+  try {
+    const fonts = (doc as Document & { fonts?: FontFaceSet }).fonts
+    if (fonts?.ready) {
+      await Promise.race([fonts.ready, sleep(3_000)])
+    }
+  } catch {
+    /* FontFaceSet unavailable — brief settle is enough. */
+  }
+}
+
 /** Hide elements that should not appear in the capture (toolbar, etc.). */
 async function withHiddenPrintChrome<T>(root: Document, run: () => Promise<T>): Promise<T> {
   const hide = Array.from(root.querySelectorAll<HTMLElement>('.print-hide'))
@@ -252,31 +339,61 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   })
 }
 
-/** Slice a tall canvas across multiple A4 pages (portrait or landscape by aspect). */
+/**
+ * How many A4 pages of height (at full usable width) we still squeeze onto one page
+ * via uniform scale-to-fit. Typical invoices sit just over 1 page; long reports exceed this.
+ */
+const SINGLE_PAGE_FIT_MAX_PAGES = 1.85
+
+type PdfPageBox = { margin: number; usableW: number; usableH: number }
+
+function a4PageBox(pdf: jsPDF): PdfPageBox {
+  const margin = 12
+  return {
+    margin,
+    usableW: pdf.internal.pageSize.getWidth() - margin * 2,
+    usableH: pdf.internal.pageSize.getHeight() - margin * 2,
+  }
+}
+
+/**
+ * Fit image into one A4 page (width + height). Used for invoice-sized content that is
+ * only slightly taller than one page after width-fit.
+ */
+function fitImageOnSinglePage(
+  pdf: jsPDF,
+  img: HTMLCanvasElement | HTMLImageElement | string,
+  srcW: number,
+  srcH: number,
+  box: PdfPageBox,
+) {
+  const scale = Math.min(box.usableW / srcW, box.usableH / srcH)
+  const w = srcW * scale
+  const h = srcH * scale
+  const x = box.margin + (box.usableW - w) / 2
+  const y = box.margin
+  pdf.addImage(img, 'PNG', x, y, w, h)
+}
+
+/** Draw a canvas onto A4: scale-to-fit one page when near invoice height; else slice. */
 function canvasToMultiPagePdf(canvas: HTMLCanvasElement): Blob {
   const orientation = canvas.width >= canvas.height * 1.15 ? 'landscape' : 'portrait'
   const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' })
-  const pageWidth = pdf.internal.pageSize.getWidth()
-  const pageHeight = pdf.internal.pageSize.getHeight()
-  const margin = 18
-  const usableW = pageWidth - margin * 2
-  const usableH = pageHeight - margin * 2
-
+  const box = a4PageBox(pdf)
   const imgData = canvas.toDataURL('image/png')
-  const scaledW = usableW
-  const scaledH = (canvas.height * scaledW) / canvas.width
 
-  // Single page fits — center vertically a bit from top margin
-  if (scaledH <= usableH) {
-    const x = margin
-    const y = margin
-    pdf.addImage(imgData, 'PNG', x, y, scaledW, scaledH)
+  const widthFitH = (canvas.height * box.usableW) / canvas.width
+
+  // Fits at full width, or only slightly over → one page (scale to fit both axes).
+  if (widthFitH <= box.usableH * SINGLE_PAGE_FIT_MAX_PAGES) {
+    fitImageOnSinglePage(pdf, imgData, canvas.width, canvas.height, box)
     return pdf.output('blob')
   }
 
-  // Multi-page: map source canvas slices to each PDF page
+  // Long reports: slice across pages at full usable width.
+  const scaledW = box.usableW
   const pxPerPt = canvas.width / scaledW
-  const pageSlicePx = usableH * pxPerPt
+  const pageSlicePx = box.usableH * pxPerPt
   let sourceY = 0
   let pageIndex = 0
 
@@ -304,11 +421,10 @@ function canvasToMultiPagePdf(canvas: HTMLCanvasElement): Blob {
     const sliceData = sliceCanvas.toDataURL('image/png')
     const sliceH = (sliceHeightPx * scaledW) / canvas.width
     if (pageIndex > 0) pdf.addPage()
-    pdf.addImage(sliceData, 'PNG', margin, margin, scaledW, sliceH)
+    pdf.addImage(sliceData, 'PNG', box.margin, box.margin, scaledW, sliceH)
 
     sourceY += sliceHeightPx
     pageIndex += 1
-    // Safety: avoid infinite loops on tiny remainders
     if (sliceHeightPx < 2) break
   }
 
@@ -329,6 +445,9 @@ export async function captureElement(
   element: HTMLElement,
   opts: { format: CaptureFormat; fileName: string },
 ): Promise<CapturedFile> {
+  const captureDirection = resolveCaptureDirection(element)
+  await waitForDocumentFonts(element.ownerDocument || document)
+
   let canvas: HTMLCanvasElement
   try {
     canvas = await html2canvas(element, {
@@ -337,12 +456,40 @@ export async function captureElement(
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false,
-      // Prefer standard canvas path; foreignObject can reintroduce oklab via SVG.
+      // Prefer standard canvas path; foreignObject can reintroduce oklab via SVG
+      // and often mishandles Arabic shaping / RTL.
       foreignObjectRendering: false,
       imageTimeout: 15_000,
       onclone: (_clonedDoc, clonedElement) => {
         const doc = clonedElement.ownerDocument || _clonedDoc
         sanitizeCloneForHtml2Canvas(doc)
+        // Screen capture ignores @media print — apply compact layout for PDF/PNG.
+        clonedElement.classList.add('pdf-capture-root')
+        applyArabicSafeCaptureStyles(doc, clonedElement, captureDirection)
+        if (!doc.getElementById('pdf-capture-compact-style')) {
+          const style = doc.createElement('style')
+          style.id = 'pdf-capture-compact-style'
+          style.textContent = `
+            .pdf-capture-root { font-size: 11px !important; line-height: 1.35 !important; }
+            .pdf-capture-root .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem !important; }
+            .pdf-capture-root .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.35rem !important; }
+            .pdf-capture-root .print-brand-header { display: flex !important; flex-wrap: nowrap !important; align-items: flex-start !important; justify-content: space-between !important; padding-bottom: 0.4rem !important; gap: 0.75rem !important; }
+            .pdf-capture-root .print-brand-header > :first-child { flex: 1 1 auto !important; min-width: 0 !important; }
+            .pdf-capture-root img.brand-logo--print,
+            .pdf-capture-root img.print-logo { max-height: 56px !important; max-width: 45mm !important; width: auto !important; height: auto !important; object-fit: contain !important; flex-shrink: 0 !important; }
+            .pdf-capture-root .data-table th,
+            .pdf-capture-root .data-table td { padding: 0.28rem 0.4rem !important; font-size: 10.5px !important; }
+            .pdf-capture-root canvas.print-qr,
+            .pdf-capture-root canvas { max-width: 72px !important; max-height: 72px !important; width: 72px !important; height: 72px !important; }
+            .pdf-capture-root svg.print-barcode,
+            .pdf-capture-root .barcode-label svg { max-height: 52px !important; max-width: 100% !important; width: auto !important; height: 48px !important; }
+            .pdf-capture-root .p-4 { padding: 0.5rem !important; }
+            .pdf-capture-root .p-3 { padding: 0.4rem !important; }
+            .pdf-capture-root .text-lg { font-size: 0.95rem !important; }
+            .pdf-capture-root .text-base { font-size: 0.85rem !important; }
+          `
+          doc.head.appendChild(style)
+        }
       },
       ignoreElements: (el) => {
         if (!(el instanceof HTMLElement)) return false
@@ -467,7 +614,8 @@ export async function captureFromPrintPopup(
 
       if (isPrintContentReady(doc, selector)) {
         // Allow fonts / late images a brief settle before capture.
-        await sleep(500)
+        await waitForDocumentFonts(doc)
+        await sleep(350)
         if (isPrintContentReady(doc, selector)) {
           return await captureSelectorInDocument(doc, selector, opts)
         }
@@ -529,13 +677,8 @@ export async function exportMergedPdfFromPrintPaths(
     const pngUrl = URL.createObjectURL(pngCapture.blob)
     try {
       const img = await loadImage(pngUrl)
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const margin = 18
-      const usableW = pageWidth - margin * 2
-      const usableH = pageHeight - margin * 2
-      const scaledW = usableW
-      const scaledH = (img.height * scaledW) / img.width
+      const box = a4PageBox(pdf)
+      const widthFitH = (img.height * box.usableW) / img.width
 
       if (!pageAdded) {
         pageAdded = true
@@ -543,10 +686,11 @@ export async function exportMergedPdfFromPrintPaths(
         pdf.addPage()
       }
 
-      if (scaledH <= usableH) {
-        pdf.addImage(img, 'PNG', margin, margin, scaledW, scaledH)
+      // Each invoice/document: prefer one page via scale-to-fit when near A4 height.
+      if (widthFitH <= box.usableH * SINGLE_PAGE_FIT_MAX_PAGES) {
+        fitImageOnSinglePage(pdf, img, img.width, img.height, box)
       } else {
-        // Draw onto temp canvas and slice
+        const scaledW = box.usableW
         const canvas = document.createElement('canvas')
         canvas.width = img.width
         canvas.height = img.height
@@ -554,7 +698,7 @@ export async function exportMergedPdfFromPrintPaths(
         if (!ctx) throw new Error('PDF merge failed')
         ctx.drawImage(img, 0, 0)
         const pxPerPt = canvas.width / scaledW
-        const pageSlicePx = usableH * pxPerPt
+        const pageSlicePx = box.usableH * pxPerPt
         let sourceY = 0
         let firstSlice = true
         while (sourceY < canvas.height - 1) {
@@ -569,7 +713,7 @@ export async function exportMergedPdfFromPrintPaths(
           sctx.drawImage(canvas, 0, sourceY, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx)
           const sliceH = (sliceHeightPx * scaledW) / canvas.width
           if (!firstSlice) pdf.addPage()
-          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', margin, margin, scaledW, sliceH)
+          pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', box.margin, box.margin, scaledW, sliceH)
           firstSlice = false
           sourceY += sliceHeightPx
           if (sliceHeightPx < 2) break

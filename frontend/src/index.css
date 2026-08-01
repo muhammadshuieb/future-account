@@ -83,17 +83,103 @@ body {
   max-width: min(100%, 160px);
 }
 
-.brand-logo--print {
-  height: 72px;
+/* Print/PDF logo: hard cap so wordmark never swallows the header */
+.brand-logo--print,
+.print-logo {
+  display: block;
+  height: auto;
   width: auto;
-  max-width: 220px;
+  max-height: 56px;
+  max-width: min(160px, 45mm);
+  flex-shrink: 0;
+  object-fit: contain;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+}
+
+.print-brand-header {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.print-brand-header > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * Dedicated print routes: on-screen preview matches a physical A4 sheet
+ * (210mm × 297mm). Padding simulates @page margins so WYSIWYG ≈ print dialog.
+ * PDF capture still targets .print-area (content only — no sheet chrome).
+ */
+@media screen {
+  body:has(.print-document) {
+    background: #c5ced3;
+    min-height: 100vh;
+  }
+
+  .print-document {
+    background: transparent !important;
+    color: #000;
+  }
+
+  .print-document .print-sheet {
+    width: 210mm;
+    max-width: 100%;
+    min-height: 297mm;
+    margin: 0 auto;
+    padding: 10mm 12mm;
+    box-sizing: border-box;
+    background: #fff;
+    box-shadow: 0 2px 16px rgba(12, 26, 34, 0.22);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .print-document .print-area {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+}
+
+/*
+ * Print/PDF text: keep Arabic joining intact.
+ * Non-zero letter-spacing (Tailwind tracking-*) makes html2canvas paint
+ * glyphs one-by-one and disconnects Arabic letters.
+ */
+.print-area,
+.print-document,
+.print-sheet {
+  letter-spacing: normal;
+  word-spacing: normal;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
+  text-rendering: optimizeLegibility;
 }
 
 .brand-logo--barcode-mark {
   height: 28px;
   width: 28px;
+}
+
+/* Invoice QR + label barcodes — keep compact on screen and in print preview */
+.print-qr {
+  width: 72px;
+  height: 72px;
+  max-width: 72px;
+  max-height: 72px;
+}
+
+.print-barcode {
+  max-height: 52px;
+  max-width: 100%;
+  height: 48px;
+  width: auto;
 }
 
 button,
@@ -246,6 +332,30 @@ textarea {
   padding: 0.7rem 0.85rem;
   border-top: 1px solid var(--color-line);
   vertical-align: middle;
+}
+
+/*
+ * Row action clusters (Print / PDF / WhatsApp / Delete / Collect…).
+ * Use flex + gap — never space-x — so RTL wrap never overlaps labels.
+ * Scoped away from .print-brand-header { flex-wrap: nowrap }.
+ */
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.7rem;
+  max-width: 18rem;
+}
+
+.table-actions > * {
+  flex: 0 0 auto;
+}
+
+.table-actions button,
+.table-actions a,
+.table-actions span {
+  white-space: nowrap;
+  line-height: 1.3;
 }
 
 .data-table tbody tr:hover {
@@ -464,15 +574,15 @@ textarea {
 }
 
 @media print {
-  /* A4 page box — room at bottom for page numbers where supported */
+  /* Physical A4 — margins only via @page (avoid double margins / Chrome shrink) */
   @page {
-    size: A4;
-    margin: 12mm 12mm 15mm 12mm;
+    size: A4 portrait;
+    margin: 10mm 12mm 12mm 12mm;
 
     @bottom-center {
       content: counter(page) " / " counter(pages);
       font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
-      font-size: 9pt;
+      font-size: 8pt;
       color: #555;
     }
   }
@@ -480,6 +590,8 @@ textarea {
   html,
   body,
   #root {
+    width: auto !important;
+    max-width: 100% !important;
     height: auto !important;
     min-height: 0 !important;
     overflow: visible !important;
@@ -490,6 +602,10 @@ textarea {
   body {
     background: #fff !important;
     color: #000 !important;
+    font-size: 10.5pt !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   .no-print,
@@ -521,7 +637,8 @@ textarea {
   main,
   .app-shell-main,
   .print-area,
-  .print-document {
+  .print-document,
+  .print-sheet {
     margin: 0 !important;
     padding: 0 !important;
     max-width: none !important;
@@ -534,9 +651,32 @@ textarea {
   }
 
   .print-area,
-  .print-document {
+  .print-document,
+  .print-sheet {
     display: block !important;
     min-height: 0 !important;
+    height: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-document {
+    min-height: 0 !important;
+  }
+
+  /* Keep content inside the printable width — prevents Chrome “shrink to fit” */
+  .print-area,
+  .print-document .print-area,
+  .print-sheet .print-area {
+    max-width: 100% !important;
+  }
+
+  .print-area img,
+  .print-document img,
+  .print-area canvas,
+  .print-document canvas,
+  .print-area svg,
+  .print-document svg {
+    max-width: 100% !important;
     height: auto !important;
   }
 
@@ -548,27 +688,117 @@ textarea {
   .print-brand-header,
   .print-area > header,
   .print-document header {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
     break-inside: avoid;
     page-break-inside: avoid;
     break-after: avoid;
     page-break-after: avoid;
+    padding-bottom: 0.35rem !important;
+    gap: 0.75rem !important;
+  }
+
+  .print-brand-header > :first-child {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
   }
 
   .brand-logo,
   .brand-logo--print,
-  .brand-logo--barcode-mark {
+  .brand-logo--barcode-mark,
+  .print-logo {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  /* Tables: repeat header on each page; keep rows intact */
+  /*
+   * Must beat `.print-area img { height: auto !important }` (0,1,1) —
+   * without this, the wordmark expands to full page width and overlaps titles.
+   */
+  .print-area img.brand-logo--print,
+  .print-document img.brand-logo--print,
+  .print-sheet img.brand-logo--print,
+  .print-area img.print-logo,
+  .print-document img.print-logo,
+  .print-sheet img.print-logo,
+  img.brand-logo--print,
+  img.print-logo {
+    max-height: 56px !important;
+    max-width: 45mm !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Compact spacing inside print documents */
+  .print-area .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  .print-document .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.45rem !important;
+  }
+
+  .print-area .text-lg,
+  .print-document .text-lg {
+    font-size: 11.5pt !important;
+  }
+
+  .print-area .text-base,
+  .print-document .text-base {
+    font-size: 10pt !important;
+  }
+
+  .print-area .p-4,
+  .print-document .p-4 {
+    padding: 0.4rem !important;
+  }
+
+  .print-area .p-3,
+  .print-document .p-3 {
+    padding: 0.35rem !important;
+  }
+
+  /*
+   * QR / barcode — must beat `.print-area canvas|svg { height: auto !important }`
+   * or labels and e-invoice QR expand to fill the printable width.
+   */
+  .print-area canvas.print-qr,
+  .print-document canvas.print-qr,
+  .print-sheet canvas.print-qr,
+  .print-area canvas,
+  .print-document canvas,
+  canvas.print-qr {
+    max-width: 72px !important;
+    max-height: 72px !important;
+    width: 72px !important;
+    height: 72px !important;
+  }
+
+  .print-area svg.print-barcode,
+  .print-document svg.print-barcode,
+  .print-sheet svg.print-barcode,
+  .print-area .barcode-label svg,
+  .print-document .barcode-label svg,
+  .print-sheet .barcode-label svg,
+  svg.print-barcode {
+    max-height: 52px !important;
+    max-width: 100% !important;
+    width: auto !important;
+    height: 48px !important;
+  }
+
+  /* Tables: repeat header on each page; keep rows intact; tighter cells */
   .print-area table,
   .print-document table,
   .data-table {
     width: 100% !important;
+    max-width: 100% !important;
     border-collapse: collapse !important;
     break-inside: auto;
     page-break-inside: auto;
+    font-size: 9.5pt !important;
+    table-layout: auto !important;
   }
 
   .print-area thead,
@@ -598,6 +828,11 @@ textarea {
   .data-table td {
     break-inside: avoid;
     page-break-inside: avoid;
+    padding: 0.22rem 0.35rem !important;
+    /* anywhere splits Arabic into isolated letters in some engines */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: normal;
   }
 
   .data-table th {

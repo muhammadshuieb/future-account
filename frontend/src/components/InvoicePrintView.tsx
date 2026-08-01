@@ -77,7 +77,7 @@ function BrandLogo() {
     <img
       src={LOGO.print}
       alt="SYNAMOR TECHNOLOGY"
-      className="brand-logo brand-logo--print"
+      className="brand-logo brand-logo--print print-logo"
       onError={(e) => {
         const img = e.currentTarget
         if (img.dataset.fallback === '1') return
@@ -145,7 +145,7 @@ export function SalesInvoicePrintView({
 
   useEffect(() => {
     if (canvasRef.current && payload) {
-      void QRCode.toCanvas(canvasRef.current, payload, { width: 96, margin: 1 })
+      void QRCode.toCanvas(canvasRef.current, payload, { width: 72, margin: 1 })
     }
   }, [payload])
 
@@ -164,14 +164,14 @@ export function SalesInvoicePrintView({
         <div className="rounded border border-teal/30 bg-teal/5 p-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal">
+              <p className="text-[11px] font-semibold uppercase text-teal">
                 {t('sales.eInvoice')} — future-account-einvoice/1.0
               </p>
               <p className="mt-0.5 font-mono text-[10px] text-black/60">
                 UUID: {structured?.uuid || eInvoice?.e_invoice_uuid || invoice.e_invoice_uuid || '—'}
               </p>
             </div>
-            {payload && <canvas ref={canvasRef} className="rounded border border-black/10" />}
+            {payload && <canvas ref={canvasRef} className="print-qr rounded border border-black/10" />}
           </div>
         </div>
       )}
