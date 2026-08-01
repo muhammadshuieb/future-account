@@ -316,7 +316,7 @@
     "payables": "Accounts payable (we owe)",
     "receivablesHint": "Owed to us",
     "payablesHint": "We owe",
-    "sharedCashBox": "Shared across branches",
+    "sharedCashBox": "No branch assigned",
     "nativeBalances": "Native balances by currency",
     "baseEquivalentHint": "≈ {{amount}} {{currency}} FX equivalent — not actual {{currency}} cash in a box",
     "cashBoxesTitle": "Cash boxes",

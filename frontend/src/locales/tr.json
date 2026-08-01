@@ -309,7 +309,7 @@
     "payables": "Borçlar (biz borçluyuz)",
     "receivablesHint": "Bize borçlu",
     "payablesHint": "Biz borçluyuz",
-    "sharedCashBox": "Tüm şubelerde ortak",
+    "sharedCashBox": "Şube atanmamış",
     "nativeBalances": "Para birimine göre gerçek bakiyeler",
     "baseEquivalentHint": "≈ {{amount}} {{currency}} kur karşılığı — kasada gerçek {{currency}} bakiyesi değil",
     "cashBoxesTitle": "Kasalar",

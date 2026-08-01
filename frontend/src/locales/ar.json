@@ -316,7 +316,7 @@
     "payables": "الذمم الدائنة (علينا)",
     "receivablesHint": "عليه",
     "payablesHint": "علينا",
-    "sharedCashBox": "مشترك لكل الفروع",
+    "sharedCashBox": "غير مرتبط بفرع",
     "nativeBalances": "أرصدة أصلية حسب العملة",
     "baseEquivalentHint": "≈ {{amount}} {{currency}} مكافئ بسعر الصرف — ليس رصيد {{currency}} فعلي في الصندوق",
     "cashBoxesTitle": "الصناديق",

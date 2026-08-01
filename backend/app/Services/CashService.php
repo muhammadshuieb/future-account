@@ -343,26 +343,19 @@ class CashService
         $base = $this->currencies->baseCurrency();
         $asOf = now()->toDateString();
 
-        // Unassigned (null branch_id) cash/banks are company-wide: include them for every
-        // branch filter so "all branches" vs a single branch stay consistent.
+        // Branch filter: only boxes/banks assigned to that branch.
+        // Unassigned (null branch_id) appear only when viewing all branches — never injected
+        // into every branch view (that made branch filter totals look identical).
         $boxes = CashBox::query()
             ->where('is_active', true)
-            ->when($branchId !== null, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('branch_id', $branchId)->orWhereNull('branch_id');
-                });
-            })
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
             ->orderBy('code')
             ->get();
 
         $banks = Bank::query()
             ->where('is_active', true)
-            ->when($branchId !== null, function ($q) use ($branchId) {
-                $q->where(function ($inner) use ($branchId) {
-                    $inner->where('branch_id', $branchId)->orWhereNull('branch_id');
-                });
-            })
+            ->when($branchId !== null, fn ($q) => $q->where('branch_id', $branchId))
             ->when($currencyFilter !== null, fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [$base, $currencyFilter]))
             ->orderBy('code')
             ->get();

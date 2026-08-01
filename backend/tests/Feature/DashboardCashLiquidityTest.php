@@ -395,33 +395,59 @@ class DashboardCashLiquidityTest extends TestCase
         $this->assertEqualsWithDelta($usdBefore + 98, $cash->cashBoxCurrencyBalance($usdBox->fresh()), 0.01);
     }
 
-    public function test_unassigned_cash_boxes_appear_for_every_branch_filter(): void
+    public function test_unassigned_cash_boxes_only_appear_for_all_branches_filter(): void
     {
         $sypBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
         $usdBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $sypBox->update(['branch_id' => null]);
         $usdBox->update(['branch_id' => null]);
 
-        $branchId = (int) Branch::query()->where('code', 'DAM')->value('id');
+        $damId = (int) Branch::query()->where('code', 'DAM')->value('id');
+        $alpId = (int) Branch::query()->where('code', 'ALP')->value('id');
+        $this->assertGreaterThan(0, $alpId);
+
         $cash = app(CashService::class);
         $sypBalance = $cash->cashBoxCurrencyBalance($sypBox->fresh());
         $this->assertGreaterThan(0, $sypBalance, 'demo SYP box should hold cash');
 
         $all = $this->getJson('/api/dashboard/summary')->assertOk()->json('data');
-        $branch = $this->getJson('/api/dashboard/summary?branch_id='.$branchId)->assertOk()->json('data');
+        $dam = $this->getJson('/api/dashboard/summary?branch_id='.$damId)->assertOk()->json('data');
+        $alp = $this->getJson('/api/dashboard/summary?branch_id='.$alpId)->assertOk()->json('data');
 
-        $this->assertEqualsWithDelta((float) $all['cash'], (float) $branch['cash'], 0.01);
-        $this->assertEqualsWithDelta((float) $all['liquidity'], (float) $branch['liquidity'], 0.01);
+        $allBoxes = collect($all['cash_boxes'] ?? []);
+        $this->assertNotNull($allBoxes->firstWhere('id', $sypBox->id), 'unassigned SYP visible for all branches');
+        $this->assertTrue((bool) ($allBoxes->firstWhere('id', $sypBox->id)['is_shared'] ?? false));
 
-        $branchBoxes = collect($branch['cash_boxes'] ?? []);
-        $sypRow = $branchBoxes->firstWhere('id', $sypBox->id);
-        $this->assertNotNull($sypRow, 'shared SYP box must appear under branch filter');
-        $this->assertTrue((bool) ($sypRow['is_shared'] ?? false));
-        $this->assertEqualsWithDelta($sypBalance, (float) $sypRow['balance'], 0.01);
+        $this->assertNull(
+            collect($dam['cash_boxes'] ?? [])->firstWhere('id', $sypBox->id),
+            'unassigned boxes must not appear under a specific branch'
+        );
+        $this->assertNull(
+            collect($alp['cash_boxes'] ?? [])->firstWhere('id', $sypBox->id),
+            'unassigned boxes must not appear under a specific branch'
+        );
 
-        // Headline cash is USD equivalent of native SYP (plus any USD), not mysterious leftover cents.
-        $expectedUsd = round($sypBalance / 15000, 2);
-        $this->assertEqualsWithDelta($expectedUsd, (float) $all['cash'], 0.05);
+        $this->assertEqualsWithDelta(0.0, (float) $dam['cash'], 0.01);
+        $this->assertEqualsWithDelta(0.0, (float) $alp['cash'], 0.01);
+        $this->assertGreaterThan((float) $dam['cash'], (float) $all['cash']);
+
+        // Assign SYP to DAM — branch filter totals must diverge.
+        $sypBox->update(['branch_id' => $damId]);
+        $damAfter = $this->getJson('/api/dashboard/summary?branch_id='.$damId)->assertOk()->json('data');
+        $alpAfter = $this->getJson('/api/dashboard/summary?branch_id='.$alpId)->assertOk()->json('data');
+        $sypOnly = $this->getJson('/api/dashboard/summary?currency=SYP&branch_id='.$damId)->assertOk()->json('data');
+
+        $this->assertNotNull(collect($damAfter['cash_boxes'] ?? [])->firstWhere('id', $sypBox->id));
+        $this->assertNull(collect($alpAfter['cash_boxes'] ?? [])->firstWhere('id', $sypBox->id));
+        $this->assertNotEquals(
+            round((float) $damAfter['cash'], 2),
+            round((float) $alpAfter['cash'], 2),
+            'branch filter must change cash totals when boxes are assigned'
+        );
+        $this->assertEqualsWithDelta($sypBalance, (float) $sypOnly['cash'], 0.01);
+        foreach ($sypOnly['cash_boxes'] ?? [] as $row) {
+            $this->assertSame('SYP', strtoupper((string) $row['currency']));
+        }
     }
 
     public function test_mismatched_cash_box_on_syp_invoice_is_rejected(): void

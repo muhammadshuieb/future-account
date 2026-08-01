@@ -32,6 +32,8 @@ type CashBox = {
   opening_balance: number
   currency?: string
   balance?: number
+  branch_id?: number | null
+  branch?: { id: number; name: string; code?: string } | null
 }
 type Bank = {
   id: number
@@ -41,7 +43,10 @@ type Bank = {
   opening_balance?: number
   currency?: string
   balance?: number
+  branch_id?: number | null
+  branch?: { id: number; name: string; code?: string } | null
 }
+type BranchOption = { id: number; name: string; code?: string; is_main?: boolean; is_active?: boolean }
 type Transfer = { id: number; transfer_number: string; from_type: string; to_type: string; amount: number; status: string }
 type CurrencyExchange = {
   id: number
@@ -68,8 +73,8 @@ type Reconciliation = {
   bank?: { name: string }
 }
 
-const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD' }
-const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0', currency: 'USD' }
+const emptyBox = { code: '', name: '', opening_balance: '0', currency: 'USD', branch_id: '' }
+const emptyBank = { code: '', name: '', account_number: '', opening_balance: '0', currency: 'USD', branch_id: '' }
 const emptyTr = {
   transfer_date: todayYmd(),
   from_type: 'cash_box',
@@ -152,9 +157,17 @@ export default function CashBanksPage() {
     queryKey: ['banks', tab === 'banks' ? search.debouncedQ : ''],
     queryFn: async () => (await api.get('/banks', { params: tab === 'banks' ? search.params : {} })).data.data as Bank[],
   })
+  const branches = useQuery({
+    queryKey: ['branches'],
+    queryFn: async () => (await api.get('/branches')).data.data as BranchOption[],
+  })
   const currencies = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => (await api.get('/currencies')).data.data as CurrencyOption[],
+  })
+  const settings = useQuery({
+    queryKey: ['settings'],
+    queryFn: async () => (await api.get('/settings')).data.data as { key: string; value: string }[],
   })
   const transfers = useQuery({
     queryKey: ['cash-transfers', search.debouncedQ],
@@ -178,6 +191,9 @@ export default function CashBanksPage() {
   const exchangeRows = listOrEmpty(exchanges.data)
   const reconcileRows = listOrEmpty(reconciliations.data)
   const currencyList = listOrEmpty(currencies.data)
+  const activeBranches = listOrEmpty(branches.data).filter((b) => b.is_active !== false)
+  const defaultBranchId = settings.data?.find((s) => s.key === 'default_branch_id')?.value
+    || String(activeBranches.find((b) => b.is_main)?.id || activeBranches[0]?.id || '')
   const baseCurrency = 'USD'
   const fromList = trForm.from_type === 'cash_box' ? boxRows : bankRows
   const toList = trForm.to_type === 'cash_box' ? boxRows : bankRows
@@ -260,8 +276,8 @@ export default function CashBanksPage() {
     setEditingId(null)
     setViewRow(null)
     setPendingAttachment(null)
-    if (tab === 'boxes') setBoxForm(emptyBox)
-    if (tab === 'banks') setBankForm(emptyBank)
+    if (tab === 'boxes') setBoxForm({ ...emptyBox, branch_id: defaultBranchId || '', currency: baseCurrency })
+    if (tab === 'banks') setBankForm({ ...emptyBank, branch_id: defaultBranchId || '', currency: baseCurrency })
     if (tab === 'transfers') setTrForm(emptyTr)
     if (tab === 'exchange') setExForm(emptyEx)
     if (tab === 'reconcile') setRecForm(emptyRec)
@@ -274,6 +290,7 @@ export default function CashBanksPage() {
         ...boxForm,
         opening_balance: Number(boxForm.opening_balance),
         currency: boxForm.currency || 'USD',
+        branch_id: boxForm.branch_id ? Number(boxForm.branch_id) : null,
         is_active: true,
       }
       if (editingId) return api.put(`/cash-boxes/${editingId}`, payload)
@@ -288,6 +305,7 @@ export default function CashBanksPage() {
         ...bankForm,
         opening_balance: Number(bankForm.opening_balance),
         currency: (bankForm.currency || 'USD').toUpperCase(),
+        branch_id: bankForm.branch_id ? Number(bankForm.branch_id) : null,
         is_active: true,
       }
       if (editingId) return api.put(`/banks/${editingId}`, payload)
@@ -462,6 +480,7 @@ export default function CashBanksPage() {
                 <tr>
                   <th className="px-4 py-3">رمز</th>
                   <th className="px-4 py-3">اسم</th>
+                  <th className="px-4 py-3">فرع</th>
                   <th className="px-4 py-3">عملة</th>
                   <th className="px-4 py-3">رصيد</th>
                   <th className="px-4 py-3">افتتاحي</th>
@@ -479,6 +498,7 @@ export default function CashBanksPage() {
                         name: b.name,
                         opening_balance: String(b.opening_balance),
                         currency: b.currency || 'USD',
+                        branch_id: b.branch_id != null ? String(b.branch_id) : '',
                       })
                       setModalOpen(true)
                     }}
@@ -486,6 +506,7 @@ export default function CashBanksPage() {
                   >
                     <td className="px-4 py-3 font-mono">{b.code}</td>
                     <td className="px-4 py-3">{b.name}</td>
+                    <td className="px-4 py-3">{b.branch?.name || (b.branch_id ? `#${b.branch_id}` : '—')}</td>
                     <td className="px-4 py-3 font-mono">{b.currency || 'USD'}</td>
                     <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance, b.currency || 'USD')}</td>
                     <td className="px-4 py-3">{formatMoney(b.opening_balance, b.currency || 'USD')}</td>
@@ -509,6 +530,7 @@ export default function CashBanksPage() {
                 <tr>
                   <th className="px-4 py-3">رمز</th>
                   <th className="px-4 py-3">اسم</th>
+                  <th className="px-4 py-3">فرع</th>
                   <th className="px-4 py-3">رقم الحساب</th>
                   <th className="px-4 py-3">العملة</th>
                   <th className="px-4 py-3">الرصيد</th>
@@ -528,6 +550,7 @@ export default function CashBanksPage() {
                         account_number: b.account_number || '',
                         opening_balance: String(b.opening_balance ?? 0),
                         currency: b.currency || 'USD',
+                        branch_id: b.branch_id != null ? String(b.branch_id) : '',
                       })
                       setModalOpen(true)
                     }}
@@ -535,6 +558,7 @@ export default function CashBanksPage() {
                   >
                     <td className="px-4 py-3 font-mono">{b.code}</td>
                     <td className="px-4 py-3">{b.name}</td>
+                    <td className="px-4 py-3">{b.branch?.name || (b.branch_id ? `#${b.branch_id}` : '—')}</td>
                     <td className="px-4 py-3">{b.account_number || '—'}</td>
                     <td className="px-4 py-3 font-mono">{b.currency || 'USD'}</td>
                     <td className="px-4 py-3">{formatMoney(b.balance ?? b.opening_balance ?? 0, b.currency || 'USD')}</td>
@@ -672,6 +696,18 @@ export default function CashBanksPage() {
         <div className="space-y-3">
           <Field label="رمز"><input className={inputClass} value={boxForm.code} onChange={(e) => setBoxForm({ ...boxForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={boxForm.name} onChange={(e) => setBoxForm({ ...boxForm, name: e.target.value })} required /></Field>
+          <Field label={t('common.branch')}>
+            <select
+              className={inputClass}
+              value={boxForm.branch_id}
+              onChange={(e) => setBoxForm({ ...boxForm, branch_id: e.target.value })}
+            >
+              <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
+              {activeBranches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="العملة">
             <select className={inputClass} value={boxForm.currency} onChange={(e) => setBoxForm({ ...boxForm, currency: e.target.value })}>
               {(currencyList.length ? currencyList : [
@@ -702,6 +738,18 @@ export default function CashBanksPage() {
         <div className="space-y-3">
           <Field label="رمز"><input className={inputClass} value={bankForm.code} onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })} required /></Field>
           <Field label="اسم"><input className={inputClass} value={bankForm.name} onChange={(e) => setBankForm({ ...bankForm, name: e.target.value })} required /></Field>
+          <Field label={t('common.branch')}>
+            <select
+              className={inputClass}
+              value={bankForm.branch_id}
+              onChange={(e) => setBankForm({ ...bankForm, branch_id: e.target.value })}
+            >
+              <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
+              {activeBranches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="رقم الحساب"><input className={inputClass} value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} /></Field>
           <Field label="العملة">
             <select className={inputClass} value={bankForm.currency} onChange={(e) => setBankForm({ ...bankForm, currency: e.target.value })}>
