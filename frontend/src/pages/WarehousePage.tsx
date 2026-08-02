@@ -6,6 +6,7 @@ import { todayYmd } from '@/lib/dates'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import ExcelExportButton from '@/components/ExcelExportButton'
+import ProductExcelImportButtons from '@/components/ProductExcelImportButtons'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -436,6 +437,39 @@ export default function WarehousePage() {
                 params={filterWarehouseId && ['stock', 'movements'].includes(tab) ? { warehouse_id: filterWarehouseId } : undefined}
               />
             )}
+            {tab === 'products' ? (
+              <ProductExcelImportButtons
+                onImported={(result) => {
+                  void qc.invalidateQueries({ queryKey: ['products'] })
+                  void qc.invalidateQueries({ queryKey: ['stock-levels'] })
+                  void qc.invalidateQueries({ queryKey: ['stock-movements'] })
+                  const lines: string[] = []
+                  if (result.imported > 0) {
+                    lines.push(t('warehouse.importSuccess', { count: result.imported }))
+                    const skus = result.products.slice(0, 5).map((p) => p.sku).join('، ')
+                    if (skus) lines.push(t('warehouse.importSkuHint', { skus }))
+                  }
+                  if (result.failed > 0) {
+                    const detail = result.errors
+                      .slice(0, 8)
+                      .map((e) => t('warehouse.importRowError', { row: e.row, message: e.message }))
+                      .join('\n')
+                    msg.setError(
+                      `${t('warehouse.importPartial', { failed: result.failed })}\n${detail}`,
+                    )
+                    if (result.imported > 0) msg.setMessage(lines.join(' — '))
+                    else msg.setMessage('')
+                  } else if (result.imported > 0) {
+                    msg.setMessage(lines.join(' — '))
+                    msg.setError('')
+                  } else {
+                    msg.setError(t('warehouse.importEmpty'))
+                    msg.setMessage('')
+                  }
+                }}
+                onError={(message) => msg.setError(message)}
+              />
+            ) : null}
             {canAdd ? <Button variant="primary" onClick={openCreate}>إضافة</Button> : null}
           </div>
         }

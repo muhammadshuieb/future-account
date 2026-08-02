@@ -254,7 +254,17 @@
     "trackBatch": "Track Batches",
     "trackSerial": "Track Serials",
     "warehouseBalance": "Warehouse balance",
-    "openingQuantity": "Opening quantity"
+    "openingQuantity": "Opening quantity",
+    "downloadImportTemplate": "Download Excel template",
+    "importFromExcel": "Import from Excel",
+    "importing": "Importing...",
+    "importSuccess": "Imported {{count}} product(s) successfully",
+    "importSkuHint": "Generated SKUs: {{skus}}",
+    "importPartial": "Failed to import {{failed}} row(s)",
+    "importRowError": "Row {{row}}: {{message}}",
+    "importEmpty": "The file has no data rows to import",
+    "importFailed": "Could not import the Excel file. Check permissions and format, then try again.",
+    "importTemplateFailed": "Could not download the import template."
   },
   "reports": {
     "generalLedger": "General Ledger",

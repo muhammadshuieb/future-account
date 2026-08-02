@@ -251,7 +251,18 @@
     "postCount": "Farkları Kaydet",
     "trackBatch": "Parti Takibi",
     "trackSerial": "Seri Takibi",
-    "warehouseBalance": "Depo bakiyesi"
+    "warehouseBalance": "Depo bakiyesi",
+    "openingQuantity": "Açılış miktarı",
+    "downloadImportTemplate": "Excel şablonunu indir",
+    "importFromExcel": "Excel'den içe aktar",
+    "importing": "İçe aktarılıyor...",
+    "importSuccess": "{{count}} ürün başarıyla içe aktarıldı",
+    "importSkuHint": "Oluşturulan SKU'lar: {{skus}}",
+    "importPartial": "{{failed}} satır içe aktarılamadı",
+    "importRowError": "Satır {{row}}: {{message}}",
+    "importEmpty": "Dosyada içe aktarılacak veri satırı yok",
+    "importFailed": "Excel dosyası içe aktarılamadı. İzinleri ve biçimi kontrol edip tekrar deneyin.",
+    "importTemplateFailed": "İçe aktarma şablonu indirilemedi."
   },
   "reports": {
     "generalLedger": "Genel Defter",

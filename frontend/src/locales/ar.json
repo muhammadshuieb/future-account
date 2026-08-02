@@ -254,7 +254,17 @@
     "trackBatch": "تتبع الدفعات",
     "trackSerial": "تتبع التسلسلي",
     "warehouseBalance": "رصيد المخزن",
-    "openingQuantity": "كمية افتتاحية"
+    "openingQuantity": "كمية افتتاحية",
+    "downloadImportTemplate": "تحميل قالب Excel",
+    "importFromExcel": "استيراد من Excel",
+    "importing": "جاري الاستيراد...",
+    "importSuccess": "تم استيراد {{count}} صنفاً بنجاح",
+    "importSkuHint": "أرقام الأصناف المولَّدة: {{skus}}",
+    "importPartial": "فشل استيراد {{failed}} صف",
+    "importRowError": "صف {{row}}: {{message}}",
+    "importEmpty": "الملف لا يحتوي على صفوف بيانات للاستيراد",
+    "importFailed": "تعذر استيراد ملف Excel. تحقق من الصلاحيات والصيغة وحاول مجدداً.",
+    "importTemplateFailed": "تعذر تحميل قالب الاستيراد."
   },
   "reports": {
     "generalLedger": "دفتر الأستاذ العام",

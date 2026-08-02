@@ -51,6 +51,11 @@ export function Panel({ children, className = '' }: { children: ReactNode; class
   )
 }
 
+/** Flex-wrap action cluster for table rows — Print / PDF / WhatsApp / Delete, etc. */
+export function TableActions({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`table-actions ${className}`.trim()}>{children}</div>
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block text-sm">
@@ -102,7 +107,10 @@ export function Button({
 export function Msg({ message, error }: { message?: string; error?: string }) {
   if (!message && !error) return null
   return (
-    <p className={error ? 'rounded-lg bg-red-50 px-3 py-2 text-sm text-danger' : 'rounded-lg bg-teal-soft/60 px-3 py-2 text-sm text-teal-dark'}>
+    <p className={[
+      error ? 'rounded-lg bg-red-50 px-3 py-2 text-sm text-danger' : 'rounded-lg bg-teal-soft/60 px-3 py-2 text-sm text-teal-dark',
+      'whitespace-pre-line',
+    ].join(' ')}>
       {error || message}
     </p>
   )
@@ -169,11 +177,14 @@ export function StatTile({
   label,
   value,
   hint,
+  subtitle,
   tone = 'default',
 }: {
   label: string
   value: string
   hint?: string
+  /** Clarifier shown directly under the label (e.g. عليه / علينا). */
+  subtitle?: string
   tone?: 'default' | 'teal' | 'amber' | 'success' | 'danger'
 }) {
   const tones = {
@@ -186,6 +197,7 @@ export function StatTile({
   return (
     <div className="rounded-xl border border-[var(--color-line)] bg-white/95 p-4 shadow-[0_1px_2px_rgba(12,26,34,0.03)]">
       <p className="text-xs font-medium tracking-wide text-black/45">{label}</p>
+      {subtitle && <p className="mt-0.5 text-xs font-medium text-black/55">{subtitle}</p>}
       <p className={`mt-2 text-xl font-bold tabular-nums ${tones[tone]}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-black/40">{hint}</p>}
     </div>

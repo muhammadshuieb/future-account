@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\ProductImportController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\PurchaseRequestController;
 use App\Http\Controllers\Api\RoleController;
@@ -81,6 +82,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exports/full', [ExportController::class, 'full']);
     Route::get('exports/reports/{type}', [ExportController::class, 'report']);
     Route::get('exports/{module}', [ExportController::class, 'module']);
+
+    // Excel product import (warehouse)
+    Route::get('imports/products/template', [ProductImportController::class, 'template']);
+    Route::post('imports/products', [ProductImportController::class, 'import']);
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);
