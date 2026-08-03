@@ -66,12 +66,12 @@ class ProductImportService
         ]);
         $book->addSheet('تعليمات', ['البند', 'الشرح'], [
             ['اسم الصنف', 'مطلوب'],
-            ['التصنيف', 'اختياري — اسم التصنيف الموجود في النظام'],
-            ['الوحدة', 'اختياري — اسم وحدة القياس الموجودة في النظام'],
+            ['التصنيف', 'اختياري — إن لم يوجد يُنشأ تلقائياً بالاسم المكتوب'],
+            ['الوحدة', 'اختياري — إن فرغت تُستخدم «قطعة»؛ وإن لم توجد تُنشأ تلقائياً'],
             ['الباركود', 'اختياري — يجب أن يكون فريداً إن وُجد'],
             ['سعر التكلفة', 'اختياري — افتراضي 0'],
             ['سعر البيع', 'اختياري — افتراضي 0'],
-            ['المخزن', 'مطلوب — اسم أو رمز المخزن لربط الصنف'],
+            ['المخزن', 'مطلوب — اسم أو رمز مخزن موجود. إن لم يكن لديك أي مخزن يُنشأ «المخزن الرئيسي» تلقائياً'],
             ['كمية افتتاحية', 'اختياري — افتراضي 0'],
             ['حد إعادة الطلب', 'اختياري — افتراضي 0'],
             ['ملاحظات', 'اختياري — تُحفظ في وصف الصنف'],
@@ -210,7 +210,16 @@ class ProductImportService
                 || mb_strtolower((string) $w->code) === mb_strtolower($warehouseKey);
         });
         if (! $warehouse) {
-            throw new \InvalidArgumentException("المخزن غير موجود: {$warehouseKey}");
+            // After a wipe there may be zero warehouses — create a practical default once.
+            if ($warehouses->isEmpty()) {
+                $warehouse = $this->ensureDefaultWarehouse($warehouseKey);
+                $warehouses->push($warehouse);
+            } else {
+                $names = $warehouses->pluck('name')->implode('، ');
+                throw new \InvalidArgumentException(
+                    "المخزن غير موجود: {$warehouseKey}. المخازن المتاحة: {$names}"
+                );
+            }
         }
 
         $categoryId = null;
@@ -220,23 +229,28 @@ class ProductImportService
                 fn (Category $c) => mb_strtolower((string) $c->name) === mb_strtolower($categoryKey)
             );
             if (! $category) {
-                throw new \InvalidArgumentException("التصنيف غير موجود: {$categoryKey}");
+                $category = Category::query()->create(['name' => $categoryKey]);
+                $categories->push($category);
             }
             $categoryId = $category->id;
         }
 
-        $unitId = null;
         $unitKey = trim($raw['الوحدة']);
-        if ($unitKey !== '') {
-            $unit = $units->first(function (Unit $u) use ($unitKey) {
-                return mb_strtolower((string) $u->name) === mb_strtolower($unitKey)
-                    || mb_strtolower((string) ($u->symbol ?? '')) === mb_strtolower($unitKey);
-            });
-            if (! $unit) {
-                throw new \InvalidArgumentException("الوحدة غير موجودة: {$unitKey}");
-            }
-            $unitId = $unit->id;
+        if ($unitKey === '') {
+            $unitKey = 'قطعة';
         }
+        $unit = $units->first(function (Unit $u) use ($unitKey) {
+            return mb_strtolower((string) $u->name) === mb_strtolower($unitKey)
+                || mb_strtolower((string) ($u->symbol ?? '')) === mb_strtolower($unitKey);
+        });
+        if (! $unit) {
+            $unit = Unit::query()->create([
+                'name' => $unitKey,
+                'symbol' => mb_strlen($unitKey) <= 16 ? $unitKey : null,
+            ]);
+            $units->push($unit);
+        }
+        $unitId = $unit->id;
 
         $barcode = trim($raw['الباركود']);
         if ($barcode === '') {
@@ -338,6 +352,32 @@ class ProductImportService
         }
 
         return $prefix.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * When the company has no warehouses yet (e.g. after a wipe), create one so import can proceed.
+     * Uses the name from the spreadsheet when provided; falls back to «المخزن الرئيسي».
+     */
+    protected function ensureDefaultWarehouse(string $requestedName): Warehouse
+    {
+        $name = trim($requestedName) !== '' ? trim($requestedName) : 'المخزن الرئيسي';
+        $baseCode = 'WH-01';
+        $code = $baseCode;
+        $n = 1;
+        while (Warehouse::query()->where('code', $code)->exists()) {
+            $n++;
+            $code = 'WH-'.str_pad((string) $n, 2, '0', STR_PAD_LEFT);
+        }
+
+        $branchId = \App\Models\Branch::query()->where('is_main', true)->value('id')
+            ?? \App\Models\Branch::query()->value('id');
+
+        return Warehouse::query()->create([
+            'code' => $code,
+            'name' => $name,
+            'branch_id' => $branchId,
+            'is_active' => true,
+        ]);
     }
 
     /**

@@ -139,6 +139,68 @@ class ProductExcelImportTest extends TestCase
         $this->assertCount(2, $res->json('data.errors'));
         $this->assertTrue(Product::query()->where('name', 'صالح')->exists());
         $this->assertFalse(Product::query()->where('name', 'بدون مخزن')->exists());
+        // Empty unit defaults to قطعة and auto-creates it
+        $this->assertTrue(Unit::query()->where('name', 'قطعة')->exists());
+        $this->assertNotNull(Product::query()->where('name', 'صالح')->value('unit_id'));
+    }
+
+    public function test_import_auto_creates_missing_category_and_unit(): void
+    {
+        Warehouse::query()->create([
+            'code' => 'WH-AC',
+            'name' => 'المخزن الرئيسي',
+            'is_active' => true,
+        ]);
+
+        $this->assertFalse(Category::query()->where('name', 'عام')->exists());
+        $this->assertFalse(Unit::query()->where('name', 'قطعة')->exists());
+
+        $file = $this->makeImportXlsx([
+            ['منتج أ', 'عام', 'قطعة', '', '10', '15', 'المخزن الرئيسي', '0', '5', ''],
+            ['منتج ب', 'عام', '', '', '5', '8', 'المخزن الرئيسي', '2', '1', ''],
+            ['منتج ج', 'مواد خام', 'كيلو', '', '3', '6', 'المخزن الرئيسي', '0', '0', ''],
+        ]);
+
+        $res = $this->post('/api/imports/products', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
+        $this->assertSame(3, $res->json('data.imported'));
+        $this->assertSame(0, $res->json('data.failed'));
+
+        $this->assertTrue(Category::query()->where('name', 'عام')->exists());
+        $this->assertTrue(Category::query()->where('name', 'مواد خام')->exists());
+        $this->assertTrue(Unit::query()->where('name', 'قطعة')->exists());
+        $this->assertTrue(Unit::query()->where('name', 'كيلو')->exists());
+
+        $pA = Product::query()->where('name', 'منتج أ')->first();
+        $this->assertNotNull($pA);
+        $this->assertSame('PRD-00001', $pA->sku);
+        $this->assertSame(Category::query()->where('name', 'عام')->value('id'), $pA->category_id);
+        $this->assertSame(Unit::query()->where('name', 'قطعة')->value('id'), $pA->unit_id);
+
+        $pB = Product::query()->where('name', 'منتج ب')->first();
+        $this->assertNotNull($pB);
+        $this->assertSame(Unit::query()->where('name', 'قطعة')->value('id'), $pB->unit_id);
+        // Same category name reused — only one «عام» row
+        $this->assertSame(1, Category::query()->where('name', 'عام')->count());
+    }
+
+    public function test_import_auto_creates_default_warehouse_when_none_exist(): void
+    {
+        $this->assertSame(0, Warehouse::query()->count());
+
+        $file = $this->makeImportXlsx([
+            ['صنف بعد المسح', 'عام', 'قطعة', '', '1', '2', 'المخزن الرئيسي', '0', '0', ''],
+        ]);
+
+        $res = $this->post('/api/imports/products', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
+        $this->assertSame(1, $res->json('data.imported'));
+        $this->assertTrue(Warehouse::query()->where('name', 'المخزن الرئيسي')->exists());
+        $this->assertTrue(Product::query()->where('name', 'صنف بعد المسح')->exists());
     }
 
     public function test_import_ignores_sku_column_if_present(): void
