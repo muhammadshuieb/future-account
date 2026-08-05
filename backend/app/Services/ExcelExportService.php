@@ -42,6 +42,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
 use App\Services\Excel\ExcelWorkbook;
+use App\Support\WarehouseAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -325,7 +326,7 @@ class ExcelExportService
             'units' => $book->addSheet('الوحدات', ['المعرف', 'الاسم', 'الرمز'],
                 Unit::query()->orderBy('id')->get()->map(fn ($u) => [$u->id, $u->name, $u->symbol ?? ''])->all()),
             'warehouses' => $book->addSheet('المستودعات', ['المعرف', 'الاسم', 'الكود', 'الفرع', 'نشط'],
-                Warehouse::query()->with('branch')->orderBy('id')->get()->map(fn ($w) => [
+                $this->scopedWarehouseQuery()->with('branch')->orderBy('id')->get()->map(fn ($w) => [
                     $w->id, $w->name, $w->code, $w->branch?->name, $w->is_active ? '1' : '0',
                 ])->all()),
             'stock-levels' => $this->sheetStockLevels($book, $request),
@@ -543,9 +544,25 @@ class ExcelExportService
             ])->all());
     }
 
+    protected function scopedWarehouseQuery(): Builder
+    {
+        $query = Warehouse::query();
+        if (auth()->user()) {
+            WarehouseAccess::scopeWarehouseColumn($query, auth()->user(), 'id');
+        }
+
+        return $query;
+    }
+
     protected function sheetProducts(ExcelWorkbook $book, Request $request): void
     {
         $q = Product::query()->with(['category', 'unit'])->orderBy('id');
+        if (auth()->user() && WarehouseAccess::isScoped(auth()->user())) {
+            $q->whereHas('stockLevels', fn ($query) => $query->whereIn(
+                'warehouse_id',
+                WarehouseAccess::warehouseIds(auth()->user()),
+            ));
+        }
         if ($request->filled('q')) {
             $term = '%'.$request->query('q').'%';
             $q->where(fn ($qq) => $qq->where('name', 'ilike', $term)->orWhere('sku', 'ilike', $term)->orWhere('barcode', 'ilike', $term));
@@ -560,6 +577,9 @@ class ExcelExportService
     protected function sheetStockLevels(ExcelWorkbook $book, Request $request): void
     {
         $q = StockLevel::query()->with(['product', 'warehouse'])->orderBy('id');
+        if (auth()->user()) {
+            WarehouseAccess::scopeWarehouseColumn($q, auth()->user());
+        }
         if ($request->filled('warehouse_id')) {
             $q->where('warehouse_id', $request->query('warehouse_id'));
         }
@@ -572,6 +592,9 @@ class ExcelExportService
     protected function sheetStockMovements(ExcelWorkbook $book, Request $request): void
     {
         $q = StockMovement::query()->with(['product', 'warehouse'])->orderByDesc('id');
+        if (auth()->user()) {
+            WarehouseAccess::scopeWarehouseColumn($q, auth()->user());
+        }
         $this->applyDateFilter($q, 'movement_date', $request);
         if ($request->filled('warehouse_id')) {
             $q->where('warehouse_id', $request->query('warehouse_id'));
@@ -587,6 +610,10 @@ class ExcelExportService
     protected function sheetWarehouseTransfers(ExcelWorkbook $book, Request $request): void
     {
         $q = WarehouseTransfer::query()->with(['fromWarehouse', 'toWarehouse'])->orderByDesc('id');
+        if (auth()->user() && WarehouseAccess::isScoped(auth()->user())) {
+            $ids = WarehouseAccess::warehouseIds(auth()->user());
+            $q->whereIn('from_warehouse_id', $ids)->whereIn('to_warehouse_id', $ids);
+        }
         $this->applyDateFilter($q, 'transfer_date', $request);
         $book->addSheet('تحويلات المستودعات', ['الرقم', 'التاريخ', 'من', 'إلى', 'الحالة'],
             $q->get()->map(fn ($t) => [
@@ -802,8 +829,8 @@ class ExcelExportService
             ['عدد فواتير المشتريات', $data['purchases']['count'] ?? 0],
             ['إجمالي المشتريات', $data['purchases']['total'] ?? 0],
             ['مجمل الربح', $data['profit']['gross_profit'] ?? 0],
-            ['الذمم المدينة', $data['receivables'] ?? 0],
-            ['الذمم الدائنة', $data['payables'] ?? 0],
+            ['الذمم المدينة (عليه)', $data['receivables'] ?? 0],
+            ['الذمم الدائنة (علينا)', $data['payables'] ?? 0],
             ['قيمة المخزون', $data['stock_value'] ?? 0],
             ['ضريبة المخرجات', $data['tax']['output_vat'] ?? 0],
             ['ضريبة المدخلات', $data['tax']['input_vat'] ?? 0],

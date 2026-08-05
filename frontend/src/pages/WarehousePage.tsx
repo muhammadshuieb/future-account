@@ -10,6 +10,7 @@ import ProductExcelImportButtons from '@/components/ProductExcelImportButtons'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useAuth } from '@/context/AuthContext'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
 type Tab = (typeof WAREHOUSE_TABS)[number]
@@ -91,6 +92,7 @@ const emptyTr = {
 
 export default function WarehousePage() {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
   const [tab, setTab] = useQueryTab(WAREHOUSE_TABS, 'warehouses')
   const qc = useQueryClient()
   const msg = useFormMessage()
@@ -158,7 +160,17 @@ export default function WarehousePage() {
   const [trForm, setTrForm] = useState(emptyTr)
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
 
-  const canAdd = !['stock', 'alerts'].includes(tab)
+  const canManageDirectly = hasPermission('warehouse.manage')
+  const canRequest = (permission: string) => canManageDirectly || hasPermission(permission)
+  const canEditCurrent = (
+    (tab === 'warehouses' && canRequest('warehouse.master.request'))
+    || (tab === 'products' && canRequest('warehouse.products.request'))
+    || (tab === 'movements' && canRequest('warehouse.adjustments.request'))
+    || (tab === 'transfers' && canRequest('warehouse.transfers.request'))
+    || (tab === 'counts' && canRequest('warehouse.counts.request'))
+    || (['categories', 'units'].includes(tab) && canManageDirectly)
+  )
+  const canAdd = canEditCurrent && !['stock', 'alerts'].includes(tab) && (tab !== 'warehouses' || canManageDirectly)
   const productList = (products.data || []) as ProductRow[]
   const trProduct = productList.find((p) => String(p.id) === trForm.product_id)
   const mvProduct = productList.find((p) => String(p.id) === mvForm.product_id)
@@ -274,7 +286,7 @@ export default function WarehousePage() {
       if (editingId) return api.put(`/warehouses/${editingId}`, payload)
       return api.post('/warehouses', payload)
     },
-    onSuccess: () => { msg.setMessage('تم حفظ المخزن'); closeModal(); void qc.invalidateQueries({ queryKey: ['warehouses'] }) },
+    onSuccess: (res) => { msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم حفظ المخزن'); closeModal(); void qc.invalidateQueries({ queryKey: ['warehouses'] }); void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] }) },
     onError: msg.fromErr,
   })
 
@@ -319,12 +331,13 @@ export default function WarehousePage() {
       if (editingId) return api.put(`/products/${editingId}`, payload)
       return api.post('/products', payload)
     },
-    onSuccess: () => {
-      msg.setMessage('تم حفظ الصنف')
+    onSuccess: (res) => {
+      msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم حفظ الصنف')
       closeModal()
       void qc.invalidateQueries({ queryKey: ['products'] })
       void qc.invalidateQueries({ queryKey: ['stock-levels'] })
       void qc.invalidateQueries({ queryKey: ['stock-movements'] })
+      void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] })
     },
     onError: msg.fromErr,
   })
@@ -355,12 +368,13 @@ export default function WarehousePage() {
         batch_no: mvForm.batch_no || undefined,
         serial_no: mvForm.serial_no || undefined,
       }),
-    onSuccess: () => {
-      msg.setMessage('تم تسجيل الحركة')
+    onSuccess: (res) => {
+      msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم تسجيل الحركة')
       closeModal()
       for (const key of ['stock-levels', 'stock-movements', 'stock-alerts'] as const) {
         void qc.invalidateQueries({ queryKey: [key] })
       }
+      void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] })
     },
     onError: msg.fromErr,
   })
@@ -377,23 +391,25 @@ export default function WarehousePage() {
           serial_no: cntForm.serial_no || undefined,
         }],
       }),
-    onSuccess: () => {
-      msg.setMessage('تم حفظ الجرد')
+    onSuccess: (res) => {
+      msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم حفظ الجرد')
       closeModal()
       for (const key of ['inventory-counts', 'stock-levels'] as const) {
         void qc.invalidateQueries({ queryKey: [key] })
       }
+      void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] })
     },
     onError: msg.fromErr,
   })
 
   const postCnt = useMutation({
     mutationFn: (id: number) => api.post(`/inventory-counts/${id}/post`),
-    onSuccess: () => {
-      msg.setMessage('تم ترحيل فروقات الجرد')
+    onSuccess: (res) => {
+      msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم ترحيل فروقات الجرد')
       for (const key of ['inventory-counts', 'stock-levels', 'stock-movements'] as const) {
         void qc.invalidateQueries({ queryKey: [key] })
       }
+      void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] })
     },
     onError: msg.fromErr,
   })
@@ -412,12 +428,13 @@ export default function WarehousePage() {
           serial_no: trForm.serial_no || undefined,
         }],
       }),
-    onSuccess: () => {
-      msg.setMessage('تم التحويل')
+    onSuccess: (res) => {
+      msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم التحويل')
       closeModal()
       for (const key of ['warehouse-transfers', 'stock-levels'] as const) {
         void qc.invalidateQueries({ queryKey: [key] })
       }
+      void qc.invalidateQueries({ queryKey: ['warehouse-approvals'] })
     },
     onError: msg.fromErr,
   })
@@ -437,7 +454,7 @@ export default function WarehousePage() {
                 params={filterWarehouseId && ['stock', 'movements'].includes(tab) ? { warehouse_id: filterWarehouseId } : undefined}
               />
             )}
-            {tab === 'products' ? (
+            {tab === 'products' && canManageDirectly ? (
               <ProductExcelImportButtons
                 onImported={(result) => {
                   void qc.invalidateQueries({ queryKey: ['products'] })
@@ -531,6 +548,7 @@ export default function WarehousePage() {
                   key={w.id}
                   className="row-clickable border-t border-black/5"
                   onClick={() => {
+                    if (!canRequest('warehouse.master.request')) return
                     setEditingId(w.id)
                     setWhForm({ code: w.code, name: w.name, location: w.location || '' })
                     setModalOpen(true)
@@ -565,6 +583,7 @@ export default function WarehousePage() {
                     key={p.id}
                     className="row-clickable"
                     onClick={() => {
+                      if (!canRequest('warehouse.products.request')) return
                       setEditingId(p.id)
                       setPrForm({
                         sku: p.sku,
@@ -601,7 +620,7 @@ export default function WarehousePage() {
                         : '—'}
                     </td>
                     <td>
-                      {(p.on_hand ?? 0) === 0
+                      {(p.on_hand ?? 0) === 0 && canManageDirectly
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => {
                             e.stopPropagation()
                             setEditingId(p.id)
@@ -628,6 +647,7 @@ export default function WarehousePage() {
                   key={c.id}
                   className="row-clickable"
                   onClick={() => {
+                    if (!canManageDirectly) return
                     setEditingId(c.id)
                     setCatForm({ name: c.name, parent_id: c.parent_id ? String(c.parent_id) : '' })
                     setModalOpen(true)
@@ -653,6 +673,7 @@ export default function WarehousePage() {
                   key={u.id}
                   className="row-clickable"
                   onClick={() => {
+                    if (!canManageDirectly) return
                     setEditingId(u.id)
                     setUnitForm({ name: u.name, symbol: u.symbol || '' })
                     setModalOpen(true)
@@ -759,7 +780,7 @@ export default function WarehousePage() {
                   <td className="px-4 py-3">{String(c.count_date).slice(0, 10)}</td>
                   <td className="px-4 py-3">{c.status}</td>
                   <td className="px-4 py-3">
-                    {c.status === 'draft' && (
+                    {c.status === 'draft' && canRequest('warehouse.counts.request') && (
                       <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); postCnt.mutate(c.id) }}>
                         {t('warehouse.postCount')}
                       </button>

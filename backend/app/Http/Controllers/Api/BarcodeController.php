@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\SalesInvoice;
 use App\Models\Setting;
 use App\Services\EInvoiceService;
+use App\Support\WarehouseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -24,6 +25,12 @@ class BarcodeController extends ApiController
         ]);
 
         $query = Product::query()->where('is_active', true)->orderBy('sku');
+        if (WarehouseAccess::isScoped($request->user())) {
+            $query->whereHas('stockLevels', fn ($q) => $q->whereIn(
+                'warehouse_id',
+                WarehouseAccess::warehouseIds($request->user()),
+            ));
+        }
         if (! empty($data['product_ids'])) {
             $query->whereIn('id', $data['product_ids']);
         }

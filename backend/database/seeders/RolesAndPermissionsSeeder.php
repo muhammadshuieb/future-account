@@ -28,6 +28,13 @@ class RolesAndPermissionsSeeder extends Seeder
             'purchases.manage',
             'warehouse.view',
             'warehouse.manage',
+            'warehouse.products.request',
+            'warehouse.adjustments.request',
+            'warehouse.transfers.request',
+            'warehouse.counts.request',
+            'warehouse.master.request',
+            'warehouse.approvals.view_own',
+            'warehouse.approvals.review',
             'customers.view',
             'customers.manage',
             'suppliers.view',
@@ -70,6 +77,18 @@ class RolesAndPermissionsSeeder extends Seeder
             'warehouse.view',
             'warehouse.manage',
             'reports.view',
+        ]);
+
+        $warehouseManager = Role::findOrCreate('warehouse_manager');
+        $warehouseManager->syncPermissions([
+            'dashboard.view',
+            'warehouse.view',
+            'warehouse.products.request',
+            'warehouse.adjustments.request',
+            'warehouse.transfers.request',
+            'warehouse.counts.request',
+            'warehouse.master.request',
+            'warehouse.approvals.view_own',
         ]);
 
         $sales = Role::findOrCreate('sales');

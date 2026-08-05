@@ -309,24 +309,22 @@ export default function ReportsPage() {
       </div>
 
       <Panel className="print-area" data-print-ready={report.data ? '1' : undefined}>
-        <div className="print-brand-header hidden border-b border-black/10 px-4 py-3 print:block">
-          <div className="mb-2 flex w-full items-start justify-between gap-4">
-            {/* First in RTL → visual right: company + report title */}
-            <div className="min-w-0 text-start">
-              <p className="text-lg font-bold">{t('app.name')} — Syna Co</p>
-              <p className="text-sm font-semibold">
-                {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
-              </p>
-              <p className="mt-1 text-xs text-black/60">
-                العملة الأساسية: {base}
-                {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
-                {branchId && ` · فرع محدد`}
-                {warehouseId && ` · مخزن محدد`}
-              </p>
-            </div>
-            {/* Second in RTL → visual left: logo */}
-            <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print" />
+        <div className="print-brand-header hidden border-b border-black/10 px-4 py-3 print:flex">
+          {/* First in RTL → visual right: company + report title */}
+          <div className="min-w-0 text-start">
+            <p className="text-lg font-bold">{t('app.name')} — Syna Co</p>
+            <p className="text-sm font-semibold">
+              {tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
+            </p>
+            <p className="mt-1 text-xs text-black/60">
+              العملة الأساسية: {base}
+              {tab !== 'inventory' && ` · الفترة: ${from} → ${to}`}
+              {branchId && ` · فرع محدد`}
+              {warehouseId && ` · مخزن محدد`}
+            </p>
           </div>
+          {/* Second in RTL → visual left: logo */}
+          <img src={LOGO.print} alt="SYNAMOR TECHNOLOGY" className="brand-logo brand-logo--print print-logo" />
         </div>
 
         {!reportUrl && <EmptyState title={tab === 'branch-complete' ? 'اختر فرعاً لعرض التقرير' : 'اختر عنصراً لعرض التقرير'} />}
@@ -344,8 +342,8 @@ export default function ReportsPage() {
                   <StatTile label="المبيعات" value={formatMoney(report.data.sales?.total || 0, base)} hint={`${report.data.sales?.count || 0} فاتورة`} tone="teal" />
                   <StatTile label="المشتريات" value={formatMoney(report.data.purchases?.total || 0, base)} hint={`${report.data.purchases?.count || 0} فاتورة`} />
                   <StatTile label="مجمل الربح" value={formatMoney(report.data.profit?.gross_profit || 0, base)} tone="success" />
-                  <StatTile label="الذمم المدينة" value={formatMoney(report.data.receivables || 0, base)} tone="amber" />
-                  <StatTile label="الذمم الدائنة" value={formatMoney(report.data.payables || 0, base)} />
+                  <StatTile label={t('dashboard.receivables')} value={formatMoney(report.data.receivables || 0, base)} tone="amber" />
+                  <StatTile label={t('dashboard.payables')} value={formatMoney(report.data.payables || 0, base)} />
                   <StatTile label="قيمة المخزون" value={formatMoney(report.data.stock_value || 0, base)} />
                 </div>
                 {(report.data.cash_boxes || []).length > 0 && (

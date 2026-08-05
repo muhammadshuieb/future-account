@@ -39,6 +39,17 @@ class AppNotificationService
         }
     }
 
+    public function notifyUser(User $user, string $type, string $title, string $body, array $data = []): void
+    {
+        AppNotification::query()->create([
+            'user_id' => $user->id,
+            'type' => $type,
+            'title' => $title,
+            'body' => $body,
+            'data' => $this->withHref($type, $data),
+        ]);
+    }
+
     /**
      * Create at most one unread notification of this type per admin per calendar day.
      */
@@ -86,6 +97,8 @@ class AppNotificationService
             'receivables' => '/partners?tab=customers',
             'payables' => '/partners?tab=suppliers',
             'draft_journals' => '/journal-entries',
+            'warehouse_approval_pending' => '/warehouse-approvals',
+            'warehouse_approval_reviewed' => '/warehouse-approvals',
         ];
 
         if (isset($map[$type])) {

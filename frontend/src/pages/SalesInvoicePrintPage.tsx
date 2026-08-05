@@ -51,8 +51,8 @@ export default function SalesInvoicePrintPage() {
   }
 
   return (
-    <div className="print-document min-h-screen bg-white p-6 text-black" dir="rtl">
-      <div className="print-hide mb-4 flex flex-wrap items-center gap-2 border-b border-black/10 pb-4">
+    <div className="print-document min-h-0 p-4 text-black" dir="rtl">
+      <div className="print-hide mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-white p-3">
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
@@ -67,10 +67,12 @@ export default function SalesInvoicePrintPage() {
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}
         </Button>
-        <p className="text-xs text-black/45">نافذة طباعة الفاتورة — بدون قائمة التطبيق</p>
+        <p className="text-xs text-black/45">معاينة A4 — نافذة طباعة الفاتورة</p>
       </div>
-      <div className="print-area mx-auto max-w-3xl" data-print-ready="1">
-        <SalesInvoicePrintView invoice={invoice.data} eInvoice={qr.data} />
+      <div className="print-sheet">
+        <div className="print-area" data-print-ready="1">
+          <SalesInvoicePrintView invoice={invoice.data} eInvoice={qr.data} />
+        </div>
       </div>
     </div>
   )

@@ -171,6 +171,8 @@ export default function SettingsPage() {
       email: string
       is_active: boolean
       roles: string[]
+      warehouse_ids: number[]
+      warehouses?: { id: number; name: string; code: string }[]
     }[],
     enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
     retry: false,
@@ -183,6 +185,13 @@ export default function SettingsPage() {
     retry: false,
   })
 
+  const warehousesAdmin = useQuery({
+    queryKey: ['admin-warehouses'],
+    queryFn: async () => (await api.get('/warehouses')).data.data as { id: number; name: string; code: string }[],
+    enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
+    retry: false,
+  })
+
   const emptyUserForm = {
     first_name: '',
     last_name: '',
@@ -191,6 +200,7 @@ export default function SettingsPage() {
     email: '',
     password: '',
     roles: ['accountant'] as string[],
+    warehouse_ids: [] as number[],
   }
   const [userForm, setUserForm] = useState(emptyUserForm)
   const [userModal, setUserModal] = useState<'create' | 'edit' | null>(null)
@@ -378,6 +388,7 @@ export default function SettingsPage() {
         mobile: userForm.mobile,
         email: userForm.email || undefined,
         roles: userForm.roles,
+        warehouse_ids: userForm.warehouse_ids,
         ...(userForm.password ? { password: userForm.password } : {}),
       }
       if (!editingUserId) {
@@ -1042,6 +1053,7 @@ export default function SettingsPage() {
                         email: u.email || '',
                         password: '',
                         roles: u.roles.length ? u.roles : ['accountant'],
+                        warehouse_ids: u.warehouse_ids || [],
                       })
                       setUserModal('edit')
                     }}
@@ -1104,6 +1116,27 @@ export default function SettingsPage() {
           <Field label={t('settings.email')} hint={t('settings.emailOptionalHint')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Field>
           <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
           <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
+          {userForm.roles.includes('warehouse_manager') && (
+            <Field label={t('settings.assignedWarehouses')} hint={t('settings.assignedWarehousesHint')}>
+              <div className="grid gap-2 rounded-lg border border-[var(--color-line)] p-3 sm:grid-cols-2">
+                {(warehousesAdmin.data || []).map((warehouse) => (
+                  <label key={warehouse.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={userForm.warehouse_ids.includes(warehouse.id)}
+                      onChange={(e) => setUserForm({
+                        ...userForm,
+                        warehouse_ids: e.target.checked
+                          ? [...userForm.warehouse_ids, warehouse.id]
+                          : userForm.warehouse_ids.filter((id) => id !== warehouse.id),
+                      })}
+                    />
+                    <span>{warehouse.code} — {warehouse.name}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          )}
         </form>
       </Modal>
     </div>

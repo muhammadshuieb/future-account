@@ -44,6 +44,7 @@ use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\SupplierPaymentController;
 use App\Http\Controllers\Api\UnitController;
 use App\Http\Controllers\Api\WarehouseController;
+use App\Http\Controllers\Api\WarehouseApprovalController;
 use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
@@ -135,6 +136,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('inventory-counts', [InventoryController::class, 'counts']);
     Route::post('inventory-counts', [InventoryController::class, 'storeCount']);
     Route::post('inventory-counts/{inventoryCount}/post', [InventoryController::class, 'postCount']);
+    Route::get('warehouse-approvals', [WarehouseApprovalController::class, 'index']);
+    Route::get('warehouse-approvals/{warehouseApprovalRequest}', [WarehouseApprovalController::class, 'show']);
+    Route::post('warehouse-approvals/{warehouseApprovalRequest}/approve', [WarehouseApprovalController::class, 'approve']);
+    Route::post('warehouse-approvals/{warehouseApprovalRequest}/reject', [WarehouseApprovalController::class, 'reject']);
 
     // Phase 3 — Sales & Purchases
     Route::apiResource('customers', CustomerController::class);

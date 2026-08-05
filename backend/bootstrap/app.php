@@ -39,6 +39,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
 
+        $middleware->redirectGuestsTo(
+            fn (Request $request) => $request->is('api/*') || $request->expectsJson() ? null : '/'
+        );
+
         $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {

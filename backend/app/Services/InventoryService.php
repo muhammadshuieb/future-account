@@ -186,6 +186,7 @@ class InventoryService
 
             $entry = $this->journals->create([
                 'entry_date' => $data['movement_date'] ?? now()->toDateString(),
+                'branch_id' => Warehouse::query()->whereKey((int) $data['warehouse_id'])->value('branch_id'),
                 'description' => 'حركة مخزون '.$type,
                 'reference' => $data['notes'] ?? null,
                 'status' => 'posted',
@@ -368,7 +369,33 @@ class InventoryService
         }
 
         return DB::transaction(function () use ($count, $user) {
-            $count->load('lines');
+            $count->load('lines.product');
+
+            $surplusValue = 0.0;
+            $shortageValue = 0.0;
+
+            foreach ($count->lines as $line) {
+                $diff = (float) $line->difference;
+                if (abs($diff) < 0.0001) {
+                    continue;
+                }
+
+                $unitCost = (float) ($line->product?->cost_price ?? 0);
+                $value = round(abs($diff) * $unitCost, 2);
+                if ($diff > 0) {
+                    $surplusValue += $value;
+                } else {
+                    $shortageValue += $value;
+                }
+            }
+
+            // A physical count changes inventory on hand, so the inventory account must move with it.
+            $entryId = $this->postCountAdjustmentEntry(
+                $count,
+                round($surplusValue, 2),
+                round($shortageValue, 2),
+                $user
+            );
 
             foreach ($count->lines as $line) {
                 $diff = (float) $line->difference;
@@ -384,10 +411,11 @@ class InventoryService
                     $user,
                     [
                         'movement_date' => $count->count_date->toDateString(),
+                        'unit_cost' => (float) ($line->product?->cost_price ?? 0),
                         'reference_type' => $count::class,
                         'reference_id' => $count->id,
                         'notes' => 'تسوية جرد '.$count->count_number,
-                        'post_to_gl' => false,
+                        'journal_entry_id' => $entryId,
                         'batch_no' => $line->batch_no,
                         'serial_no' => $line->serial_no,
                     ]
@@ -514,6 +542,42 @@ class InventoryService
         });
 
         return array_values($alerts);
+    }
+
+    protected function postCountAdjustmentEntry(
+        \App\Models\InventoryCount $count,
+        float $surplusValue,
+        float $shortageValue,
+        User $user
+    ): ?int {
+        if ($surplusValue <= 0 && $shortageValue <= 0) {
+            return null;
+        }
+
+        $inventory = Account::query()->where('code', '1104')->firstOrFail();
+        $lines = [];
+
+        if ($surplusValue > 0) {
+            $otherIncome = Account::query()->where('code', '4102')->firstOrFail();
+            $lines[] = ['account_id' => $inventory->id, 'debit' => $surplusValue, 'credit' => 0, 'memo' => 'زيادة جرد'];
+            $lines[] = ['account_id' => $otherIncome->id, 'debit' => 0, 'credit' => $surplusValue, 'memo' => 'زيادة جرد'];
+        }
+
+        if ($shortageValue > 0) {
+            $generalExpense = Account::query()->where('code', '5104')->firstOrFail();
+            $lines[] = ['account_id' => $generalExpense->id, 'debit' => $shortageValue, 'credit' => 0, 'memo' => 'نقص جرد'];
+            $lines[] = ['account_id' => $inventory->id, 'debit' => 0, 'credit' => $shortageValue, 'memo' => 'نقص جرد'];
+        }
+
+        $entry = $this->journals->create([
+            'entry_date' => $count->count_date->toDateString(),
+            'branch_id' => Warehouse::query()->whereKey($count->warehouse_id)->value('branch_id'),
+            'description' => 'تسوية جرد '.$count->count_number,
+            'reference' => $count->count_number,
+            'status' => 'posted',
+        ], $lines, $user);
+
+        return $entry->id;
     }
 
     protected function resolveBatchKey(Product $product, ?string $batchNo): string

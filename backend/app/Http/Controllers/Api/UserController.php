@@ -7,6 +7,7 @@ use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends ApiController
 {
@@ -14,7 +15,7 @@ class UserController extends ApiController
     {
         $this->authorizePermission('users.manage');
 
-        $query = User::query()->with('roles')->orderBy('name');
+        $query = User::query()->with(['roles', 'warehouses:id,name,code'])->orderBy('name');
         ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name']);
         $users = $query->get()->map(fn (User $u) => $this->userPayload($u));
 
@@ -34,7 +35,12 @@ class UserController extends ApiController
             'is_active' => ['boolean'],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
+            'warehouse_ids' => ['nullable', 'array'],
+            'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
         ]);
+        if (in_array('warehouse_manager', $data['roles'] ?? [], true) && empty($data['warehouse_ids'])) {
+            throw ValidationException::withMessages(['warehouse_ids' => ['يجب تخصيص مخزن واحد على الأقل لمسؤول المخزن.']]);
+        }
 
         $name = User::composeDisplayName($data['first_name'], $data['last_name']);
         $email = $data['email'] ?? ($data['username'].'@users.local');
@@ -49,12 +55,12 @@ class UserController extends ApiController
             'password' => $data['password'],
             'is_active' => $data['is_active'] ?? true,
         ]);
-
         if (! empty($data['roles'])) {
             $user->syncRoles($data['roles']);
         }
+        $user->warehouses()->sync($data['warehouse_ids'] ?? []);
 
-        return $this->ok($this->userPayload($user->load('roles')), 201);
+        return $this->ok($this->userPayload($user->load(['roles', 'warehouses:id,name,code'])), 201);
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -70,7 +76,14 @@ class UserController extends ApiController
             'is_active' => ['boolean'],
             'roles' => ['nullable', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
+            'warehouse_ids' => ['nullable', 'array'],
+            'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
         ]);
+        $nextRoles = $data['roles'] ?? $user->getRoleNames()->all();
+        $nextWarehouses = $data['warehouse_ids'] ?? $user->warehouses()->pluck('warehouses.id')->all();
+        if (in_array('warehouse_manager', $nextRoles, true) && empty($nextWarehouses)) {
+            throw ValidationException::withMessages(['warehouse_ids' => ['يجب تخصيص مخزن واحد على الأقل لمسؤول المخزن.']]);
+        }
 
         if (isset($data['first_name'])) {
             $user->first_name = $data['first_name'];
@@ -103,8 +116,11 @@ class UserController extends ApiController
         if (array_key_exists('roles', $data)) {
             $user->syncRoles($data['roles'] ?? []);
         }
+        if (array_key_exists('warehouse_ids', $data)) {
+            $user->warehouses()->sync($data['warehouse_ids'] ?? []);
+        }
 
-        return $this->ok($this->userPayload($user->fresh('roles')));
+        return $this->ok($this->userPayload($user->fresh(['roles', 'warehouses:id,name,code'])));
     }
 
     public function destroy(User $user): JsonResponse
@@ -131,6 +147,8 @@ class UserController extends ApiController
             'is_active' => $user->is_active,
             'roles' => $user->roles->pluck('name'),
             'permissions' => $user->getAllPermissions()->pluck('name'),
+            'warehouse_ids' => $user->warehouses->pluck('id'),
+            'warehouses' => $user->warehouses->map->only(['id', 'name', 'code'])->values(),
         ];
     }
 }

@@ -87,13 +87,14 @@ class FinanceDocumentFeaturesTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        // Documents default to the base currency (USD), so payments need a USD box.
         $cashBox = CashBox::query()->firstOrCreate(
-            ['code' => 'MAIN'],
+            ['code' => 'CASH-USD'],
             [
-                'name' => 'الصندوق الرئيسي',
+                'name' => 'صندوق الدولار',
                 'account_id' => Account::query()->where('code', '1101')->value('id'),
                 'opening_balance' => 0,
-                'currency' => 'SYP',
+                'currency' => 'USD',
                 'is_active' => true,
             ]
         );
@@ -165,12 +166,12 @@ class FinanceDocumentFeaturesTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
         $cashBox = CashBox::query()->firstOrCreate(
-            ['code' => 'MAIN'],
+            ['code' => 'CASH-USD'],
             [
-                'name' => 'الصندوق الرئيسي',
+                'name' => 'صندوق الدولار',
                 'account_id' => Account::query()->where('code', '1101')->value('id'),
                 'opening_balance' => 100000,
-                'currency' => 'SYP',
+                'currency' => 'USD',
                 'is_active' => true,
             ]
         );

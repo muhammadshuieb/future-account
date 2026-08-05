@@ -16,7 +16,9 @@ use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\WarehouseTransferLine;
 use App\Services\InventoryService;
+use App\Services\WarehouseApprovalService;
 use App\Support\ListSearch;
+use App\Support\WarehouseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,18 +26,31 @@ use Illuminate\Validation\ValidationException;
 
 class ProductController extends ApiController
 {
-    public function __construct(protected InventoryService $inventory) {}
+    public function __construct(
+        protected InventoryService $inventory,
+        protected WarehouseApprovalService $approvals,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        $user = $request->user();
+        $warehouseIds = WarehouseAccess::warehouseIds($user);
         $query = Product::query()
             ->with([
                 'category',
                 'unit',
-                'stockLevels' => fn ($q) => $q->where('quantity', '>', 0)->with('warehouse:id,name'),
+                'stockLevels' => fn ($q) => $q
+                    ->where('quantity', '>', 0)
+                    ->when(WarehouseAccess::isScoped($user), fn ($q) => $q->whereIn('warehouse_id', $warehouseIds))
+                    ->with('warehouse:id,name'),
             ])
-            ->withSum('stockLevels as on_hand', 'quantity')
+            ->withSum(['stockLevels as on_hand' => fn ($q) => $q
+                ->when(WarehouseAccess::isScoped($user), fn ($q) => $q->whereIn('warehouse_id', $warehouseIds))], 'quantity')
+            ->when(WarehouseAccess::isScoped($user), fn ($q) => $q->whereHas(
+                'stockLevels',
+                fn ($q) => $q->whereIn('warehouse_id', $warehouseIds),
+            ))
             ->orderBy('sku');
         if ($request->filled('barcode')) {
             $query->where('barcode', $request->string('barcode'));
@@ -64,13 +79,26 @@ class ProductController extends ApiController
 
     public function store(Request $request): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.products.request']);
 
         $data = $this->validated($request);
         $stock = $request->validate([
             'warehouse_id' => ['required', 'exists:warehouses,id'],
             'opening_quantity' => ['nullable', 'numeric', 'min:0'],
         ]);
+        WarehouseAccess::assertWarehouse($request->user(), (int) $stock['warehouse_id']);
+
+        if (WarehouseAccess::isScoped($request->user())) {
+            $approval = $this->approvals->request(
+                $request->user(),
+                'warehouse.products.request',
+                'product.create',
+                array_merge($data, $stock),
+                [(int) $stock['warehouse_id']],
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         $product = DB::transaction(function () use ($request, $data, $stock) {
             $product = Product::query()->create($data);
@@ -110,6 +138,7 @@ class ProductController extends ApiController
     public function show(Product $product): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
+        WarehouseAccess::assertProduct(request()->user(), $product);
 
         return $this->ok($product->load(['category', 'unit', 'stockLevels.warehouse']));
     }
@@ -123,6 +152,8 @@ class ProductController extends ApiController
         ]);
 
         $warehouseId = (int) $data['warehouse_id'];
+        WarehouseAccess::assertWarehouse($request->user(), $warehouseId);
+        WarehouseAccess::assertProduct($request->user(), $product);
         $batchNo = $data['batch_no'] ?? null;
         $availableQty = $this->inventory->availableQty($warehouseId, $product->id, $batchNo, $product);
         $breakdown = $this->inventory->stockBreakdown($product->id, $warehouseId);
@@ -141,8 +172,22 @@ class ProductController extends ApiController
 
     public function update(Request $request, Product $product): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
-        $product->update($this->validated($request, $product->id));
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.products.request']);
+        $data = $this->validated($request, $product->id);
+        WarehouseAccess::assertProduct($request->user(), $product);
+        if (WarehouseAccess::isScoped($request->user())) {
+            $approval = $this->approvals->request(
+                $request->user(),
+                'warehouse.products.request',
+                'product.update',
+                $data,
+                WarehouseAccess::warehouseIds($request->user()),
+                $product,
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
+        $product->update($data);
 
         return $this->ok($product->fresh(['category', 'unit']));
     }

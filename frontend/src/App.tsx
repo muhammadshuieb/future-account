@@ -13,6 +13,7 @@ const AccountsPage = lazy(() => import('@/pages/AccountsPage'))
 const JournalEntriesPage = lazy(() => import('@/pages/JournalEntriesPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const WarehousePage = lazy(() => import('@/pages/WarehousePage'))
+const WarehouseApprovalsPage = lazy(() => import('@/pages/WarehouseApprovalsPage'))
 const SalesPage = lazy(() => import('@/pages/SalesPage'))
 const PurchasesPage = lazy(() => import('@/pages/PurchasesPage'))
 const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
@@ -82,6 +83,7 @@ export default function App() {
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="purchases" element={<PurchasesPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
+                <Route path="warehouse-approvals" element={<WarehouseApprovalsPage />} />
                 <Route path="partners" element={<PartnersPage />} />
                 <Route path="cash-banks" element={<CashBanksPage />} />
                 <Route path="hr" element={<HrPage />} />

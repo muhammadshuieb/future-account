@@ -141,7 +141,7 @@ export default function WhatsAppSendButton({
       {compact ? (
         <button
           type="button"
-          className={`inline-flex items-center gap-1 text-teal disabled:opacity-40 ${className}`}
+          className={`inline-flex items-center gap-1 whitespace-nowrap text-xs text-teal disabled:opacity-40 ${className}`}
           disabled={disabled}
           onClick={(e) => {
             e.stopPropagation()

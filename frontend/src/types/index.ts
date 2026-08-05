@@ -8,6 +8,8 @@ export type User = {
   email?: string | null
   roles: string[]
   permissions: string[]
+  warehouse_ids?: number[]
+  warehouses?: { id: number; name: string; code: string }[]
 }
 
 export type Account = {

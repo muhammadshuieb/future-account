@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\Bank;
 use App\Models\Branch;
 use App\Models\CashBox;
 use App\Models\JournalDetail;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReportService
 {
+    public function __construct(protected CurrencyService $currencies) {}
+
     public function trialBalance(?string $asOf = null, ?int $branchId = null): array
     {
         $asOf = $asOf ?: now()->toDateString();
@@ -112,7 +115,7 @@ class ReportService
         $from = $from ?: now()->startOfYear()->toDateString();
         $to = $to ?: now()->toDateString();
 
-        $cashAccounts = Account::query()->whereIn('code', ['1101', '1102'])->pluck('id');
+        $cashAccounts = $this->cashAccountIds();
 
         $movements = JournalDetail::query()
             ->whereIn('account_id', $cashAccounts)
@@ -241,12 +244,40 @@ class ReportService
             ->when($branchId || $warehouseId, fn ($c) => $c->filter(fn ($r) => abs($r['on_hand']) > 0.0001)->values())
             ->values();
 
+        $totalValue = round($products->sum('value'), 2);
+        // Warehouse-level stock has no matching GL split, so the control account is only
+        // comparable for the whole company or for a branch.
+        $glValue = $warehouseId === null ? $this->inventoryControlBalance($branchId) : null;
+
         return [
             'branch_id' => $branchId,
             'warehouse_id' => $warehouseId,
             'rows' => $products,
-            'total_value' => round($products->sum('value'), 2),
+            'total_value' => $totalValue,
+            'gl_value' => $glValue,
+            'variance' => $glValue === null ? null : round($totalValue - $glValue, 2),
         ];
+    }
+
+    /** Balance of the inventory control account (1104). */
+    protected function inventoryControlBalance(?int $branchId = null): float
+    {
+        $accountId = Account::query()->where('code', '1104')->value('id');
+
+        if (! $accountId) {
+            return 0.0;
+        }
+
+        $agg = JournalDetail::query()
+            ->where('account_id', $accountId)
+            ->whereHas('journalEntry', function ($q) use ($branchId) {
+                $q->where('status', 'posted');
+                $this->scopeJournalBranch($q, $branchId);
+            })
+            ->selectRaw('COALESCE(SUM(debit),0) as debit, COALESCE(SUM(credit),0) as credit')
+            ->first();
+
+        return round((float) ($agg->debit ?? 0) - (float) ($agg->credit ?? 0), 2);
     }
 
     public function productMovement(
@@ -283,28 +314,31 @@ class ReportService
         $from = $from ?: now()->startOfMonth()->toDateString();
         $to = $to ?: now()->toDateString();
 
+        // Tax is stored in the document currency, so it is converted before being summed.
         $salesTax = (float) SalesInvoice::query()
             ->where('status', 'posted')
             ->whereDate('invoice_date', '>=', $from)
             ->whereDate('invoice_date', '<=', $to)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->sum('tax_amount');
+            ->selectRaw('COALESCE(SUM(tax_amount * COALESCE(NULLIF(exchange_rate, 0), 1)), 0) AS base_tax')
+            ->value('base_tax');
 
         $purchaseTax = (float) PurchaseInvoice::query()
             ->where('status', 'posted')
             ->whereDate('invoice_date', '>=', $from)
             ->whereDate('invoice_date', '<=', $to)
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
-            ->sum('tax_amount');
+            ->selectRaw('COALESCE(SUM(tax_amount * COALESCE(NULLIF(exchange_rate, 0), 1)), 0) AS base_tax')
+            ->value('base_tax');
 
         return [
             'from' => $from,
             'to' => $to,
             'branch_id' => $branchId,
+            'currency' => $this->currencies->baseCurrency(),
             'output_vat' => round($salesTax, 2),
             'input_vat' => round($purchaseTax, 2),
             'net_vat' => round($salesTax - $purchaseTax, 2),
-            'note' => 'تقرير ضريبة مبسّط — stub',
         ];
     }
 
@@ -330,13 +364,13 @@ class ReportService
             : $openingCredit - $openingDebit;
 
         $details = JournalDetail::query()
-            ->with(['journalEntry:id,entry_number,entry_date,description,status,branch_id'])
-            ->where('account_id', $accountId)
-            ->whereHas('journalEntry', function ($q) use ($from, $to, $branchId) {
-                $q->where('status', 'posted')->whereBetween('entry_date', [$from, $to]);
-                $this->scopeJournalBranch($q, $branchId);
-            })
             ->join('journal_entries', 'journal_details.journal_entry_id', '=', 'journal_entries.id')
+            ->with(['journalEntry:id,entry_number,entry_date,description,status,branch_id'])
+            ->where('journal_details.account_id', $accountId)
+            ->where('journal_entries.status', 'posted')
+            ->whereDate('journal_entries.entry_date', '>=', $from)
+            ->whereDate('journal_entries.entry_date', '<=', $to)
+            ->when($branchId, fn ($q) => $q->where('journal_entries.branch_id', $branchId))
             ->orderBy('journal_entries.entry_date')
             ->orderBy('journal_entries.id')
             ->orderBy('journal_details.line_order')
@@ -487,6 +521,22 @@ class ReportService
                 'net_vat' => $tax['net_vat'],
             ],
         ];
+    }
+
+    /**
+     * Cash-and-bank accounts: the default ones plus any dedicated account attached to a
+     * cash box or bank, which is how multi-currency boxes are set up.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    protected function cashAccountIds(): \Illuminate\Support\Collection
+    {
+        return Account::query()->whereIn('code', ['1101', '1102'])->pluck('id')
+            ->merge(CashBox::query()->whereNotNull('account_id')->pluck('account_id'))
+            ->merge(Bank::query()->whereNotNull('account_id')->pluck('account_id'))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
     }
 
     protected function scopeJournalBranch(Builder $q, ?int $branchId): void

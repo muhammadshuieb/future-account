@@ -19,6 +19,7 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Services\CashService;
 use App\Services\CurrencyService;
+use App\Support\WarehouseAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -71,7 +72,14 @@ class DashboardController extends Controller
             - $this->returnsTotal(PurchaseReturn::class, 'supplier', $branchId, $currencyFilter)
             - $this->unallocatedSettlementsTotal(SupplierPayment::class, 'supplier', 'purchase_invoice_id', $branchId, $currencyFilter);
 
-        $lowStockAlerts = app(\App\Services\InventoryService::class)->lowStockAlerts();
+        if (WarehouseAccess::isScoped($request->user())) {
+            $lowStockAlerts = [];
+            foreach (WarehouseAccess::warehouseIds($request->user()) as $warehouseId) {
+                array_push($lowStockAlerts, ...app(\App\Services\InventoryService::class)->lowStockAlerts($warehouseId));
+            }
+        } else {
+            $lowStockAlerts = app(\App\Services\InventoryService::class)->lowStockAlerts();
+        }
         if ($branchId !== null) {
             $branchWarehouseIds = \App\Models\Warehouse::query()
                 ->where('branch_id', $branchId)
@@ -170,7 +178,7 @@ class DashboardController extends Controller
             $alerts[] = [
                 'type' => 'info',
                 'code' => 'receivables',
-                'title' => 'ذمم مدينة',
+                'title' => 'ذمم مدينة (عليه)',
                 'body' => 'يوجد أرصدة مستحقة على العملاء',
                 'href' => '/partners?tab=customers',
             ];
@@ -179,7 +187,7 @@ class DashboardController extends Controller
             $alerts[] = [
                 'type' => 'info',
                 'code' => 'payables',
-                'title' => 'ذمم دائنة',
+                'title' => 'ذمم دائنة (علينا)',
                 'body' => 'يوجد أرصدة مستحقة للموردين',
                 'href' => '/partners?tab=suppliers',
             ];
@@ -259,7 +267,12 @@ class DashboardController extends Controller
                 'daily_purchases' => $dailyPurchases,
                 'customers_count' => Customer::query()->count(),
                 'suppliers_count' => Supplier::query()->count(),
-                'products_count' => Product::query()->count(),
+                'products_count' => Product::query()
+                    ->when(WarehouseAccess::isScoped($request->user()), fn ($query) => $query->whereHas(
+                        'stockLevels',
+                        fn ($stock) => $stock->whereIn('warehouse_id', WarehouseAccess::warehouseIds($request->user())),
+                    ))
+                    ->count(),
                 'low_stock_count' => $lowStock,
                 'alerts' => $alerts,
             ],

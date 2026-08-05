@@ -44,7 +44,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $this->postJson('/api/purchase-invoices', [
@@ -94,7 +94,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $this->postJson('/api/purchase-invoices', [
@@ -142,7 +142,7 @@ class CashCreditDebtFlowTest extends TestCase
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $cashStart = $cash->cashBoxCurrencyBalance($cashBox->fresh());
@@ -176,7 +176,7 @@ class CashCreditDebtFlowTest extends TestCase
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $invoice = $this->postJson('/api/purchase-invoices', [
@@ -212,7 +212,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $this->postJson('/api/purchase-invoices', [
@@ -266,7 +266,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
 
         $this->postJson('/api/purchase-invoices', [
             'invoice_date' => now()->toDateString(),
@@ -315,7 +315,7 @@ class CashCreditDebtFlowTest extends TestCase
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $invoice = $this->postJson('/api/purchase-invoices', [
@@ -349,7 +349,7 @@ class CashCreditDebtFlowTest extends TestCase
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
 
         $invoice = $this->postJson('/api/purchase-invoices', [
             'invoice_date' => now()->toDateString(),
@@ -395,7 +395,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $this->postJson('/api/purchase-invoices', [
@@ -437,7 +437,7 @@ class CashCreditDebtFlowTest extends TestCase
         $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
         $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
-        $cashBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+        $cashBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
         $cash = app(CashService::class);
 
         $this->postJson('/api/purchase-invoices', [

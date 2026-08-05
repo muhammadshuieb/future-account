@@ -42,7 +42,7 @@ function BarcodeSvg({ value, format }: { value: string; format: string }) {
       JsBarcode(ref.current, value, { format: 'CODE128', displayValue: true, fontSize: 12, height: 48, margin: 4, width: 1.4 })
     }
   }, [value, format])
-  return <svg ref={ref} className="mx-auto max-w-full" />
+  return <svg ref={ref} className="print-barcode mx-auto max-w-full" />
 }
 
 export default function BarcodeLabelsPage() {

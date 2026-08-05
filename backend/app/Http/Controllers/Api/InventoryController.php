@@ -7,19 +7,26 @@ use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\WarehouseTransfer;
 use App\Services\InventoryService;
+use App\Services\WarehouseApprovalService;
 use App\Support\ListSearch;
+use App\Support\WarehouseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class InventoryController extends ApiController
 {
-    public function __construct(protected InventoryService $inventory) {}
+    public function __construct(
+        protected InventoryService $inventory,
+        protected WarehouseApprovalService $approvals,
+    ) {}
 
     public function stockLevels(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
         $query = StockLevel::query()->with(['warehouse', 'product'])->orderByDesc('updated_at');
+        WarehouseAccess::scopeWarehouseColumn($query, $request->user());
         if ($request->filled('warehouse_id')) {
+            WarehouseAccess::assertWarehouse($request->user(), $request->integer('warehouse_id'));
             $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
         ListSearch::apply($query, $request, ['batch_no'], [
@@ -34,7 +41,9 @@ class InventoryController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = StockMovement::query()->with(['warehouse', 'product'])->latest('id');
+        WarehouseAccess::scopeWarehouseColumn($query, $request->user());
         if ($request->filled('warehouse_id')) {
+            WarehouseAccess::assertWarehouse($request->user(), $request->integer('warehouse_id'));
             $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
         if ($request->filled('product_id')) {
@@ -50,7 +59,7 @@ class InventoryController extends ApiController
 
     public function storeMovement(Request $request): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.adjustments.request']);
         $data = $request->validate([
             'type' => ['required', 'in:in,out,adjustment'],
             'warehouse_id' => ['required', 'exists:warehouses,id'],
@@ -63,6 +72,18 @@ class InventoryController extends ApiController
             'notes' => ['nullable', 'string'],
             'post_to_gl' => ['boolean'],
         ]);
+        WarehouseAccess::assertWarehouse($request->user(), (int) $data['warehouse_id']);
+        if (WarehouseAccess::isScoped($request->user())) {
+            $approval = $this->approvals->request(
+                $request->user(),
+                'warehouse.adjustments.request',
+                'stock.adjustment.create',
+                $data,
+                [(int) $data['warehouse_id']],
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         return $this->ok($this->inventory->createManualMovement($data, $request->user())->load(['warehouse', 'product']), 201);
     }
@@ -71,6 +92,17 @@ class InventoryController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $warehouseId = $request->filled('warehouse_id') ? $request->integer('warehouse_id') : null;
+        if ($warehouseId !== null) {
+            WarehouseAccess::assertWarehouse($request->user(), $warehouseId);
+        }
+        if (WarehouseAccess::isScoped($request->user()) && $warehouseId === null) {
+            $alerts = [];
+            foreach (WarehouseAccess::warehouseIds($request->user()) as $assignedId) {
+                array_push($alerts, ...$this->inventory->lowStockAlerts($assignedId));
+            }
+
+            return $this->ok($alerts);
+        }
 
         return $this->ok($this->inventory->lowStockAlerts($warehouseId));
     }
@@ -79,6 +111,10 @@ class InventoryController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = WarehouseTransfer::query()->with(['fromWarehouse', 'toWarehouse', 'lines.product'])->latest('id');
+        if (WarehouseAccess::isScoped($request->user())) {
+            $ids = WarehouseAccess::warehouseIds($request->user());
+            $query->whereIn('from_warehouse_id', $ids)->whereIn('to_warehouse_id', $ids);
+        }
         ListSearch::apply($query, $request, ['transfer_number', 'notes', 'status'], [
             'fromWarehouse' => ['name', 'code'],
             'toWarehouse' => ['name', 'code'],
@@ -89,7 +125,7 @@ class InventoryController extends ApiController
 
     public function storeTransfer(Request $request): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.transfers.request']);
         $data = $request->validate([
             'transfer_date' => ['required', 'date'],
             'from_warehouse_id' => ['required', 'exists:warehouses,id', 'different:to_warehouse_id'],
@@ -102,13 +138,43 @@ class InventoryController extends ApiController
             'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
             'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
+        WarehouseAccess::assertWarehouse($request->user(), (int) $data['from_warehouse_id']);
+        WarehouseAccess::assertWarehouse($request->user(), (int) $data['to_warehouse_id']);
+        if (WarehouseAccess::isScoped($request->user())) {
+            $approval = $this->approvals->request(
+                $request->user(),
+                'warehouse.transfers.request',
+                'warehouse_transfer.create',
+                $data,
+                [(int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']],
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         return $this->ok($this->inventory->transfer($data, $data['lines'], $request->user()), 201);
     }
 
     public function postTransfer(WarehouseTransfer $warehouseTransfer): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.transfers.request']);
+        WarehouseAccess::assertWarehouse(request()->user(), (int) $warehouseTransfer->from_warehouse_id);
+        WarehouseAccess::assertWarehouse(request()->user(), (int) $warehouseTransfer->to_warehouse_id);
+        if (WarehouseAccess::isScoped(request()->user())) {
+            $approval = $this->approvals->request(
+                request()->user(),
+                'warehouse.transfers.request',
+                'warehouse_transfer.post',
+                array_merge(
+                    $warehouseTransfer->load('lines')->toArray(),
+                    ['requested_status' => 'posted'],
+                ),
+                [(int) $warehouseTransfer->from_warehouse_id, (int) $warehouseTransfer->to_warehouse_id],
+                $warehouseTransfer,
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         return $this->ok($this->inventory->postTransfer($warehouseTransfer, request()->user()));
     }
@@ -117,6 +183,7 @@ class InventoryController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = InventoryCount::query()->with(['warehouse', 'lines.product'])->latest('id');
+        WarehouseAccess::scopeWarehouseColumn($query, $request->user());
         ListSearch::apply($query, $request, ['count_number', 'notes', 'status'], [
             'warehouse' => ['name', 'code'],
         ]);
@@ -126,7 +193,7 @@ class InventoryController extends ApiController
 
     public function storeCount(Request $request): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.counts.request']);
         $data = $request->validate([
             'warehouse_id' => ['required', 'exists:warehouses,id'],
             'count_date' => ['required', 'date'],
@@ -137,6 +204,18 @@ class InventoryController extends ApiController
             'lines.*.batch_no' => ['nullable', 'string', 'max:64'],
             'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
+        WarehouseAccess::assertWarehouse($request->user(), (int) $data['warehouse_id']);
+        if (WarehouseAccess::isScoped($request->user())) {
+            $approval = $this->approvals->request(
+                $request->user(),
+                'warehouse.counts.request',
+                'inventory_count.create',
+                $data,
+                [(int) $data['warehouse_id']],
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         $count = InventoryCount::query()->create([
             'count_number' => $this->inventory->nextNumber('CNT'),
@@ -171,7 +250,23 @@ class InventoryController extends ApiController
 
     public function postCount(InventoryCount $inventoryCount): JsonResponse
     {
-        $this->authorizePermission('warehouse.manage');
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.counts.request']);
+        WarehouseAccess::assertWarehouse(request()->user(), (int) $inventoryCount->warehouse_id);
+        if (WarehouseAccess::isScoped(request()->user())) {
+            $approval = $this->approvals->request(
+                request()->user(),
+                'warehouse.counts.request',
+                'inventory_count.post',
+                array_merge(
+                    $inventoryCount->load('lines')->toArray(),
+                    ['requested_status' => 'posted'],
+                ),
+                [(int) $inventoryCount->warehouse_id],
+                $inventoryCount,
+            );
+
+            return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
+        }
 
         return $this->ok($this->inventory->postInventoryCount($inventoryCount, request()->user()));
     }

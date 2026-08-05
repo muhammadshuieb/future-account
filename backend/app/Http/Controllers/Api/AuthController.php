@@ -96,7 +96,7 @@ class AuthController extends Controller
 
     protected function userPayload(User $user): array
     {
-        $user->loadMissing('roles', 'permissions');
+        $user->loadMissing('roles', 'permissions', 'warehouses:id,name,code');
 
         return [
             'id' => $user->id,
@@ -108,6 +108,8 @@ class AuthController extends Controller
             'email' => $user->email,
             'roles' => $user->getRoleNames(),
             'permissions' => $user->getAllPermissions()->pluck('name'),
+            'warehouse_ids' => $user->warehouses->pluck('id'),
+            'warehouses' => $user->warehouses->map->only(['id', 'name', 'code'])->values(),
         ];
     }
 }

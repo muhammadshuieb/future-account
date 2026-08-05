@@ -10,7 +10,7 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPartnersTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, TableActions, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean; balance?: number }
@@ -171,10 +171,10 @@ export default function PartnersPage() {
                 <td className="px-4 py-3">{r.phone || '—'}</td>
                 <td className="px-4 py-3 tabular-nums font-medium">{balanceLabel(Number(r.balance) || 0)}</td>
                 <td className="px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-3">
+                  <TableActions>
                     <button
                       type="button"
-                      className="text-teal"
+                      className="text-xs text-teal"
                       onClick={(e) => {
                         e.stopPropagation()
                         setStatementId(r.id)
@@ -184,7 +184,7 @@ export default function PartnersPage() {
                     </button>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-teal"
+                      className="inline-flex items-center gap-1 text-xs text-teal"
                       onClick={(e) => {
                         e.stopPropagation()
                         printStatement(r.id)
@@ -208,7 +208,7 @@ export default function PartnersPage() {
                         documentLabel={`كشف حساب — ${r.name}`}
                       />
                     </span>
-                  </div>
+                  </TableActions>
                 </td>
               </tr>
             ))}

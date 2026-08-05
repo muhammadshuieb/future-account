@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Field, NumericInput, inputClass } from '@/components/ui'
 
@@ -14,6 +14,8 @@ type Props<T extends {
   state: T
   setState: (next: T) => void
   cashBoxes: CashBox[]
+  /** When set, only same-currency boxes are offered (prevents SYP→USD cents). */
+  documentCurrency?: string
   estimatedTotal?: number
   showTaxToggle?: boolean
   applyTax?: boolean
@@ -36,12 +38,17 @@ export function paymentTypeLabel(type?: string | null, t?: (k: string) => string
   return 'آجل'
 }
 
-function defaultCashBoxId(cashBoxes: CashBox[]): string {
-  const flagged = cashBoxes.find((c) => c.is_default)
+export function defaultCashBoxId(cashBoxes: CashBox[], currency?: string): string {
+  const code = currency ? currency.toUpperCase() : null
+  const list = code
+    ? cashBoxes.filter((c) => (c.currency || 'USD').toUpperCase() === code)
+    : cashBoxes
+  if (list.length === 0) return ''
+  const flagged = list.find((c) => c.is_default)
   if (flagged) return String(flagged.id)
-  const cash01 = cashBoxes.find((c) => c.code === 'CASH-01')
+  const cash01 = list.find((c) => c.code === 'CASH-01')
   if (cash01) return String(cash01.id)
-  return cashBoxes[0] ? String(cashBoxes[0].id) : ''
+  return String(list[0].id)
 }
 
 export default function PaymentTypeFields<T extends {
@@ -52,6 +59,7 @@ export default function PaymentTypeFields<T extends {
   state,
   setState,
   cashBoxes,
+  documentCurrency,
   estimatedTotal = 0,
   showTaxToggle = false,
   applyTax = true,
@@ -70,14 +78,27 @@ export default function PaymentTypeFields<T extends {
         ? (partner === 'supplier' ? 'common.paymentHintPartialPurchase' : 'common.paymentHintPartial')
         : (partner === 'supplier' ? 'common.paymentHintCreditPurchase' : 'common.paymentHintCredit')
 
+  const filteredBoxes = useMemo(() => {
+    const code = documentCurrency ? documentCurrency.toUpperCase() : null
+    if (!code) return cashBoxes
+    // Never offer a different-currency box — that would auto-land money in the wrong box.
+    return cashBoxes.filter((c) => (c.currency || 'USD').toUpperCase() === code)
+  }, [cashBoxes, documentCurrency])
+
   useEffect(() => {
-    if ((type === 'cash' || type === 'partial') && !state.cash_box_id && cashBoxes.length > 0) {
-      const id = defaultCashBoxId(cashBoxes)
-      if (id) setState({ ...state, cash_box_id: id })
+    if (type !== 'cash' && type !== 'partial') return
+    if (filteredBoxes.length === 0) return
+
+    const selectedOk = state.cash_box_id
+      && filteredBoxes.some((c) => String(c.id) === String(state.cash_box_id))
+    if (selectedOk) return
+
+    const id = defaultCashBoxId(filteredBoxes, documentCurrency)
+    if (id && id !== state.cash_box_id) {
+      setState({ ...state, cash_box_id: id })
     }
-    // Only auto-pick when box list arrives / type needs a box.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: avoid loops on every state change
-  }, [type, cashBoxes])
+  }, [type, filteredBoxes, documentCurrency])
 
   return (
     <div className="space-y-3">
@@ -99,7 +120,9 @@ export default function PaymentTypeFields<T extends {
                   paid_amount: value === 'partial' ? state.paid_amount : '',
                   cash_box_id: value === 'credit'
                     ? ''
-                    : (state.cash_box_id || defaultCashBoxId(cashBoxes)),
+                    : (state.cash_box_id && filteredBoxes.some((c) => String(c.id) === String(state.cash_box_id))
+                      ? state.cash_box_id
+                      : defaultCashBoxId(filteredBoxes, documentCurrency)),
                 })}
               />
               {label}
@@ -118,7 +141,7 @@ export default function PaymentTypeFields<T extends {
             required
           >
             <option value="">—</option>
-            {cashBoxes.map((c) => (
+            {filteredBoxes.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
               </option>

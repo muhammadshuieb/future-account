@@ -6,6 +6,8 @@ export type StatementRow = {
   date: string
   type: string
   number: string
+  currency?: string
+  document_amount?: number
   debit: number
   credit: number
   balance: number
@@ -16,6 +18,7 @@ export type PartnerStatementData = {
   supplier?: { id: number; code?: string; name: string; phone?: string }
   from?: string | null
   to?: string | null
+  currency?: string
   opening_balance?: number
   closing_balance?: number
   balance?: number
@@ -26,6 +29,7 @@ const TYPE_LABELS: Record<string, string> = {
   invoice: 'فاتورة',
   receipt: 'سند قبض',
   payment: 'سند صرف',
+  return: 'مرتجع',
 }
 
 function BrandLogo() {
@@ -33,7 +37,7 @@ function BrandLogo() {
     <img
       src={LOGO.print}
       alt="SYNAMOR TECHNOLOGY"
-      className="brand-logo brand-logo--print"
+      className="brand-logo brand-logo--print print-logo"
       onError={(e) => {
         const img = e.currentTarget
         if (img.dataset.fallback === '1') return
@@ -70,20 +74,20 @@ export function StatementPrintView({
       : 'كامل الفترة'
 
   return (
-    <div className="space-y-4 text-sm" dir="rtl">
-      <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-4 border-b border-black/10 pb-4">
+    <div className="space-y-2 text-xs" dir="rtl">
+      <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2">
         {/* First in RTL → visual right: company + report title */}
         <div className="min-w-0 text-start">
-          <p className="text-lg font-bold">شركة ساينا — Syna Co</p>
-          <p className="text-xs text-black/55">SYNAMOR TECHNOLOGY</p>
-          <p className="mt-1 text-xs font-semibold text-teal">{documentLabel}</p>
-          <p className="mt-1 text-xs text-black/55">تاريخ الطباعة: {todayYmd()}</p>
+          <p className="text-base font-bold leading-tight">شركة ساينا — Syna Co</p>
+          <p className="text-[11px] text-black/55">SYNAMOR TECHNOLOGY</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
+          <p className="mt-0.5 text-[11px] text-black/55">تاريخ الطباعة: {todayYmd()}</p>
         </div>
         {/* Second in RTL → visual left: logo */}
         <BrandLogo />
       </header>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-1 sm:grid-cols-2">
         <p>
           <span className="text-black/55">{partnerLabel}: </span>
           <strong>
@@ -107,7 +111,7 @@ export function StatementPrintView({
         </p>
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-black/10 bg-mist/40 p-3 sm:grid-cols-2">
+      <div className="grid gap-1 rounded border border-black/10 bg-mist/40 p-2 sm:grid-cols-2">
         <p>
           الرصيد الافتتاحي:{' '}
           <strong className="tabular-nums">{formatMoney(opening, currency)}</strong>
@@ -118,7 +122,7 @@ export function StatementPrintView({
         </p>
       </div>
 
-      <table className="data-table">
+      <table className="data-table text-[11px]">
         <thead>
           <tr>
             <th>التاريخ</th>
@@ -151,8 +155,8 @@ export function StatementPrintView({
         </tbody>
       </table>
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-1 border-t border-black/10 pt-3 text-start">
-        <p className="text-base font-bold">
+      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
+        <p className="text-sm font-bold">
           الرصيد الختامي ({currency}):{' '}
           <span className="tabular-nums">{formatMoney(closing, currency)}</span>
         </p>

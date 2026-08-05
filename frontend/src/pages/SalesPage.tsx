@@ -9,13 +9,13 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
-import PaymentTypeFields, { paymentTypeLabel } from '@/components/PaymentTypeFields'
+import PaymentTypeFields, { defaultCashBoxId, paymentTypeLabel } from '@/components/PaymentTypeFields'
 import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 
@@ -185,12 +185,15 @@ export default function SalesPage() {
   })
 
   useEffect(() => {
-    if (!rc.cash_box_id && (cashBoxes.data || []).length > 0) {
-      const boxes = cashBoxes.data || []
-      const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
-      if (main) setRc((prev) => prev.cash_box_id ? prev : { ...prev, cash_box_id: String(main.id) })
-    }
-  }, [cashBoxes.data, rc.cash_box_id])
+    const boxes = cashBoxes.data || []
+    if (boxes.length === 0) return
+    const cur = (rc.currency || baseCurrency).toUpperCase()
+    const matched = boxes.filter((c) => (c.currency || 'USD').toUpperCase() === cur)
+    const selectedOk = rc.cash_box_id && matched.some((c) => String(c.id) === String(rc.cash_box_id))
+    if (selectedOk) return
+    const id = defaultCashBoxId(matched, cur)
+    if (id !== rc.cash_box_id) setRc((prev) => ({ ...prev, cash_box_id: id }))
+  }, [cashBoxes.data, rc.cash_box_id, rc.currency, baseCurrency])
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
 
@@ -304,8 +307,13 @@ export default function SalesPage() {
   }) => {
     if (!canCollectInvoice(invRow)) return
     const boxes = cashBoxes.data || []
-    const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
-    const defaultBox = invRow.cash_box_id ? String(invRow.cash_box_id) : (main ? String(main.id) : '')
+    const cur = (invRow.currency || baseCurrency || 'USD').toUpperCase()
+    const matched = boxes.filter((c) => (c.currency || 'USD').toUpperCase() === cur)
+    const invoiceBoxOk = invRow.cash_box_id
+      && matched.some((c) => Number(c.id) === Number(invRow.cash_box_id))
+    const defaultBox = invoiceBoxOk
+      ? String(invRow.cash_box_id)
+      : defaultCashBoxId(matched, cur)
     setSelectedId(invRow.id)
     setSelectedRow(invRow as unknown as Record<string, unknown>)
     setCollectForm({
@@ -915,11 +923,13 @@ export default function SalesPage() {
                     <td>{q.currency || 'USD'}</td>
                     <td>{q.total}</td>
                     <td>{documentStatusLabel(q.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       {q.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertQuote.mutate(q.id) }}>{t('sales.convertToOrder')}</button>}
                       {canDeleteSales('quotes', q.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('quotes', q.id, q.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -942,11 +952,13 @@ export default function SalesPage() {
                     <td>{o.currency || 'USD'}</td>
                     <td>{o.total}</td>
                     <td>{documentStatusLabel(o.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}
                       {canDeleteSales('orders', o.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('orders', o.id, o.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={o.status === 'converted' ? t('common.cannotDeleteConverted') : t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -980,16 +992,17 @@ export default function SalesPage() {
                     <td className="tabular-nums">{i.total}</td>
                     <td className="tabular-nums">{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
-                      <span className="print-hide inline-block">
+                      <span className="print-hide">
                         <PdfExportButton
                           compact
                           printPath={`/print/sales-invoices/${i.id}`}
                           fileName={i.invoice_number}
                         />
                       </span>
-                      <span className="print-hide inline-block">
+                      <span className="print-hide">
                         <WhatsAppSendButton
                           compact
                           defaultPhone={i.customer?.phone}
@@ -1010,6 +1023,7 @@ export default function SalesPage() {
                       {canDeleteSales('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -1191,7 +1205,10 @@ export default function SalesPage() {
                 onChange={(e) => setCollectForm({ ...collectForm, cash_box_id: e.target.value })}
               >
                 <option value="">—</option>
-                {(cashBoxes.data || []).map((c) => (
+                {(cashBoxes.data || []).filter((c) => {
+                  const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
+                  return (c.currency || 'USD').toUpperCase() === cur
+                }).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
                   </option>
@@ -1208,9 +1225,9 @@ export default function SalesPage() {
               if (wh?.branch_id) {
                 setInv((prev) => ({ ...prev, branch_id: String(wh.branch_id) }))
               }
-            })}<Field label={t('common.branch')}><select className={inputClass} value={inv.branch_id} onChange={(e) => setInv({ ...inv, branch_id: e.target.value })} required={activeBranches.length > 0}><option value="">—</option>{activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}</select></Field><DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invEstimatedTotal} />{invoiceLinesEditor}{invHasSerialProduct && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field><PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invEstimatedTotal} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+            })}<Field label={t('common.branch')}><select className={inputClass} value={inv.branch_id} onChange={(e) => setInv({ ...inv, branch_id: e.target.value })} required={activeBranches.length > 0}><option value="">—</option>{activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}</select></Field><DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invEstimatedTotal} />{invoiceLinesEditor}{invHasSerialProduct && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}<Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field><PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invEstimatedTotal} partner="customer" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
             {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{customerField(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
-            {tab === 'receipts' && <><p className="text-xs leading-relaxed text-black/55">{t('common.receiptHint')}</p>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
+            {tab === 'receipts' && <><p className="text-xs leading-relaxed text-black/55">{t('common.receiptHint')}</p>{customerField(rc, setRc, false)}<Field label={t('common.invoice')}><select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={rc.cash_box_id} onChange={(e) => setRc({ ...rc, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).filter((c) => !rc.currency || (c.currency || 'USD').toUpperCase() === (rc.currency || 'USD').toUpperCase()).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={rc} setState={setRc} currencies={currencyList} baseCurrency={baseCurrency} /></>}
           </form>
         )}
       </Modal>

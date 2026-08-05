@@ -14,6 +14,7 @@ import {
   Barcode,
   ScrollText,
   Building2,
+  ClipboardCheck,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -50,6 +51,7 @@ export const navGroups: NavGroup[] = [
       { to: '/sales', key: 'sales', icon: ShoppingCart, permission: 'sales.view' },
       { to: '/purchases', key: 'purchases', icon: Truck, permission: 'purchases.view' },
       { to: '/warehouse', key: 'warehouse', icon: Warehouse, permission: 'warehouse.view' },
+      { to: '/warehouse-approvals', key: 'warehouseApprovals', icon: ClipboardCheck, permission: 'warehouse.approvals.view_own' },
       { to: '/partners', key: 'partners', icon: Users, permission: 'customers.view' },
       { to: '/cash-banks', key: 'cash', icon: Landmark, permission: 'cash.view' },
       { to: '/hr', key: 'hr', icon: UserCog, permission: 'hr.view' },

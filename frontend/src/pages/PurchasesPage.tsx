@@ -8,13 +8,13 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
-import PaymentTypeFields, { paymentTypeLabel } from '@/components/PaymentTypeFields'
+import PaymentTypeFields, { defaultCashBoxId, paymentTypeLabel } from '@/components/PaymentTypeFields'
 import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
-import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 
@@ -179,13 +179,19 @@ export default function PurchasesPage() {
     paid_amount?: number
     status?: string
     invoice_number?: string
+    currency?: string
     cash_box_id?: number | null
     supplier?: { name?: string; phone?: string }
   }) => {
     if (!canPayInvoice(invRow)) return
     const boxes = cashBoxes.data || []
-    const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
-    const defaultBox = invRow.cash_box_id ? String(invRow.cash_box_id) : (main ? String(main.id) : '')
+    const cur = (invRow.currency || baseCurrency || 'USD').toUpperCase()
+    const matched = boxes.filter((c) => (c.currency || 'USD').toUpperCase() === cur)
+    const invoiceBoxOk = invRow.cash_box_id
+      && matched.some((c) => Number(c.id) === Number(invRow.cash_box_id))
+    const defaultBox = invoiceBoxOk
+      ? String(invRow.cash_box_id)
+      : defaultCashBoxId(matched, cur)
     setSelectedId(invRow.id)
     setSelectedRow(invRow as unknown as Record<string, unknown>)
     setPayForm({
@@ -201,12 +207,15 @@ export default function PurchasesPage() {
   }, [taxEnabled, defaultTaxRate, purchaseTaxRate])
 
   useEffect(() => {
-    if (!pay.cash_box_id && (cashBoxes.data || []).length > 0) {
-      const boxes = cashBoxes.data || []
-      const main = boxes.find((c) => c.is_default) || boxes.find((c) => c.code === 'CASH-01') || boxes[0]
-      if (main) setPay((prev) => prev.cash_box_id ? prev : { ...prev, cash_box_id: String(main.id) })
-    }
-  }, [cashBoxes.data, pay.cash_box_id])
+    const boxes = cashBoxes.data || []
+    if (boxes.length === 0) return
+    const cur = (pay.currency || 'USD').toUpperCase()
+    const matched = boxes.filter((c) => (c.currency || 'USD').toUpperCase() === cur)
+    const selectedOk = pay.cash_box_id && matched.some((c) => String(c.id) === String(pay.cash_box_id))
+    if (selectedOk) return
+    const id = defaultCashBoxId(matched, cur)
+    if (id !== pay.cash_box_id) setPay((prev) => ({ ...prev, cash_box_id: id }))
+  }, [cashBoxes.data, pay.cash_box_id, pay.currency])
 
   const effectiveTaxRate = taxEnabled && applyPurchaseTax ? (Number(purchaseTaxRate) || defaultTaxRate) : 0
 
@@ -709,11 +718,13 @@ export default function PurchasesPage() {
                     <td>{r.currency || 'USD'}</td>
                     <td>{r.total}</td>
                     <td>{documentStatusLabel(r.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       {r.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertReq.mutate(r.id) }}>{t('purchases.convertToOrder')}</button>}
                       {canDeletePurchase('requests', r.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('requests', r.id, r.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -734,11 +745,13 @@ export default function PurchasesPage() {
                     <td>{o.currency || 'USD'}</td>
                     <td>{o.total}</td>
                     <td>{documentStatusLabel(o.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertPo.mutate(o.id) }}>{t('purchases.convertToInvoice')}</button>}
                       {canDeletePurchase('orders', o.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('orders', o.id, o.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeleteConverted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -769,16 +782,17 @@ export default function PurchasesPage() {
                     {taxEnabled && <td>{i.tax_amount ?? 0}</td>}
                     <td>{i.paid_amount ?? 0}</td>
                     <td>{documentStatusLabel(i.status)}</td>
-                    <td className="space-x-2 space-x-reverse">
+                    <td>
+                      <TableActions>
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
-                      <span className="print-hide inline-block">
+                      <span className="print-hide">
                         <PdfExportButton
                           compact
                           printPath={`/print/purchase-invoices/${i.id}`}
                           fileName={i.invoice_number}
                         />
                       </span>
-                      <span className="print-hide inline-block">
+                      <span className="print-hide">
                         <WhatsAppSendButton
                           compact
                           defaultPhone={i.supplier?.phone}
@@ -799,6 +813,7 @@ export default function PurchasesPage() {
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
+                      </TableActions>
                     </td>
                   </tr>
                 ))}
@@ -974,7 +989,10 @@ export default function PurchasesPage() {
                 onChange={(e) => setPayForm({ ...payForm, cash_box_id: e.target.value })}
               >
                 <option value="">—</option>
-                {(cashBoxes.data || []).map((c) => (
+                {(cashBoxes.data || []).filter((c) => {
+                  const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
+                  return (c.currency || 'USD').toUpperCase() === cur
+                }).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
                   </option>
@@ -998,9 +1016,9 @@ export default function PurchasesPage() {
                 <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{invoiceExtrasSum}</span></p>
               )}
             </div>
-            <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
+            <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
           {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
-          {tab === 'payments' && <><p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
+          {tab === 'payments' && <><p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).filter((c) => !pay.currency || (c.currency || 'USD').toUpperCase() === (pay.currency || 'USD').toUpperCase()).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
         </form>}
       </Modal>
     </div>
