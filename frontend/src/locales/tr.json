@@ -492,7 +492,6 @@
     "sentManual": "Dosya indirildi ve WhatsApp açıldı. İndirilenler’den ekleyip gönderin."
   },
   "login": {
-    "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP",
-    "demoHint": "Demo: admin / password"
+    "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP"
   }
 }

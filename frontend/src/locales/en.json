@@ -498,7 +498,6 @@
     "sentManual": "File downloaded and WhatsApp opened. Attach the file from Downloads, then send."
   },
   "login": {
-    "subtitle": "Syna Co — ERP for accounting & business management",
-    "demoHint": "Demo: admin / password"
+    "subtitle": "Syna Co — ERP for accounting & business management"
   }
 }
