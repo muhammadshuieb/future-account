@@ -136,6 +136,27 @@ class WarehouseApprovalWorkflowTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_manager_can_list_only_minimal_active_transfer_target_metadata(): void
+    {
+        $this->warehouseB->update(['location' => 'Secret aisle', 'notes' => 'Sensitive target notes']);
+
+        Sanctum::actingAs($this->manager);
+        $targets = $this->getJson('/api/warehouses/transfer-targets')
+            ->assertOk()
+            ->json('data');
+
+        $target = collect($targets)->firstWhere('id', $this->warehouseB->id);
+        $this->assertSame([
+            'id' => $this->warehouseB->id,
+            'name' => $this->warehouseB->name,
+            'code' => $this->warehouseB->code,
+        ], $target);
+        $this->getJson("/api/warehouses/{$this->warehouseB->id}")->assertForbidden();
+        $this->getJson("/api/stock-levels?warehouse_id={$this->warehouseB->id}")->assertForbidden();
+        $this->getJson("/api/products/{$this->product->id}/stock?warehouse_id={$this->warehouseB->id}")
+            ->assertForbidden();
+    }
+
     public function test_stale_update_is_not_applied(): void
     {
         Sanctum::actingAs($this->manager);
@@ -276,7 +297,6 @@ class WarehouseApprovalWorkflowTest extends TestCase
 
     public function test_posted_transfer_is_not_created_or_applied_before_approval(): void
     {
-        $this->manager->warehouses()->attach($this->warehouseB);
         Sanctum::actingAs($this->manager);
         $requestId = $this->postJson('/api/warehouse-transfers', [
             'transfer_date' => now()->toDateString(),
@@ -290,6 +310,13 @@ class WarehouseApprovalWorkflowTest extends TestCase
         $this->assertSame(10.0, $this->stock());
 
         Sanctum::actingAs($this->admin);
+        $this->getJson("/api/warehouse-approvals/{$requestId}")
+            ->assertOk()
+            ->assertJsonPath('data.review_context.source_warehouse.id', $this->warehouseA->id)
+            ->assertJsonPath('data.review_context.target_warehouse.id', $this->warehouseB->id)
+            ->assertJsonPath('data.review_context.lines.0.product.id', $this->product->id)
+            ->assertJsonPath('data.review_context.lines.0.quantity', 4)
+            ->assertJsonPath('data.review_context.lines.0.source_current_stock', 10);
         $this->postJson("/api/warehouse-approvals/{$requestId}/approve")->assertOk();
 
         $this->assertDatabaseHas('warehouse_transfers', ['status' => 'posted']);
@@ -298,6 +325,62 @@ class WarehouseApprovalWorkflowTest extends TestCase
             ->where('warehouse_id', $this->warehouseB->id)
             ->where('product_id', $this->product->id)
             ->sum('quantity'));
+        $this->assertSame(2, StockMovement::query()->where('type', 'transfer')->count());
+    }
+
+    public function test_transfer_rejection_leaves_both_warehouses_unchanged(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $requestId = $this->postJson('/api/warehouse-transfers', [
+            'transfer_date' => now()->toDateString(),
+            'from_warehouse_id' => $this->warehouseA->id,
+            'to_warehouse_id' => $this->warehouseB->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $this->product->id, 'quantity' => 3]],
+        ])->assertStatus(202)->json('data.approval_request.id');
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/warehouse-approvals/{$requestId}/reject", ['comment' => 'rejected'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertSame(10.0, $this->stock());
+        $this->assertSame(0.0, (float) StockLevel::query()
+            ->where('warehouse_id', $this->warehouseB->id)
+            ->where('product_id', $this->product->id)
+            ->sum('quantity'));
+        $this->assertSame(0, WarehouseTransfer::query()->count());
+        $this->assertSame(0, StockMovement::query()->count());
+    }
+
+    public function test_transfer_approval_refuses_stale_insufficient_source_stock(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $requestId = $this->postJson('/api/warehouse-transfers', [
+            'transfer_date' => now()->toDateString(),
+            'from_warehouse_id' => $this->warehouseA->id,
+            'to_warehouse_id' => $this->warehouseB->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $this->product->id, 'quantity' => 8]],
+        ])->assertStatus(202)->json('data.approval_request.id');
+
+        StockLevel::query()
+            ->where('warehouse_id', $this->warehouseA->id)
+            ->where('product_id', $this->product->id)
+            ->update(['quantity' => 2]);
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/warehouse-approvals/{$requestId}/approve")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('quantity');
+
+        $this->assertSame(2.0, $this->stock());
+        $this->assertSame(0.0, (float) StockLevel::query()
+            ->where('warehouse_id', $this->warehouseB->id)
+            ->where('product_id', $this->product->id)
+            ->sum('quantity'));
+        $this->assertDatabaseHas('warehouse_approval_requests', ['id' => $requestId, 'status' => 'pending']);
+        $this->assertSame(0, WarehouseTransfer::query()->count());
     }
 
     public function test_inventory_count_creation_and_posting_each_require_approval(): void

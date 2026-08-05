@@ -121,6 +121,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('attachments/{attachment}', [AttachmentController::class, 'destroy']);
 
     // Phase 2 — Inventory
+    Route::get('warehouses/transfer-targets', [WarehouseController::class, 'transferTargets']);
     Route::apiResource('warehouses', WarehouseController::class);
     Route::apiResource('categories', CategoryController::class)->except(['show']);
     Route::apiResource('units', UnitController::class)->except(['show']);

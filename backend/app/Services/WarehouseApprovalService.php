@@ -152,7 +152,7 @@ class WarehouseApprovalService
             'product.create' => $this->createProduct($payload, $reviewer),
             'product.update' => $this->updateProduct($request, $payload),
             'stock.adjustment.create' => $this->modelResult($this->inventory->createManualMovement($payload, $reviewer)),
-            'warehouse_transfer.create' => $this->modelResult($this->inventory->transfer($payload, $payload['lines'], $reviewer)),
+            'warehouse_transfer.create' => $this->createTransfer($payload, $reviewer),
             'warehouse_transfer.post' => $this->postTransfer($request, $reviewer),
             'inventory_count.create' => $this->createCount($payload, $reviewer),
             'inventory_count.post' => $this->postCount($request, $reviewer),
@@ -217,6 +217,40 @@ class WarehouseApprovalService
         $warehouse->update($payload);
 
         return $this->modelResult($warehouse->fresh());
+    }
+
+    protected function createTransfer(array $payload, User $reviewer): array
+    {
+        $sourceId = (int) $payload['from_warehouse_id'];
+        $targetId = (int) $payload['to_warehouse_id'];
+
+        Warehouse::query()->lockForUpdate()->findOrFail($sourceId);
+        $target = Warehouse::query()->lockForUpdate()->findOrFail($targetId);
+        if (! $target->is_active) {
+            throw ValidationException::withMessages([
+                'to_warehouse_id' => ['المخزن الهدف لم يعد نشطاً.'],
+            ]);
+        }
+
+        foreach ($payload['lines'] as $line) {
+            $product = Product::query()->findOrFail((int) $line['product_id']);
+            StockLevel::query()
+                ->where('warehouse_id', $sourceId)
+                ->where('product_id', $product->id)
+                ->lockForUpdate()
+                ->get();
+            $this->inventory->assertSufficientStock(
+                $sourceId,
+                $product->id,
+                (float) $line['quantity'],
+                $line['batch_no'] ?? null,
+                $product,
+            );
+        }
+
+        return $this->modelResult(
+            $this->inventory->transfer($payload, $payload['lines'], $reviewer)
+        );
     }
 
     protected function postTransfer(WarehouseApprovalRequest $request, User $reviewer): array

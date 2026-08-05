@@ -18,6 +18,18 @@ type Approval = {
   requester?: { id: number; name: string }
   reviewer?: { id: number; name: string }
   warehouse?: { id: number; name: string }
+  review_context?: {
+    source_warehouse?: { id: number; name: string; code: string }
+    target_warehouse?: { id: number; name: string; code: string }
+    lines: {
+      product?: { id: number; name: string; sku: string }
+      quantity: number
+      batch_no?: string | null
+      serial_no?: string | null
+      source_current_stock: number
+      target_current_stock: number
+    }[]
+  }
 }
 
 export default function WarehouseApprovalsPage() {
@@ -113,6 +125,7 @@ export default function WarehouseApprovalsPage() {
               <p><span className="text-black/45">{t('approvals.requester')}:</span> {selected.requester?.name}</p>
               <p><span className="text-black/45">{t('common.warehouse')}:</span> {selected.warehouse?.name}</p>
             </div>
+            {selected.review_context && <TransferReviewContext context={selected.review_context} />}
             <div className="grid gap-4 lg:grid-cols-2">
               <Payload title={t('approvals.before')} value={selected.before_payload} />
               <Payload title={t('approvals.after')} value={selected.after_payload} />
@@ -121,6 +134,33 @@ export default function WarehouseApprovalsPage() {
           </div>
         )}
       </Modal>
+    </div>
+  )
+}
+
+function TransferReviewContext({ context }: { context: NonNullable<Approval['review_context']> }) {
+  return (
+    <div className="space-y-3 rounded-lg border border-black/10 bg-mist p-4">
+      <div className="grid gap-2 sm:grid-cols-2">
+        <p><span className="text-black/45">من المخزن:</span> {context.source_warehouse?.code} — {context.source_warehouse?.name}</p>
+        <p><span className="text-black/45">إلى المخزن:</span> {context.target_warehouse?.code} — {context.target_warehouse?.name}</p>
+      </div>
+      <div className="table-wrap">
+        <table className="data-table text-xs">
+          <thead><tr><th>الصنف</th><th>الكمية</th><th>دفعة/تسلسلي</th><th>الرصيد الحالي بالمصدر</th><th>الرصيد الحالي بالهدف</th></tr></thead>
+          <tbody>
+            {context.lines.map((line, index) => (
+              <tr key={`${line.product?.id ?? index}-${index}`}>
+                <td>{line.product?.sku} — {line.product?.name}</td>
+                <td>{line.quantity}</td>
+                <td>{line.batch_no || line.serial_no || '—'}</td>
+                <td>{line.source_current_stock}</td>
+                <td>{line.target_current_stock}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

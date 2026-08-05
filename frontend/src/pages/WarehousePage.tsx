@@ -106,6 +106,11 @@ export default function WarehousePage() {
     queryKey: ['warehouses', tab === 'warehouses' ? search.debouncedQ : ''],
     queryFn: async () => (await api.get('/warehouses', { params: tab === 'warehouses' ? search.params : {} })).data.data,
   })
+  const transferTargets = useQuery({
+    queryKey: ['warehouse-transfer-targets'],
+    queryFn: async () => (await api.get('/warehouses/transfer-targets')).data.data as { id: number; name: string; code: string }[],
+    enabled: tab === 'transfers',
+  })
   const products = useQuery({
     queryKey: ['products', tab === 'products' ? search.debouncedQ : ''],
     queryFn: async () => (await api.get('/products', { params: tab === 'products' ? search.params : {} })).data.data,
@@ -984,7 +989,11 @@ export default function WarehousePage() {
               value={trForm.from_warehouse_id}
               onChange={(e) => {
                 const from_warehouse_id = e.target.value
-                setTrForm((prev) => ({ ...prev, from_warehouse_id }))
+                setTrForm((prev) => ({
+                  ...prev,
+                  from_warehouse_id,
+                  to_warehouse_id: prev.to_warehouse_id === from_warehouse_id ? '' : prev.to_warehouse_id,
+                }))
                 if (trForm.product_id && from_warehouse_id) {
                   void refreshStock(trForm.product_id, from_warehouse_id, trForm.batch_no || undefined, {
                     autofillBatch: true,
@@ -998,7 +1007,7 @@ export default function WarehousePage() {
               {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
             </select>
           </Field>
-          <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
+          <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(transferTargets.data || []).filter((w) => String(w.id) !== trForm.from_warehouse_id).map((w) => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}</select></Field>
           <Field label="صنف">
             <select
               className={inputClass}

@@ -23,6 +23,18 @@ class WarehouseController extends ApiController
         return $this->ok($query->get());
     }
 
+    public function transferTargets(Request $request): JsonResponse
+    {
+        $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.transfers.request']);
+
+        return $this->ok(
+            Warehouse::query()
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->get(['id', 'name', 'code'])
+        );
+    }
+
     public function store(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.manage');

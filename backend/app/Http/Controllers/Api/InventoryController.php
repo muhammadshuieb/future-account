@@ -12,6 +12,8 @@ use App\Support\ListSearch;
 use App\Support\WarehouseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class InventoryController extends ApiController
 {
@@ -110,10 +112,14 @@ class InventoryController extends ApiController
     public function transfers(Request $request): JsonResponse
     {
         $this->authorizePermission('warehouse.view');
-        $query = WarehouseTransfer::query()->with(['fromWarehouse', 'toWarehouse', 'lines.product'])->latest('id');
+        $query = WarehouseTransfer::query()->with([
+            'fromWarehouse:id,name,code',
+            'toWarehouse:id,name,code',
+            'lines.product',
+        ])->latest('id');
         if (WarehouseAccess::isScoped($request->user())) {
             $ids = WarehouseAccess::warehouseIds($request->user());
-            $query->whereIn('from_warehouse_id', $ids)->whereIn('to_warehouse_id', $ids);
+            $query->whereIn('from_warehouse_id', $ids);
         }
         ListSearch::apply($query, $request, ['transfer_number', 'notes', 'status'], [
             'fromWarehouse' => ['name', 'code'],
@@ -129,7 +135,10 @@ class InventoryController extends ApiController
         $data = $request->validate([
             'transfer_date' => ['required', 'date'],
             'from_warehouse_id' => ['required', 'exists:warehouses,id', 'different:to_warehouse_id'],
-            'to_warehouse_id' => ['required', 'exists:warehouses,id'],
+            'to_warehouse_id' => [
+                'required',
+                Rule::exists('warehouses', 'id')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'notes' => ['nullable', 'string'],
             'status' => ['nullable', 'in:draft,posted'],
             'lines' => ['required', 'array', 'min:1'],
@@ -139,14 +148,13 @@ class InventoryController extends ApiController
             'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
         WarehouseAccess::assertWarehouse($request->user(), (int) $data['from_warehouse_id']);
-        WarehouseAccess::assertWarehouse($request->user(), (int) $data['to_warehouse_id']);
         if (WarehouseAccess::isScoped($request->user())) {
             $approval = $this->approvals->request(
                 $request->user(),
                 'warehouse.transfers.request',
                 'warehouse_transfer.create',
                 $data,
-                [(int) $data['from_warehouse_id'], (int) $data['to_warehouse_id']],
+                [(int) $data['from_warehouse_id']],
             );
 
             return $this->ok(['pending_approval' => true, 'approval_request' => $approval], 202);
@@ -159,7 +167,11 @@ class InventoryController extends ApiController
     {
         $this->authorizeAnyPermission(['warehouse.manage', 'warehouse.transfers.request']);
         WarehouseAccess::assertWarehouse(request()->user(), (int) $warehouseTransfer->from_warehouse_id);
-        WarehouseAccess::assertWarehouse(request()->user(), (int) $warehouseTransfer->to_warehouse_id);
+        if (! $warehouseTransfer->toWarehouse()->where('is_active', true)->exists()) {
+            throw ValidationException::withMessages([
+                'to_warehouse_id' => ['يجب اختيار مخزن هدف نشط.'],
+            ]);
+        }
         if (WarehouseAccess::isScoped(request()->user())) {
             $approval = $this->approvals->request(
                 request()->user(),
@@ -169,7 +181,7 @@ class InventoryController extends ApiController
                     $warehouseTransfer->load('lines')->toArray(),
                     ['requested_status' => 'posted'],
                 ),
-                [(int) $warehouseTransfer->from_warehouse_id, (int) $warehouseTransfer->to_warehouse_id],
+                [(int) $warehouseTransfer->from_warehouse_id],
                 $warehouseTransfer,
             );
 
