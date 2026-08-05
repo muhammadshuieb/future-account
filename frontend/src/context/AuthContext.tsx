@@ -13,7 +13,7 @@ import type { User } from '@/types'
 type AuthContextValue = {
   user: User | null
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string) => Promise<{ user: User; landingPath: string }>
   logout: () => Promise<void>
   hasPermission: (permission: string) => boolean
 }
@@ -50,7 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     const { data } = await api.post('/auth/login', { username, password })
     localStorage.setItem('fa_token', data.token)
-    setUser(data.user)
+    const authenticatedUser = data.user as User
+    setUser(authenticatedUser)
+    return { user: authenticatedUser, landingPath: data.landing_path as string }
   }, [])
 
   const logout = useCallback(async () => {

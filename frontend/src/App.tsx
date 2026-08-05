@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -7,8 +7,11 @@ import { applyDefaultLocale } from '@/i18n'
 import api from '@/lib/api'
 import AppLayout from '@/components/AppLayout'
 import LoginPage from '@/pages/LoginPage'
+import { useAuth } from '@/context/AuthContext'
+import { isWarehouseManager } from '@/lib/authRouting'
 
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
+const WarehouseDashboardPage = lazy(() => import('@/pages/WarehouseDashboardPage'))
 const AccountsPage = lazy(() => import('@/pages/AccountsPage'))
 const JournalEntriesPage = lazy(() => import('@/pages/JournalEntriesPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -62,6 +65,17 @@ function BootstrapLocale() {
   return null
 }
 
+function HomeRoute() {
+  const { user } = useAuth()
+  return isWarehouseManager(user) ? <Navigate to="/warehouse-dashboard" replace /> : <DashboardPage />
+}
+
+function WarehouseManagerRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth()
+  if (loading || !user) return null
+  return isWarehouseManager(user) ? children : <Navigate to="/" replace />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -76,7 +90,15 @@ export default function App() {
               <Route path="/print/customers/:id/statement" element={<PartnerStatementPrintPage kind="customers" />} />
               <Route path="/print/suppliers/:id/statement" element={<PartnerStatementPrintPage kind="suppliers" />} />
               <Route element={<AppLayout />}>
-                <Route index element={<DashboardPage />} />
+                <Route index element={<HomeRoute />} />
+                <Route
+                  path="warehouse-dashboard"
+                  element={
+                    <WarehouseManagerRoute>
+                      <WarehouseDashboardPage />
+                    </WarehouseManagerRoute>
+                  }
+                />
                 <Route path="accounts" element={<AccountsPage />} />
                 <Route path="journal-entries" element={<JournalEntriesPage />} />
                 <Route path="settings" element={<SettingsPage />} />

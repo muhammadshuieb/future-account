@@ -23,6 +23,7 @@ export type NavItem = {
   icon: LucideIcon
   end?: boolean
   permission?: string
+  warehouseManagerOnly?: boolean
 }
 
 export type NavGroup = {
@@ -35,6 +36,13 @@ export const navGroups: NavGroup[] = [
     labelKey: 'nav.group.main',
     items: [
       { to: '/', key: 'dashboard', icon: LayoutDashboard, end: true, permission: 'dashboard.view' },
+      {
+        to: '/warehouse-dashboard',
+        key: 'warehouseDashboard',
+        icon: LayoutDashboard,
+        permission: 'warehouse.view',
+        warehouseManagerOnly: true,
+      },
     ],
   },
   {

@@ -39,6 +39,7 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'user' => $this->userPayload($user),
+            'landing_path' => $this->landingPath($user),
         ]);
     }
 
@@ -74,6 +75,7 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'user' => $this->userPayload($user),
+            'landing_path' => $this->landingPath($user),
         ], 201);
     }
 
@@ -111,5 +113,12 @@ class AuthController extends Controller
             'warehouse_ids' => $user->warehouses->pluck('id'),
             'warehouses' => $user->warehouses->map->only(['id', 'name', 'code'])->values(),
         ];
+    }
+
+    protected function landingPath(User $user): string
+    {
+        return $user->hasRole('warehouse_manager') && ! $user->hasRole('admin')
+            ? '/warehouse-dashboard'
+            : '/';
     }
 }

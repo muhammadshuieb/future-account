@@ -8,7 +8,7 @@ WEB=http://127.0.0.1:8080
 
 TOKEN="$(curl -s -X POST "$API/api/auth/login" \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d "{\"username\":\"$ADMIN_USER\",\"password\":\"$ADMIN_PASS\"}" \
+  -d "{\"username\":\"${ADMIN_USER:-admin}\",\"password\":\"${ADMIN_PASS:-password}\"}" \
   | python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("data") or {}).get("token") or d.get("token") or "")')"
 
 if [[ -z "$TOKEN" ]]; then

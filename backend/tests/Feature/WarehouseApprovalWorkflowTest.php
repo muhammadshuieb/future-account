@@ -183,6 +183,11 @@ class WarehouseApprovalWorkflowTest extends TestCase
         $this->assertDatabaseMissing('products', ['sku' => 'NEW-1']);
 
         Sanctum::actingAs($this->admin);
+        $this->getJson('/api/warehouse-approvals?status=pending')
+            ->assertOk()
+            ->assertJsonPath('data.pending_count', 1)
+            ->assertJsonPath('data.items.0.id', $requestId);
+
         $this->postJson("/api/warehouse-approvals/{$requestId}/approve")->assertOk();
 
         $created = Product::query()->where('sku', 'NEW-1')->firstOrFail();
@@ -190,6 +195,66 @@ class WarehouseApprovalWorkflowTest extends TestCase
             ->where('warehouse_id', $this->warehouseA->id)
             ->where('product_id', $created->id)
             ->sum('quantity'));
+    }
+
+    public function test_product_edit_stays_pending_until_admin_approves_or_rejects(): void
+    {
+        $originalName = $this->product->name;
+        $payload = [
+            'sku' => $this->product->sku,
+            'name' => 'Proposed rename',
+            'cost_price' => 10,
+            'sale_price' => 15,
+            'reorder_level' => 2,
+            'track_batch' => false,
+            'track_serial' => false,
+            'is_active' => true,
+        ];
+
+        Sanctum::actingAs($this->manager);
+        $approveRequestId = $this->putJson("/api/products/{$this->product->id}", $payload)
+            ->assertStatus(202)
+            ->assertJsonPath('data.pending_approval', true)
+            ->json('data.approval_request.id');
+
+        $this->assertSame($originalName, $this->product->fresh()->name);
+        $this->assertDatabaseHas('warehouse_approval_requests', [
+            'id' => $approveRequestId,
+            'status' => 'pending',
+            'action_type' => 'product.update',
+        ]);
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/warehouse-approvals/{$approveRequestId}/approve")->assertOk();
+        $this->assertSame('Proposed rename', $this->product->fresh()->name);
+
+        Sanctum::actingAs($this->manager);
+        $rejectPayload = array_merge($payload, ['name' => 'Should never apply']);
+        $rejectRequestId = $this->putJson("/api/products/{$this->product->id}", $rejectPayload)
+            ->assertStatus(202)
+            ->json('data.approval_request.id');
+        $this->assertSame('Proposed rename', $this->product->fresh()->name);
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/warehouse-approvals/{$rejectRequestId}/reject", ['comment' => 'keep current name'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+        $this->assertSame('Proposed rename', $this->product->fresh()->name);
+    }
+
+    public function test_manager_cannot_transfer_from_unauthorized_warehouse(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $this->postJson('/api/warehouse-transfers', [
+            'transfer_date' => now()->toDateString(),
+            'from_warehouse_id' => $this->warehouseB->id,
+            'to_warehouse_id' => $this->warehouseA->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $this->product->id, 'quantity' => 1]],
+        ])->assertForbidden();
+
+        $this->assertSame(0, WarehouseTransfer::query()->count());
+        $this->assertSame(10.0, $this->stock());
     }
 
     public function test_requester_cannot_self_approve_even_with_review_permission(): void

@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { LOGO } from '@/lib/brand'
+import { landingPathForUser } from '@/lib/authRouting'
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth()
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   if (!loading && user) {
-    return <Navigate to="/" replace />
+    return <Navigate to={landingPathForUser(user)} replace />
   }
 
   async function onSubmit(e: FormEvent) {
@@ -19,7 +21,8 @@ export default function LoginPage() {
     setError('')
     setSubmitting(true)
     try {
-      await login(username, password)
+      const result = await login(username, password)
+      navigate(result.landingPath || landingPathForUser(result.user), { replace: true })
     } catch (err: unknown) {
       const axiosErr = err as {
         response?: { data?: { message?: string; errors?: Record<string, string[]> } }

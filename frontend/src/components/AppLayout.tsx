@@ -11,8 +11,15 @@ import { LOGO } from '@/lib/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
 import HeaderLiveClock from '@/components/HeaderLiveClock'
 import { navGroups, type NavItem } from '@/config/navigation'
+import { isWarehouseManager } from '@/lib/authRouting'
 
-function canSeeNavItem(item: NavItem, hasPermission: (p: string) => boolean): boolean {
+function canSeeNavItem(
+  item: NavItem,
+  hasPermission: (p: string) => boolean,
+  warehouseManager: boolean,
+): boolean {
+  if (item.warehouseManagerOnly && !warehouseManager) return false
+  if (item.key === 'dashboard' && warehouseManager) return false
   if (item.key === 'partners') {
     return hasPermission('customers.view') || hasPermission('suppliers.view')
   }
@@ -88,10 +95,11 @@ export default function AppLayout() {
     return <Navigate to="/login" replace />
   }
 
+  const warehouseManager = isWarehouseManager(user)
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => canSeeNavItem(item, hasPermission)),
+      items: group.items.filter((item) => canSeeNavItem(item, hasPermission, warehouseManager)),
     }))
     .filter((group) => group.items.length > 0)
 
