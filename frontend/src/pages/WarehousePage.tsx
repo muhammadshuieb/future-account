@@ -52,6 +52,8 @@ const emptyPr = {
   sku: '',
   barcode: '',
   name: '',
+  brand: '',
+  model: '',
   category_id: '',
   unit_id: '',
   cost_price: '0',
@@ -224,7 +226,7 @@ export default function WarehousePage() {
   async function handleProductBarcodeScan(code: string) {
     try {
       const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
-      const found = (res.data.data as { id: number; name: string; sku: string; barcode?: string; cost_price: number; sale_price: number; category_id?: number; unit_id?: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean }[])[0]
+      const found = (res.data.data as { id: number; name: string; sku: string; barcode?: string; brand?: string; model?: string; cost_price: number; sale_price: number; category_id?: number; unit_id?: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean }[])[0]
       if (!found) {
         msg.setError('لم يُعثر على صنف بهذا الباركود')
         return
@@ -235,6 +237,8 @@ export default function WarehousePage() {
         sku: found.sku,
         barcode: found.barcode || code,
         name: found.name,
+        brand: found.brand || '',
+        model: found.model || '',
         category_id: found.category_id ? String(found.category_id) : '',
         unit_id: found.unit_id ? String(found.unit_id) : '',
         cost_price: String(found.cost_price),
@@ -257,6 +261,8 @@ export default function WarehousePage() {
     id: number
     sku: string
     name: string
+    brand?: string
+    model?: string
     barcode?: string
     category_id?: number
     unit_id?: number
@@ -320,6 +326,8 @@ export default function WarehousePage() {
         sku: prForm.sku,
         barcode: prForm.barcode || null,
         name: prForm.name,
+        brand: prForm.brand || null,
+        model: prForm.model || null,
         category_id: prForm.category_id || null,
         unit_id: prForm.unit_id || null,
         cost_price: Number(prForm.cost_price),
@@ -581,7 +589,7 @@ export default function WarehousePage() {
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>SKU</th><th>الاسم</th><th>تكلفة</th><th>بيع</th><th>{filterWarehouseId ? t('warehouse.warehouseBalance') : t('common.balance')}</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
+              <thead><tr><th>SKU</th><th>الاسم</th><th>{t('warehouse.brand')}</th><th>{t('warehouse.model')}</th><th>تكلفة</th><th>بيع</th><th>{filterWarehouseId ? t('warehouse.warehouseBalance') : t('common.balance')}</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
               <tbody>
                 {productRows.map((p) => (
                   <tr
@@ -594,6 +602,8 @@ export default function WarehousePage() {
                         sku: p.sku,
                         barcode: p.barcode || '',
                         name: p.name,
+                        brand: p.brand || '',
+                        model: p.model || '',
                         category_id: p.category_id ? String(p.category_id) : '',
                         unit_id: p.unit_id ? String(p.unit_id) : '',
                         cost_price: String(p.cost_price),
@@ -610,6 +620,8 @@ export default function WarehousePage() {
                   >
                     <td className="font-mono">{p.sku}</td>
                     <td>{p.name}</td>
+                    <td>{p.brand || '—'}</td>
+                    <td>{p.model || '—'}</td>
                     <td>{p.cost_price}</td>
                     <td>{p.sale_price}</td>
                     <td className="tabular-nums">{formatQuantity(p.on_hand ?? 0)}</td>
@@ -840,6 +852,10 @@ export default function WarehousePage() {
           <Field label="SKU"><input className={inputClass} value={prForm.sku} onChange={(e) => setPrForm({ ...prForm, sku: e.target.value })} required /></Field>
           <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>
           <Field label="الاسم"><input className={inputClass} value={prForm.name} onChange={(e) => setPrForm({ ...prForm, name: e.target.value })} required /></Field>
+          <div className="form-grid-2">
+            <Field label={t('warehouse.brand')}><input className={inputClass} value={prForm.brand} onChange={(e) => setPrForm({ ...prForm, brand: e.target.value })} /></Field>
+            <Field label={t('warehouse.model')}><input className={inputClass} value={prForm.model} onChange={(e) => setPrForm({ ...prForm, model: e.target.value })} /></Field>
+          </div>
           {!editingId && (
             <div className="form-grid-2">
               <Field label="المخزن">

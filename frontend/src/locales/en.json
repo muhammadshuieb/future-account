@@ -284,6 +284,8 @@
     "postCount": "Post Variances",
     "trackBatch": "Track Batches",
     "trackSerial": "Track Serials",
+    "brand": "Brand",
+    "model": "Model",
     "warehouseBalance": "Warehouse balance",
     "openingQuantity": "Opening quantity",
     "downloadImportTemplate": "Download Excel template",

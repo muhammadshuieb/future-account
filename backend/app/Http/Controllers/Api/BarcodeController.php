@@ -46,6 +46,8 @@ class BarcodeController extends ApiController
                     'product_id' => $product->id,
                     'sku' => $product->sku,
                     'name' => $product->name,
+                    'brand' => $product->brand,
+                    'model' => $product->model,
                     'barcode' => $code,
                     'format' => $this->detectFormat($code),
                     'price' => (float) $product->sale_price,

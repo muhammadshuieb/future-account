@@ -55,7 +55,7 @@ class ProductController extends ApiController
         if ($request->filled('barcode')) {
             $query->where('barcode', $request->string('barcode'));
         } else {
-        ListSearch::apply($query, $request, ['name', 'sku', 'barcode']);
+        ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model']);
         }
 
         $products = $query->get()->map(function (Product $product) {
@@ -231,6 +231,8 @@ class ProductController extends ApiController
             'sku' => ['required', 'string', 'max:64', "unique:products,sku,{$idPart}"],
             'barcode' => ['nullable', 'string', 'max:64', "unique:products,barcode,{$idPart}"],
             'name' => ['required', 'string', 'max:255'],
+            'brand' => ['nullable', 'string', 'max:255'],
+            'model' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'category_id' => ['nullable', 'exists:categories,id'],
             'unit_id' => ['nullable', 'exists:units,id'],

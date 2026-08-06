@@ -193,9 +193,9 @@ class ExcelExportService
                 $w->id, $w->name, $w->code, $w->branch?->name, $w->is_active ? '1' : '0',
             ])->all());
 
-        $book->addSheet('الأصناف', ['المعرف', 'الكود', 'الاسم', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
+        $book->addSheet('الأصناف', ['المعرف', 'الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
             Product::query()->with(['category', 'unit'])->orderBy('id')->get()->map(fn (Product $p) => [
-                $p->id, $p->sku, $p->name, $p->category?->name, $p->unit?->name,
+                $p->id, $p->sku, $p->name, $p->brand, $p->model, $p->category?->name, $p->unit?->name,
                 $p->sale_price, $p->cost_price, $p->barcode, $p->is_active ? '1' : '0',
             ])->all());
 
@@ -565,11 +565,16 @@ class ExcelExportService
         }
         if ($request->filled('q')) {
             $term = '%'.$request->query('q').'%';
-            $q->where(fn ($qq) => $qq->where('name', 'ilike', $term)->orWhere('sku', 'ilike', $term)->orWhere('barcode', 'ilike', $term));
+            $q->where(fn ($qq) => $qq
+                ->where('name', 'ilike', $term)
+                ->orWhere('sku', 'ilike', $term)
+                ->orWhere('barcode', 'ilike', $term)
+                ->orWhere('brand', 'ilike', $term)
+                ->orWhere('model', 'ilike', $term));
         }
-        $book->addSheet('الأصناف', ['الكود', 'الاسم', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
+        $book->addSheet('الأصناف', ['الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
             $q->get()->map(fn ($p) => [
-                $p->sku, $p->name, $p->category?->name, $p->unit?->name,
+                $p->sku, $p->name, $p->brand, $p->model, $p->category?->name, $p->unit?->name,
                 $p->sale_price, $p->cost_price, $p->barcode, $p->is_active ? '1' : '0',
             ])->all());
     }

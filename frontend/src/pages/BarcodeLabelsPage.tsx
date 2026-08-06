@@ -19,6 +19,8 @@ type Label = {
   product_id: number
   sku: string
   name: string
+  brand?: string | null
+  model?: string | null
   barcode: string
   format: string
   price: number
@@ -182,6 +184,11 @@ export default function BarcodeLabelsPage() {
                 <div key={`${l.product_id}-${i}`} className="barcode-label rounded-lg border border-[var(--color-line)] bg-white p-3 text-center">
                   <p className="text-[10px] text-black/45">{l.company}</p>
                   <p className="text-sm font-semibold leading-tight">{l.name}</p>
+                  {(l.brand || l.model) && (
+                    <p className="text-[10px] text-black/55">
+                      {[l.brand, l.model].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                   <p className="text-xs text-black/50 font-mono">{l.sku}</p>
                   <BarcodeSvg value={l.barcode} format={l.format} />
                   <p className="text-xs font-medium">{Number(l.price).toLocaleString('ar-SY-u-nu-latn')}</p>

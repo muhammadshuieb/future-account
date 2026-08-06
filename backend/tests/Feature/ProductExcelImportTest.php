@@ -49,12 +49,16 @@ class ProductExcelImportTest extends TestCase
         $sheet = $book->getSheetByName('الأصناف');
         $this->assertNotNull($sheet);
         $this->assertSame('اسم الصنف', $sheet->getCell('A1')->getValue());
-        $this->assertSame('المخزن', $sheet->getCell('G1')->getValue());
+        $this->assertSame('الماركة', $sheet->getCell('E1')->getValue());
+        $this->assertSame('الموديل', $sheet->getCell('F1')->getValue());
+        $this->assertSame('المخزن', $sheet->getCell('I1')->getValue());
 
         $headers = [];
-        for ($c = 1; $c <= 12; $c++) {
+        for ($c = 1; $c <= 14; $c++) {
             $headers[] = (string) $sheet->getCell(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($c).'1')->getValue();
         }
+        $this->assertContains('الماركة', $headers);
+        $this->assertContains('الموديل', $headers);
         $this->assertNotContains('رقم الصنف', $headers);
         $this->assertNotContains('الكود', $headers);
         $this->assertNotContains('SKU', $headers);
@@ -80,8 +84,8 @@ class ProductExcelImportTest extends TestCase
         ]);
 
         $file = $this->makeImportXlsx([
-            ['شاشة', 'إلكترونيات', 'قطعة', 'BC-100', '50', '80', 'مخزن الاستيراد', '10', '3', 'ملاحظة'],
-            ['كابل', '', 'قطعة', '', '5', '12', 'WH-IMP', '0', '', ''],
+            ['شاشة', 'إلكترونيات', 'قطعة', 'BC-100', 'سامسونج', 'S24', '50', '80', 'مخزن الاستيراد', '10', '3', 'ملاحظة'],
+            ['كابل', '', 'قطعة', '', '', '', '5', '12', 'WH-IMP', '0', '', ''],
         ]);
 
         $res = $this->post('/api/imports/products', ['file' => $file], [
@@ -95,6 +99,8 @@ class ProductExcelImportTest extends TestCase
         $this->assertNotNull($p1);
         $this->assertSame('PRD-00002', $p1->sku);
         $this->assertSame('BC-100', $p1->barcode);
+        $this->assertSame('سامسونج', $p1->brand);
+        $this->assertSame('S24', $p1->model);
         $this->assertSame(10.0, (float) StockLevel::query()
             ->where('product_id', $p1->id)
             ->where('warehouse_id', $wh->id)
@@ -108,6 +114,8 @@ class ProductExcelImportTest extends TestCase
         $p2 = Product::query()->where('name', 'كابل')->first();
         $this->assertNotNull($p2);
         $this->assertSame('PRD-00003', $p2->sku);
+        $this->assertNull($p2->brand);
+        $this->assertNull($p2->model);
         $this->assertSame(0.0, (float) StockLevel::query()
             ->where('product_id', $p2->id)
             ->where('warehouse_id', $wh->id)
@@ -124,9 +132,9 @@ class ProductExcelImportTest extends TestCase
         ]);
 
         $file = $this->makeImportXlsx([
-            ['صالح', '', '', '', '1', '2', 'مخزن صالح', '0', '0', ''],
-            ['بدون مخزن', '', '', '', '1', '2', '', '0', '0', ''],
-            ['مخزن وهمي', '', '', '', '1', '2', 'غير موجود', '0', '0', ''],
+            ['صالح', '', '', '', '', '', '1', '2', 'مخزن صالح', '0', '0', ''],
+            ['بدون مخزن', '', '', '', '', '', '1', '2', '', '0', '0', ''],
+            ['مخزن وهمي', '', '', '', '', '', '1', '2', 'غير موجود', '0', '0', ''],
         ]);
 
         $res = $this->post('/api/imports/products', ['file' => $file], [
@@ -156,9 +164,9 @@ class ProductExcelImportTest extends TestCase
         $this->assertFalse(Unit::query()->where('name', 'قطعة')->exists());
 
         $file = $this->makeImportXlsx([
-            ['منتج أ', 'عام', 'قطعة', '', '10', '15', 'المخزن الرئيسي', '0', '5', ''],
-            ['منتج ب', 'عام', '', '', '5', '8', 'المخزن الرئيسي', '2', '1', ''],
-            ['منتج ج', 'مواد خام', 'كيلو', '', '3', '6', 'المخزن الرئيسي', '0', '0', ''],
+            ['منتج أ', 'عام', 'قطعة', '', '', '', '10', '15', 'المخزن الرئيسي', '0', '5', ''],
+            ['منتج ب', 'عام', '', '', '', '', '5', '8', 'المخزن الرئيسي', '2', '1', ''],
+            ['منتج ج', 'مواد خام', 'كيلو', '', '', '', '3', '6', 'المخزن الرئيسي', '0', '0', ''],
         ]);
 
         $res = $this->post('/api/imports/products', ['file' => $file], [
@@ -191,7 +199,7 @@ class ProductExcelImportTest extends TestCase
         $this->assertSame(0, Warehouse::query()->count());
 
         $file = $this->makeImportXlsx([
-            ['صنف بعد المسح', 'عام', 'قطعة', '', '1', '2', 'المخزن الرئيسي', '0', '0', ''],
+            ['صنف بعد المسح', 'عام', 'قطعة', '', '', '', '1', '2', 'المخزن الرئيسي', '0', '0', ''],
         ]);
 
         $res = $this->post('/api/imports/products', ['file' => $file], [
@@ -218,7 +226,7 @@ class ProductExcelImportTest extends TestCase
         foreach ($headers as $i => $h) {
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1).'1', $h);
         }
-        $row = ['USER-SKU', 'صنف نظامي', '', '', '', '1', '2', 'مخزن X', '0', '0', ''];
+        $row = ['USER-SKU', 'صنف نظامي', '', '', '', '', '', '1', '2', 'مخزن X', '0', '0', ''];
         foreach ($row as $i => $v) {
             $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1).'2', $v);
         }
@@ -242,7 +250,7 @@ class ProductExcelImportTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['is_active' => true]));
         // user without warehouse.manage and not admin
         $this->post('/api/imports/products', [
-            'file' => $this->makeImportXlsx([['x', '', '', '', '', '', 'y', '', '', '']]),
+            'file' => $this->makeImportXlsx([['x', '', '', '', '', '', '', '', 'y', '', '', '']]),
         ], ['Accept' => 'application/json'])->assertForbidden();
     }
 

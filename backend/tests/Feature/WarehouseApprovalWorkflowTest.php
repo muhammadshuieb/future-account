@@ -191,6 +191,8 @@ class WarehouseApprovalWorkflowTest extends TestCase
         $requestId = $this->postJson('/api/products', [
             'sku' => 'NEW-1',
             'name' => 'Pending product',
+            'brand' => 'Huawei',
+            'model' => 'Nova 12',
             'cost_price' => 6,
             'sale_price' => 8,
             'reorder_level' => 1,
@@ -207,11 +209,15 @@ class WarehouseApprovalWorkflowTest extends TestCase
         $this->getJson('/api/warehouse-approvals?status=pending')
             ->assertOk()
             ->assertJsonPath('data.pending_count', 1)
-            ->assertJsonPath('data.items.0.id', $requestId);
+            ->assertJsonPath('data.items.0.id', $requestId)
+            ->assertJsonPath('data.items.0.after_payload.brand', 'Huawei')
+            ->assertJsonPath('data.items.0.after_payload.model', 'Nova 12');
 
         $this->postJson("/api/warehouse-approvals/{$requestId}/approve")->assertOk();
 
         $created = Product::query()->where('sku', 'NEW-1')->firstOrFail();
+        $this->assertSame('Huawei', $created->brand);
+        $this->assertSame('Nova 12', $created->model);
         $this->assertSame(9.0, (float) StockLevel::query()
             ->where('warehouse_id', $this->warehouseA->id)
             ->where('product_id', $created->id)

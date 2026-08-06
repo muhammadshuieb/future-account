@@ -284,6 +284,8 @@
     "postCount": "ترحيل الفروقات",
     "trackBatch": "تتبع الدفعات",
     "trackSerial": "تتبع التسلسلي",
+    "brand": "ماركة",
+    "model": "موديل",
     "warehouseBalance": "رصيد المخزن",
     "openingQuantity": "كمية افتتاحية",
     "downloadImportTemplate": "تحميل قالب Excel",

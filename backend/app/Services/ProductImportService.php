@@ -23,6 +23,8 @@ class ProductImportService
         'التصنيف',
         'الوحدة',
         'الباركود',
+        'الماركة',
+        'الموديل',
         'سعر التكلفة',
         'سعر البيع',
         'المخزن',
@@ -56,6 +58,8 @@ class ProductImportService
                 'عام',
                 'قطعة',
                 '',
+                'سامسونج',
+                'A54',
                 '10',
                 '15',
                 'المخزن الرئيسي',
@@ -69,6 +73,8 @@ class ProductImportService
             ['التصنيف', 'اختياري — إن لم يوجد يُنشأ تلقائياً بالاسم المكتوب'],
             ['الوحدة', 'اختياري — إن فرغت تُستخدم «قطعة»؛ وإن لم توجد تُنشأ تلقائياً'],
             ['الباركود', 'اختياري — يجب أن يكون فريداً إن وُجد'],
+            ['الماركة', 'اختياري — اسم الماركة / العلامة التجارية'],
+            ['الموديل', 'اختياري — رقم أو اسم الموديل'],
             ['سعر التكلفة', 'اختياري — افتراضي 0'],
             ['سعر البيع', 'اختياري — افتراضي 0'],
             ['المخزن', 'مطلوب — اسم أو رمز مخزن موجود. إن لم يكن لديك أي مخزن يُنشأ «المخزن الرئيسي» تلقائياً'],
@@ -268,13 +274,21 @@ class ProductImportService
         $salePrice = $this->parseNumber($raw['سعر البيع'], 'سعر البيع');
         $openingQty = $this->parseNumber($raw['كمية افتتاحية'], 'كمية افتتاحية');
         $reorderLevel = $this->parseNumber($raw['حد إعادة الطلب'], 'حد إعادة الطلب');
+        $brand = trim($raw['الماركة']);
+        if ($brand === '') {
+            $brand = null;
+        }
+        $model = trim($raw['الموديل']);
+        if ($model === '') {
+            $model = null;
+        }
         $notes = trim($raw['ملاحظات']);
         if ($notes === '') {
             $notes = null;
         }
 
         return DB::transaction(function () use (
-            $name, $barcode, $categoryId, $unitId, $costPrice, $salePrice,
+            $name, $barcode, $brand, $model, $categoryId, $unitId, $costPrice, $salePrice,
             $reorderLevel, $notes, $warehouse, $openingQty, $user
         ) {
             $sku = $this->nextSku();
@@ -282,6 +296,8 @@ class ProductImportService
                 'sku' => $sku,
                 'barcode' => $barcode,
                 'name' => $name,
+                'brand' => $brand,
+                'model' => $model,
                 'description' => $notes,
                 'category_id' => $categoryId,
                 'unit_id' => $unitId,
@@ -391,6 +407,8 @@ class ProductImportService
             'التصنيف' => ['التصنيف', 'تصنيف', 'category'],
             'الوحدة' => ['الوحدة', 'وحدة', 'unit'],
             'الباركود' => ['الباركود', 'باركود', 'barcode'],
+            'الماركة' => ['الماركة', 'ماركة', 'العلامة التجارية', 'brand'],
+            'الموديل' => ['الموديل', 'موديل', 'model'],
             'سعر التكلفة' => ['سعر التكلفة', 'التكلفة', 'تكلفة', 'cost'],
             'سعر البيع' => ['سعر البيع', 'البيع', 'بيع', 'sale'],
             'المخزن' => ['المخزن', 'مخزن', 'warehouse'],

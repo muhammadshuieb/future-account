@@ -75,6 +75,8 @@ class ProductCreateWithWarehouseTest extends TestCase
         $res = $this->postJson('/api/products', [
             'sku' => 'NEW-003',
             'name' => 'صنف بكمية',
+            'brand' => 'سامسونج',
+            'model' => 'A54',
             'cost_price' => 12,
             'sale_price' => 20,
             'warehouse_id' => $wh->id,
@@ -96,5 +98,44 @@ class ProductCreateWithWarehouseTest extends TestCase
 
         $product = Product::query()->findOrFail($productId);
         $this->assertSame('NEW-003', $product->sku);
+        $this->assertSame('سامسونج', $product->brand);
+        $this->assertSame('A54', $product->model);
+    }
+
+    public function test_update_product_brand_and_model(): void
+    {
+        $wh = Warehouse::query()->create([
+            'code' => 'WH-T3',
+            'name' => 'مخزن تحديث',
+            'is_active' => true,
+        ]);
+
+        $create = $this->postJson('/api/products', [
+            'sku' => 'UPD-001',
+            'name' => 'صنف للتعديل',
+            'cost_price' => 1,
+            'sale_price' => 2,
+            'warehouse_id' => $wh->id,
+            'opening_quantity' => 0,
+            'is_active' => true,
+        ])->assertCreated();
+
+        $id = (int) $create->json('data.id');
+
+        $this->putJson("/api/products/{$id}", [
+            'sku' => 'UPD-001',
+            'name' => 'صنف للتعديل',
+            'brand' => 'آبل',
+            'model' => 'iPhone 15',
+            'cost_price' => 1,
+            'sale_price' => 2,
+            'is_active' => true,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('products', [
+            'id' => $id,
+            'brand' => 'آبل',
+            'model' => 'iPhone 15',
+        ]);
     }
 }

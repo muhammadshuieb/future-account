@@ -282,6 +282,8 @@
     "postCount": "Farkları Kaydet",
     "trackBatch": "Parti Takibi",
     "trackSerial": "Seri Takibi",
+    "brand": "Marka",
+    "model": "Model",
     "warehouseBalance": "Depo bakiyesi",
     "openingQuantity": "Açılış miktarı",
     "downloadImportTemplate": "Excel şablonunu indir",
