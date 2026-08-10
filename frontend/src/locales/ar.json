@@ -293,6 +293,7 @@
     "importing": "جاري الاستيراد...",
     "importSuccess": "تم استيراد {{count}} صنفاً بنجاح",
     "importSkuHint": "أرقام الأصناف المولَّدة: {{skus}}",
+    "skuAutoHint": "يُولَّد رقم الصنف (SKU) تلقائياً عند الحفظ بصيغة PRD-00001",
     "importPartial": "فشل استيراد {{failed}} صف",
     "importRowError": "صف {{row}}: {{message}}",
     "importEmpty": "الملف لا يحتوي على صفوف بيانات للاستيراد",

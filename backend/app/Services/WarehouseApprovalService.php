@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseApprovalRequest;
 use App\Models\WarehouseTransfer;
+use App\Support\ProductSku;
 use App\Support\WarehouseAccess;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
@@ -163,7 +164,10 @@ class WarehouseApprovalService
 
     protected function createProduct(array $payload, User $reviewer): array
     {
-        if (Product::query()->where('sku', $payload['sku'])->exists()) {
+        $sku = trim((string) ($payload['sku'] ?? ''));
+        if ($sku === '') {
+            $payload['sku'] = ProductSku::next();
+        } elseif (Product::query()->where('sku', $sku)->exists()) {
             throw ValidationException::withMessages(['sku' => ['رمز الصنف مستخدم منذ تقديم الطلب.']]);
         }
         if (! empty($payload['barcode']) && Product::query()->where('barcode', $payload['barcode'])->exists()) {

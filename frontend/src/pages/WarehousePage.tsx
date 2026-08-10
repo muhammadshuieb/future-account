@@ -323,7 +323,6 @@ export default function WarehousePage() {
   const savePr = useMutation({
     mutationFn: () => {
       const payload: Record<string, unknown> = {
-        sku: prForm.sku,
         barcode: prForm.barcode || null,
         name: prForm.name,
         brand: prForm.brand || null,
@@ -336,6 +335,9 @@ export default function WarehousePage() {
         track_batch: prForm.track_batch,
         track_serial: prForm.track_serial,
         is_active: true,
+      }
+      if (editingId) {
+        payload.sku = prForm.sku
       }
       if (!editingId) {
         payload.warehouse_id = Number(prForm.warehouse_id)
@@ -849,7 +851,15 @@ export default function WarehousePage() {
           <Button variant="primary" disabled={savePr.isPending} onClick={() => savePr.mutate()}>حفظ</Button>
         </>}>
         <div className="space-y-3">
-          <Field label="SKU"><input className={inputClass} value={prForm.sku} onChange={(e) => setPrForm({ ...prForm, sku: e.target.value })} required /></Field>
+          {editingId ? (
+            <Field label="SKU">
+              <input className={inputClass} value={prForm.sku} readOnly />
+            </Field>
+          ) : (
+            <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {t('warehouse.skuAutoHint')}
+            </p>
+          )}
           <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>
           <Field label="الاسم"><input className={inputClass} value={prForm.name} onChange={(e) => setPrForm({ ...prForm, name: e.target.value })} required /></Field>
           <div className="form-grid-2">

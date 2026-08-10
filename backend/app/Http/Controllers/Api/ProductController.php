@@ -18,6 +18,7 @@ use App\Models\WarehouseTransferLine;
 use App\Services\InventoryService;
 use App\Services\WarehouseApprovalService;
 use App\Support\ListSearch;
+use App\Support\ProductSku;
 use App\Support\WarehouseAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -101,6 +102,9 @@ class ProductController extends ApiController
         }
 
         $product = DB::transaction(function () use ($request, $data, $stock) {
+            if (blank($data['sku'] ?? null)) {
+                $data['sku'] = ProductSku::next();
+            }
             $product = Product::query()->create($data);
             $warehouseId = (int) $stock['warehouse_id'];
             $openingQty = round((float) ($stock['opening_quantity'] ?? 0), 3);
@@ -227,8 +231,8 @@ class ProductController extends ApiController
     {
         $idPart = $id ?? 'NULL';
 
-        return $request->validate([
-            'sku' => ['required', 'string', 'max:64', "unique:products,sku,{$idPart}"],
+        $data = $request->validate([
+            'sku' => [$id ? 'required' : 'nullable', 'string', 'max:64', "unique:products,sku,{$idPart}"],
             'barcode' => ['nullable', 'string', 'max:64', "unique:products,barcode,{$idPart}"],
             'name' => ['required', 'string', 'max:255'],
             'brand' => ['nullable', 'string', 'max:255'],
@@ -243,5 +247,11 @@ class ProductController extends ApiController
             'track_serial' => ['boolean'],
             'is_active' => ['boolean'],
         ]);
+
+        if ($id === null && blank($data['sku'] ?? null)) {
+            unset($data['sku']);
+        }
+
+        return $data;
     }
 }

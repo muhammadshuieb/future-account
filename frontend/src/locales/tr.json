@@ -291,6 +291,7 @@
     "importing": "İçe aktarılıyor...",
     "importSuccess": "{{count}} ürün başarıyla içe aktarıldı",
     "importSkuHint": "Oluşturulan SKU'lar: {{skus}}",
+    "skuAutoHint": "SKU kayıtta otomatik üretilir: PRD-00001",
     "importPartial": "{{failed}} satır içe aktarılamadı",
     "importRowError": "Satır {{row}}: {{message}}",
     "importEmpty": "Dosyada içe aktarılacak veri satırı yok",

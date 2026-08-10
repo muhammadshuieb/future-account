@@ -102,6 +102,60 @@ class ProductCreateWithWarehouseTest extends TestCase
         $this->assertSame('A54', $product->model);
     }
 
+    public function test_create_product_without_sku_auto_generates_prd_code(): void
+    {
+        $wh = Warehouse::query()->create([
+            'code' => 'WH-SKU',
+            'name' => 'مخزن SKU',
+            'is_active' => true,
+        ]);
+
+        Product::query()->create([
+            'sku' => 'PRD-00007',
+            'name' => 'موجود مسبقاً',
+            'cost_price' => 1,
+            'sale_price' => 2,
+            'is_active' => true,
+        ]);
+
+        $res = $this->postJson('/api/products', [
+            'name' => 'صنف بدون SKU',
+            'cost_price' => 3,
+            'sale_price' => 5,
+            'warehouse_id' => $wh->id,
+            'opening_quantity' => 0,
+            'is_active' => true,
+        ])->assertCreated();
+
+        $this->assertSame('PRD-00008', $res->json('data.sku'));
+        $this->assertDatabaseHas('products', [
+            'id' => (int) $res->json('data.id'),
+            'sku' => 'PRD-00008',
+            'name' => 'صنف بدون SKU',
+        ]);
+    }
+
+    public function test_create_product_with_empty_sku_auto_generates(): void
+    {
+        $wh = Warehouse::query()->create([
+            'code' => 'WH-SKU2',
+            'name' => 'مخزن SKU فارغ',
+            'is_active' => true,
+        ]);
+
+        $res = $this->postJson('/api/products', [
+            'sku' => '',
+            'name' => 'صنف SKU فارغ',
+            'cost_price' => 1,
+            'sale_price' => 2,
+            'warehouse_id' => $wh->id,
+            'is_active' => true,
+        ])->assertCreated();
+
+        $sku = (string) $res->json('data.sku');
+        $this->assertMatchesRegularExpression('/^PRD-\d{5}$/', $sku);
+    }
+
     public function test_update_product_brand_and_model(): void
     {
         $wh = Warehouse::query()->create([

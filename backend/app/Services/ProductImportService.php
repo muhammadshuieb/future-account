@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\Excel\ExcelWorkbook;
+use App\Support\ProductSku;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
@@ -345,29 +346,7 @@ class ProductImportService
      */
     public function nextSku(): string
     {
-        $prefix = 'PRD-';
-        $last = Product::query()
-            ->where('sku', 'like', $prefix.'%')
-            ->orderByDesc('sku')
-            ->lockForUpdate()
-            ->value('sku');
-
-        $seq = 1;
-        if (is_string($last) && preg_match('/^PRD-(\d+)$/', $last, $m)) {
-            $seq = ((int) $m[1]) + 1;
-        } else {
-            // Fallback: highest numeric suffix among PRD-* skus that may not sort lexicographically for mixed padding
-            $candidates = Product::query()
-                ->where('sku', 'like', $prefix.'%')
-                ->pluck('sku');
-            foreach ($candidates as $sku) {
-                if (preg_match('/^PRD-(\d+)$/', (string) $sku, $m)) {
-                    $seq = max($seq, ((int) $m[1]) + 1);
-                }
-            }
-        }
-
-        return $prefix.str_pad((string) $seq, 5, '0', STR_PAD_LEFT);
+        return ProductSku::next();
     }
 
     /**

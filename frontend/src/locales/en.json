@@ -293,6 +293,7 @@
     "importing": "Importing...",
     "importSuccess": "Imported {{count}} product(s) successfully",
     "importSkuHint": "Generated SKUs: {{skus}}",
+    "skuAutoHint": "SKU is generated automatically on save as PRD-00001",
     "importPartial": "Failed to import {{failed}} row(s)",
     "importRowError": "Row {{row}}: {{message}}",
     "importEmpty": "The file has no data rows to import",

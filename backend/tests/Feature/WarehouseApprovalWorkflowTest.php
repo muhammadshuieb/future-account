@@ -224,6 +224,30 @@ class WarehouseApprovalWorkflowTest extends TestCase
             ->sum('quantity'));
     }
 
+    public function test_product_create_without_sku_auto_generates_on_approval(): void
+    {
+        Sanctum::actingAs($this->manager);
+        $requestId = $this->postJson('/api/products', [
+            'name' => 'Pending auto SKU',
+            'cost_price' => 4,
+            'sale_price' => 7,
+            'reorder_level' => 1,
+            'track_batch' => false,
+            'track_serial' => false,
+            'is_active' => true,
+            'warehouse_id' => $this->warehouseA->id,
+            'opening_quantity' => 0,
+        ])->assertStatus(202)->json('data.approval_request.id');
+
+        $this->assertSame(0, Product::query()->where('name', 'Pending auto SKU')->count());
+
+        Sanctum::actingAs($this->admin);
+        $this->postJson("/api/warehouse-approvals/{$requestId}/approve")->assertOk();
+
+        $created = Product::query()->where('name', 'Pending auto SKU')->firstOrFail();
+        $this->assertMatchesRegularExpression('/^PRD-\d{5}$/', $created->sku);
+    }
+
     public function test_product_edit_stays_pending_until_admin_approves_or_rejects(): void
     {
         $originalName = $this->product->name;
