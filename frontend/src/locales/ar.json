@@ -65,6 +65,7 @@
   },
   "common": {
     "save": "حفظ",
+    "notSpecified": "غير محدد",
     "post": "ترحيل",
     "convert": "تحويل",
     "delete": "حذف",

@@ -14,6 +14,7 @@ import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachme
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import ProductVariantSelect from '@/components/ProductVariantSelect'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -703,12 +704,10 @@ export default function SalesPage() {
           onScan={onScan}
         />
       )}
-      <Field label={t('common.product')}>
-        <select
-          className={inputClass}
-          value={state.product_id}
-          onChange={(e) => {
-            const productId = e.target.value
+      <ProductVariantSelect
+        products={products.data || []}
+        value={state.product_id}
+        onChange={(productId) => {
             const product = (products.data || []).find((p) => String(p.id) === productId)
             setState((prev) => ({
               ...prev,
@@ -720,25 +719,12 @@ export default function SalesPage() {
             } else if (!productId) {
               setStockInfo(null)
             }
-          }}
-          required
-        >
-          <option value="">—</option>
-          {(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-        </select>
-      </Field>
+        }}
+      />
       {state.product_id && (
-        <>
-          <Field label={t('warehouse.brand')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.brand || '—'} />
-          </Field>
-          <Field label={t('warehouse.model')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.model || '—'} />
-          </Field>
-          <Field label={t('common.unit')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
-          </Field>
-        </>
+        <Field label={t('common.unit')}>
+          <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
+        </Field>
       )}
       <div className="form-grid-2">
         <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
@@ -778,12 +764,10 @@ export default function SalesPage() {
                 </button>
               )}
             </div>
-            <Field label={t('common.product')}>
-              <select
-                className={inputClass}
-                value={line.product_id}
-                onChange={(e) => {
-                  const productId = e.target.value
+            <ProductVariantSelect
+              products={products.data || []}
+              value={line.product_id}
+              onChange={(productId) => {
                   const selected = (products.data || []).find((p) => String(p.id) === productId)
                   updateInvLine(index, {
                     product_id: productId,
@@ -794,25 +778,12 @@ export default function SalesPage() {
                   if (productId && inv.warehouse_id && !skipStockAutofill.current) {
                     void applyStockToInvoiceLine(index, productId, inv.warehouse_id)
                   }
-                }}
-                required
-              >
-                <option value="">—</option>
-                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-              </select>
-            </Field>
+              }}
+            />
             {line.product_id && (
-              <>
-                <Field label={t('warehouse.brand')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.brand || '—'} />
-                </Field>
-                <Field label={t('warehouse.model')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.model || '—'} />
-                </Field>
-                <Field label={t('common.unit')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-                </Field>
-              </>
+              <Field label={t('common.unit')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+              </Field>
             )}
             <div className="form-grid-2">
               <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
@@ -862,12 +833,10 @@ export default function SalesPage() {
                 </button>
               )}
             </div>
-            <Field label={t('common.product')}>
-              <select
-                className={inputClass}
-                value={line.product_id}
-                onChange={(e) => {
-                  const productId = e.target.value
+            <ProductVariantSelect
+              products={products.data || []}
+              value={line.product_id}
+              onChange={(productId) => {
                   const selected = (products.data || []).find((p) => String(p.id) === productId)
                   updateQuoteLine(index, {
                     product_id: productId,
@@ -875,25 +844,12 @@ export default function SalesPage() {
                     serial_no: '',
                     batch_no: '',
                   })
-                }}
-                required
-              >
-                <option value="">—</option>
-                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-              </select>
-            </Field>
+              }}
+            />
             {line.product_id && (
-              <>
-                <Field label={t('warehouse.brand')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.brand || '—'} />
-                </Field>
-                <Field label={t('warehouse.model')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.model || '—'} />
-                </Field>
-                <Field label={t('common.unit')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-                </Field>
-              </>
+              <Field label={t('common.unit')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+              </Field>
             )}
             <div className="form-grid-2">
               <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>

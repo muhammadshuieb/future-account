@@ -65,6 +65,7 @@
   },
   "common": {
     "save": "Kaydet",
+    "notSpecified": "Belirtilmemiş",
     "post": "Kaydet ve Onayla",
     "convert": "Dönüştür",
     "delete": "Sil",

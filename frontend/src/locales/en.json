@@ -65,6 +65,7 @@
   },
   "common": {
     "save": "Save",
+    "notSpecified": "Not specified",
     "post": "Post",
     "convert": "Convert",
     "delete": "Delete",

@@ -18,6 +18,7 @@ import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, P
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import { productLabel } from '@/lib/productLabel'
+import ProductVariantSelect from '@/components/ProductVariantSelect'
 
 type ProductRow = { id: number; name: string; brand?: string; model?: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
 
@@ -467,19 +468,15 @@ export default function PurchasesPage() {
     setState: Dispatch<SetStateAction<T>>,
   ) => (
     <>
-      <Field label={t('common.product')}><select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}</select></Field>
+      <ProductVariantSelect
+        products={products.data || []}
+        value={state.product_id}
+        onChange={(productId) => setState((prev) => ({ ...prev, product_id: productId }))}
+      />
       {state.product_id && (
-        <>
-          <Field label={t('warehouse.brand')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.brand || '—'} />
-          </Field>
-          <Field label={t('warehouse.model')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.model || '—'} />
-          </Field>
-          <Field label={t('common.unit')}>
-            <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
-          </Field>
-        </>
+        <Field label={t('common.unit')}>
+          <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
+        </Field>
       )}
       <div className="grid grid-cols-2 gap-2">
         <Field label={t('common.quantity')} hint={t('common.quantityUnit')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
@@ -512,12 +509,10 @@ export default function PurchasesPage() {
                 </button>
               )}
             </div>
-            <Field label={t('common.product')}>
-              <select
-                className={inputClass}
-                value={line.product_id}
-                onChange={(e) => {
-                  const productId = e.target.value
+            <ProductVariantSelect
+              products={products.data || []}
+              value={line.product_id}
+              onChange={(productId) => {
                   const selected = (products.data || []).find((p) => String(p.id) === productId)
                   updateInvLine(index, {
                     product_id: productId,
@@ -525,25 +520,12 @@ export default function PurchasesPage() {
                     serial_no: selected?.track_serial ? line.serial_no : '',
                     batch_no: selected?.track_batch ? line.batch_no : '',
                   })
-                }}
-                required
-              >
-                <option value="">—</option>
-                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-              </select>
-            </Field>
+              }}
+            />
             {line.product_id && (
-              <>
-                <Field label={t('warehouse.brand')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.brand || '—'} />
-                </Field>
-                <Field label={t('warehouse.model')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.model || '—'} />
-                </Field>
-                <Field label={t('common.unit')}>
-                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-                </Field>
-              </>
+              <Field label={t('common.unit')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+              </Field>
             )}
             <div className="grid grid-cols-2 gap-2">
               <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>

@@ -7,6 +7,7 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import ProductExcelImportButtons from '@/components/ProductExcelImportButtons'
+import ProductVariantSelect from '@/components/ProductVariantSelect'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -1040,12 +1041,10 @@ export default function WarehousePage() {
             </select>
           </Field>
           <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(transferTargets.data || []).filter((w) => String(w.id) !== trForm.from_warehouse_id).map((w) => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}</select></Field>
-          <Field label="صنف">
-            <select
-              className={inputClass}
-              value={trForm.product_id}
-              onChange={(e) => {
-                const product_id = e.target.value
+          <ProductVariantSelect
+            products={productList}
+            value={trForm.product_id}
+            onChange={(product_id) => {
                 setTrForm((prev) => ({ ...prev, product_id, batch_no: '', serial_no: '' }))
                 if (product_id && trForm.from_warehouse_id) {
                   void refreshStock(product_id, trForm.from_warehouse_id, undefined, {
@@ -1053,23 +1052,8 @@ export default function WarehousePage() {
                     onBatch: (batch) => setTrForm((prev) => ({ ...prev, batch_no: batch })),
                   })
                 } else setStockInfo(null)
-              }}
-              required
-            >
-              <option value="">—</option>
-              {productList.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
-            </select>
-          </Field>
-          {trForm.product_id && (
-            <>
-              <Field label={t('warehouse.brand')}>
-                <input className={`${inputClass} bg-black/5`} readOnly value={trProduct?.brand || '—'} />
-              </Field>
-              <Field label={t('warehouse.model')}>
-                <input className={`${inputClass} bg-black/5`} readOnly value={trProduct?.model || '—'} />
-              </Field>
-            </>
-          )}
+            }}
+          />
           <Field label="كمية">
             <NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} />
             {stockInfo && trForm.product_id && trForm.from_warehouse_id && (

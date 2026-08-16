@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext'
 import { DocumentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
+import ProductVariantSelect from '@/components/ProductVariantSelect'
 import {
   Button,
   EmptyState,
@@ -669,32 +670,16 @@ export default function QuotesPage() {
                       </button>
                     )}
                   </div>
-                  <Field label={t('common.product')}>
-                    <select
-                      className={inputClass}
-                      value={line.product_id}
-                      disabled={readOnly}
-                      onChange={(e) => onProductChange(index, e.target.value)}
-                      required
-                    >
-                      <option value="">—</option>
-                      {(products.data || []).map((p) => (
-                        <option key={p.id} value={p.id}>{productLabel(p)}{p.sku ? ` (${p.sku})` : ''}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  <ProductVariantSelect
+                    products={products.data || []}
+                    value={line.product_id}
+                    disabled={readOnly}
+                    onChange={(productId) => onProductChange(index, productId)}
+                  />
                   {line.product_id && (
-                    <>
-                      <Field label={t('warehouse.brand')}>
-                        <input className={`${inputClass} bg-black/5`} readOnly value={product?.brand || '—'} />
-                      </Field>
-                      <Field label={t('warehouse.model')}>
-                        <input className={`${inputClass} bg-black/5`} readOnly value={product?.model || '—'} />
-                      </Field>
-                      <Field label={t('common.unit')}>
-                        <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-                      </Field>
-                    </>
+                    <Field label={t('common.unit')}>
+                      <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                    </Field>
                   )}
                   <div className="form-grid-2">
                     <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
