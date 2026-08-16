@@ -17,8 +17,9 @@ import { excelModuleForPurchasesTab } from '@/lib/excelExport'
 import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
+import { productLabel } from '@/lib/productLabel'
 
-type ProductRow = { id: number; name: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
+type ProductRow = { id: number; name: string; brand?: string; model?: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
 
 type InvoiceLineDraft = {
   product_id: string
@@ -466,11 +467,19 @@ export default function PurchasesPage() {
     setState: Dispatch<SetStateAction<T>>,
   ) => (
     <>
-      <Field label={t('common.product')}><select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
+      <Field label={t('common.product')}><select className={inputClass} value={state.product_id} onChange={(e) => setState({ ...state, product_id: e.target.value })} required><option value="">—</option>{(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}</select></Field>
       {state.product_id && (
-        <Field label={t('common.unit')}>
-          <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
-        </Field>
+        <>
+          <Field label={t('warehouse.brand')}>
+            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.brand || '—'} />
+          </Field>
+          <Field label={t('warehouse.model')}>
+            <input className={`${inputClass} bg-black/5`} readOnly value={(products.data || []).find((p) => String(p.id) === state.product_id)?.model || '—'} />
+          </Field>
+          <Field label={t('common.unit')}>
+            <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
+          </Field>
+        </>
       )}
       <div className="grid grid-cols-2 gap-2">
         <Field label={t('common.quantity')} hint={t('common.quantityUnit')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
@@ -520,13 +529,21 @@ export default function PurchasesPage() {
                 required
               >
                 <option value="">—</option>
-                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {(products.data || []).map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
               </select>
             </Field>
             {line.product_id && (
-              <Field label={t('common.unit')}>
-                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-              </Field>
+              <>
+                <Field label={t('warehouse.brand')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.brand || '—'} />
+                </Field>
+                <Field label={t('warehouse.model')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={product?.model || '—'} />
+                </Field>
+                <Field label={t('common.unit')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                </Field>
+              </>
             )}
             <div className="grid grid-cols-2 gap-2">
               <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
@@ -649,7 +666,7 @@ export default function PurchasesPage() {
               <tbody>
                 {(data.items || data.lines).map((line: any, index: number) => (
                   <tr key={index}>
-                    <td>{line.product?.name}</td>
+                    <td>{productLabel(line.product)}</td>
                     <td>{unitFromProduct(line.product)}</td>
                     <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
                     <td>{line.line_total}</td>

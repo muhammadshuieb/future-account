@@ -18,6 +18,7 @@ const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const WarehousePage = lazy(() => import('@/pages/WarehousePage'))
 const WarehouseApprovalsPage = lazy(() => import('@/pages/WarehouseApprovalsPage'))
 const SalesPage = lazy(() => import('@/pages/SalesPage'))
+const QuotesPage = lazy(() => import('@/pages/QuotesPage'))
 const PurchasesPage = lazy(() => import('@/pages/PurchasesPage'))
 const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
 const CashBanksPage = lazy(() => import('@/pages/CashBanksPage'))
@@ -27,6 +28,7 @@ const BarcodeLabelsPage = lazy(() => import('@/pages/BarcodeLabelsPage'))
 const AuditLogPage = lazy(() => import('@/pages/AuditLogPage'))
 const CompaniesPage = lazy(() => import('@/pages/CompaniesPage'))
 const SalesInvoicePrintPage = lazy(() => import('@/pages/SalesInvoicePrintPage'))
+const SalesQuotePrintPage = lazy(() => import('@/pages/SalesQuotePrintPage'))
 const PurchaseInvoicePrintPage = lazy(() => import('@/pages/PurchaseInvoicePrintPage'))
 const PartnerStatementPrintPage = lazy(() => import('@/pages/PartnerStatementPrintPage'))
 
@@ -86,6 +88,7 @@ export default function App() {
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/print/sales-invoices/:id" element={<SalesInvoicePrintPage />} />
+              <Route path="/print/sales-quotes/:id" element={<SalesQuotePrintPage />} />
               <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />
               <Route path="/print/customers/:id/statement" element={<PartnerStatementPrintPage kind="customers" />} />
               <Route path="/print/suppliers/:id/statement" element={<PartnerStatementPrintPage kind="suppliers" />} />
@@ -103,6 +106,7 @@ export default function App() {
                 <Route path="journal-entries" element={<JournalEntriesPage />} />
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="sales" element={<SalesPage />} />
+                <Route path="quotes" element={<QuotesPage />} />
                 <Route path="purchases" element={<PurchasesPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
                 <Route path="warehouse-approvals" element={<WarehouseApprovalsPage />} />

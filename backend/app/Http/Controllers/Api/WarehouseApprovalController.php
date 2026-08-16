@@ -92,7 +92,7 @@ class WarehouseApprovalController extends ApiController
             ->values();
         $products = Product::query()
             ->whereIn('id', $productIds->all())
-            ->get(['id', 'sku', 'name', 'track_batch', 'track_serial'])
+            ->get(['id', 'sku', 'name', 'brand', 'model', 'track_batch', 'track_serial'])
             ->keyBy('id');
 
         $lines = collect($payload['lines'] ?? [])->map(function (array $line) use ($sourceId, $targetId, $products) {

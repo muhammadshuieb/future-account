@@ -747,11 +747,12 @@ class SalesService
             [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
             $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['quote_date'] ?? null);
 
+            // Quotes are commercial offers only: no stock, cash, or GL side effects.
             $quote = SalesQuote::query()->create([
                 'quote_number' => $this->nextNumber('SQ'),
                 'quote_date' => $data['quote_date'],
                 'valid_until' => $data['valid_until'] ?? null,
-                'customer_id' => $data['customer_id'],
+                'customer_id' => $data['customer_id'] ?? null,
                 'warehouse_id' => $data['warehouse_id'] ?? null,
                 'branch_id' => $data['branch_id'] ?? null,
                 'status' => $data['status'] ?? 'draft',
@@ -769,7 +770,7 @@ class SalesService
                 $quote->items()->create($line);
             }
 
-            return $quote->load(['items.product', 'customer', 'warehouse']);
+            return $quote->load(['items.product.unit', 'customer', 'warehouse', 'branch']);
         });
     }
 
@@ -780,14 +781,25 @@ class SalesService
         }
 
         return DB::transaction(function () use ($quote, $data, $lines) {
+            // Quotes remain non-posting documents: update header/lines only.
             [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? $quote->currency,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : (float) $quote->exchange_rate,
+                $data['quote_date'] ?? $quote->quote_date?->toDateString()
+            );
             $quote->update([
                 'quote_date' => $data['quote_date'] ?? $quote->quote_date,
-                'valid_until' => $data['valid_until'] ?? $quote->valid_until,
-                'customer_id' => $data['customer_id'] ?? $quote->customer_id,
-                'warehouse_id' => $data['warehouse_id'] ?? $quote->warehouse_id,
-                'notes' => $data['notes'] ?? $quote->notes,
+                'valid_until' => array_key_exists('valid_until', $data) ? $data['valid_until'] : $quote->valid_until,
+                'customer_id' => array_key_exists('customer_id', $data) ? $data['customer_id'] : $quote->customer_id,
+                'warehouse_id' => array_key_exists('warehouse_id', $data) ? $data['warehouse_id'] : $quote->warehouse_id,
+                'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $quote->branch_id,
+                'notes' => array_key_exists('notes', $data) ? $data['notes'] : $quote->notes,
                 'status' => $data['status'] ?? $quote->status,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
                 'tax_amount' => $tax,
                 'total' => $total,
@@ -797,7 +809,7 @@ class SalesService
                 $quote->items()->create($line);
             }
 
-            return $quote->fresh(['items.product', 'customer', 'warehouse']);
+            return $quote->fresh(['items.product.unit', 'customer', 'warehouse', 'branch']);
         });
     }
 

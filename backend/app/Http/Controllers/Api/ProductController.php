@@ -149,19 +149,26 @@ class ProductController extends ApiController
 
     public function stock(Request $request, Product $product): JsonResponse
     {
-        $this->authorizePermission('warehouse.view');
+        $this->authorizeAnyPermission(['warehouse.view', 'quotes.view', 'sales.view']);
         $data = $request->validate([
-            'warehouse_id' => ['required', 'exists:warehouses,id'],
+            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
             'batch_no' => ['nullable', 'string', 'max:64'],
         ]);
 
-        $warehouseId = (int) $data['warehouse_id'];
-        WarehouseAccess::assertWarehouse($request->user(), $warehouseId);
         WarehouseAccess::assertProduct($request->user(), $product);
+        $warehouseId = isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null;
         $batchNo = $data['batch_no'] ?? null;
-        $availableQty = $this->inventory->availableQty($warehouseId, $product->id, $batchNo, $product);
-        $breakdown = $this->inventory->stockBreakdown($product->id, $warehouseId);
-        $warehouseName = $breakdown[0]['warehouse_name'] ?? \App\Models\Warehouse::query()->find($warehouseId)?->name;
+
+        if ($warehouseId !== null) {
+            WarehouseAccess::assertWarehouse($request->user(), $warehouseId);
+            $availableQty = $this->inventory->availableQty($warehouseId, $product->id, $batchNo, $product);
+            $breakdown = $this->inventory->stockBreakdown($product->id, $warehouseId);
+            $warehouseName = $breakdown[0]['warehouse_name'] ?? \App\Models\Warehouse::query()->find($warehouseId)?->name;
+        } else {
+            $breakdown = $this->inventory->stockBreakdown($product->id, null);
+            $availableQty = round(array_sum(array_column($breakdown, 'quantity')), 3);
+            $warehouseName = null;
+        }
 
         return $this->ok([
             'product_id' => $product->id,

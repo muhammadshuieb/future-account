@@ -5,6 +5,7 @@ import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime } from '@/lib/dates'
 import { unitFromProduct } from '@/lib/productUnit'
+import { productDetails, type ProductIdentity } from '@/lib/productLabel'
 
 export type SalesInvoicePrintData = {
   invoice_number: string
@@ -23,7 +24,7 @@ export type SalesInvoicePrintData = {
   branch?: { name?: string; code?: string } | null
   warehouse?: { name?: string } | null
   lines?: {
-    product?: { name: string; sku?: string; unit?: { name?: string; symbol?: string } }
+    product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_price: number
     line_total: number
@@ -49,7 +50,7 @@ export type PurchaseInvoicePrintData = {
   notes?: string | null
   supplier?: { name: string; tax_number?: string; phone?: string }
   lines?: {
-    product?: { name: string; sku?: string; unit?: { name?: string; symbol?: string } }
+    product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_cost?: number
     unit_price?: number
@@ -70,6 +71,16 @@ type StructuredEInvoice = {
   uuid?: string
   seller?: { name?: string; tax_number?: string }
   tax_breakdown?: { rate: number; taxable: number; tax: number }[]
+}
+
+function ProductCell({ product }: { product?: ProductIdentity | null }) {
+  const details = productDetails(product)
+  return (
+    <td>
+      <span>{product?.name || '—'}</span>
+      {details && <span className="block text-[10px] text-black/55">{details}</span>}
+    </td>
+  )
 }
 
 function BrandLogo() {
@@ -238,7 +249,7 @@ export function SalesInvoicePrintView({
         <tbody>
           {(invoice.lines || []).map((l, i) => (
             <tr key={i}>
-              <td>{l.product?.name}</td>
+              <ProductCell product={l.product} />
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
@@ -284,6 +295,127 @@ export function SalesInvoicePrintView({
           <span className="tabular-nums">{invoice.total}</span>
         </p>
       </div>
+    </div>
+  )
+}
+
+export type SalesQuotePrintData = {
+  quote_number: string
+  quote_date: string
+  created_at?: string | null
+  valid_until?: string | null
+  total: number
+  tax_amount?: number
+  subtotal: number
+  currency?: string
+  notes?: string | null
+  customer?: { name: string; tax_number?: string; phone?: string } | null
+  branch?: { name?: string; code?: string } | null
+  warehouse?: { name?: string } | null
+  items?: {
+    product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
+    quantity: number
+    unit_price: number
+    line_total: number
+  }[]
+}
+
+export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
+  const { t } = useTranslation()
+  const lines = quote.items || []
+
+  return (
+    <div className="space-y-2 text-xs" dir="rtl">
+      <InvoiceBrandHeader
+        documentLabel={t('quotes.documentTitle')}
+        invoiceNumber={quote.quote_number}
+        invoiceDate={quote.quote_date}
+        createdAt={quote.created_at}
+      />
+
+      <div className="grid gap-1 sm:grid-cols-2">
+        <p>
+          <span className="text-black/55">{t('common.customer')}: </span>
+          {quote.customer?.name || t('quotes.noCustomer')}
+        </p>
+        {quote.customer?.tax_number && (
+          <p>
+            <span className="text-black/55">{t('companies.taxNumber')}: </span>
+            {quote.customer.tax_number}
+          </p>
+        )}
+        {quote.branch?.name && (
+          <p>
+            <span className="text-black/55">{t('common.branch')}: </span>
+            {quote.branch.name}
+          </p>
+        )}
+        {quote.warehouse?.name && (
+          <p>
+            <span className="text-black/55">{t('common.warehouse')}: </span>
+            {quote.warehouse.name}
+          </p>
+        )}
+        {quote.valid_until && (
+          <p>
+            <span className="text-black/55">{t('common.validUntil')}: </span>
+            {String(quote.valid_until).slice(0, 10)}
+          </p>
+        )}
+        <p>
+          <span className="text-black/55">{t('common.currency')}: </span>
+          {quote.currency || 'USD'}
+        </p>
+      </div>
+
+      {quote.notes ? (
+        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
+          <p className="text-[11px] font-semibold text-black/55">{t('common.notes')}</p>
+          <p className="mt-0.5 whitespace-pre-wrap">{quote.notes}</p>
+        </div>
+      ) : null}
+
+      <table className="data-table text-[11px]">
+        <thead>
+          <tr>
+            <th>{t('common.product')}</th>
+            <th>{t('common.unit')}</th>
+            <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
+            <th>{t('common.price')}</th>
+            <th>{t('common.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <tr key={i}>
+              <ProductCell product={l.product} />
+              <td>{unitFromProduct(l.product)}</td>
+              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
+              <td className="tabular-nums">{l.unit_price}</td>
+              <td className="tabular-nums">{l.line_total}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
+        <p>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
+          <span className="tabular-nums">{quote.subtotal}</span>
+        </p>
+        {Number(quote.tax_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.tax')}: </span>
+            <span className="tabular-nums">{quote.tax_amount}</span>
+          </p>
+        )}
+        <p className="text-sm font-bold">
+          {t('common.total')} ({quote.currency || 'USD'}):{' '}
+          <span className="tabular-nums">{quote.total}</span>
+        </p>
+      </div>
+
+      <p className="mt-4 text-[10px] text-black/45">{t('quotes.printDisclaimer')}</p>
     </div>
   )
 }
@@ -357,7 +489,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
-              <td>{l.product?.name}</td>
+              <ProductCell product={l.product} />
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_cost ?? l.unit_price ?? '—'}</td>

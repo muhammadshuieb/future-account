@@ -11,6 +11,7 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, StatTile, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
+import { productLabel } from '@/lib/productLabel'
 
 type ReportKey =
   | 'branch-complete'
@@ -290,8 +291,8 @@ export default function ReportsPage() {
           <Field label="الصنف">
             <select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
               <option value="">اختر صنفاً</option>
-              {(products.data || []).map((p: { id: number; name: string; sku: string }) => (
-                <option key={p.id} value={p.id}>{p.sku} — {p.name}</option>
+              {(products.data || []).map((p: { id: number; name: string; sku: string; brand?: string; model?: string }) => (
+                <option key={p.id} value={p.id}>{p.sku} — {productLabel(p)}</option>
               ))}
             </select>
           </Field>
@@ -536,10 +537,10 @@ export default function ReportsPage() {
               <div>
                 <p className="mb-2">قيمة المخزون: <strong>{formatMoney(report.data.total_value, base)}</strong></p>
                 <table className="data-table">
-                  <thead><tr><th>SKU</th><th>اسم</th><th>كمية</th><th>قيمة</th></tr></thead>
+                  <thead><tr><th>SKU</th><th>اسم</th><th>{t('warehouse.brand')}</th><th>{t('warehouse.model')}</th><th>كمية</th><th>قيمة</th></tr></thead>
                   <tbody>
-                    {(report.data.rows || []).map((r: { id: number; sku: string; name: string; on_hand: number; value: number }) => (
-                      <tr key={r.id}><td className="font-mono">{r.sku}</td><td>{r.name}</td><td className="tabular-nums">{formatQuantity(r.on_hand)}</td><td>{formatMoney(r.value, base)}</td></tr>
+                    {(report.data.rows || []).map((r: { id: number; sku: string; name: string; brand?: string; model?: string; on_hand: number; value: number }) => (
+                      <tr key={r.id}><td className="font-mono">{r.sku}</td><td>{r.name}</td><td>{r.brand || '—'}</td><td>{r.model || '—'}</td><td className="tabular-nums">{formatQuantity(r.on_hand)}</td><td>{formatMoney(r.value, base)}</td></tr>
                     ))}
                   </tbody>
                 </table>
@@ -598,6 +599,10 @@ export default function ReportsPage() {
             )}
 
             {tab === 'product-movement' && (
+              <>
+              {report.data.product && (
+                <p className="mb-2 font-semibold">{report.data.product.sku} — {productLabel(report.data.product)}</p>
+              )}
               <table className="data-table">
                 <thead><tr><th>تاريخ</th><th>مخزن</th><th>نوع</th><th title={t('common.quantityUnit')}>كمية</th><th>ملاحظات</th></tr></thead>
                 <tbody>
@@ -619,6 +624,7 @@ export default function ReportsPage() {
                   ))}
                 </tbody>
               </table>
+              </>
             )}
           </div>
         )}

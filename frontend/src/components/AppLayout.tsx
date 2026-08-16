@@ -23,6 +23,9 @@ function canSeeNavItem(
   if (item.key === 'partners') {
     return hasPermission('customers.view') || hasPermission('suppliers.view')
   }
+  if (item.key === 'quotes') {
+    return hasPermission('quotes.view') || hasPermission('sales.view')
+  }
   if (!item.permission) return true
   return hasPermission(item.permission)
 }

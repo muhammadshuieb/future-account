@@ -10,12 +10,13 @@ import ProductExcelImportButtons from '@/components/ProductExcelImportButtons'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { productLabel } from '@/lib/productLabel'
 import { useAuth } from '@/context/AuthContext'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
 type Tab = (typeof WAREHOUSE_TABS)[number]
 
-type ProductRow = { id: number; name: string; track_batch?: boolean; track_serial?: boolean }
+type ProductRow = { id: number; name: string; brand?: string; model?: string; track_batch?: boolean; track_serial?: boolean }
 
 type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
 
@@ -715,10 +716,10 @@ export default function WarehousePage() {
               <tr><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة</th></tr>
             </thead>
             <tbody>
-              {(stock.data || []).map((s: { id: number; quantity: number; batch_no?: string; warehouse?: { name: string }; product?: { name: string; sku: string } }) => (
+              {(stock.data || []).map((s: { id: number; quantity: number; batch_no?: string; warehouse?: { name: string }; product?: { name: string; sku: string; brand?: string; model?: string } }) => (
                 <tr key={s.id} className="border-t border-black/5">
                   <td className="px-4 py-3">{s.warehouse?.name}</td>
-                  <td className="px-4 py-3">{s.product?.sku} — {s.product?.name}</td>
+                  <td className="px-4 py-3">{s.product?.sku} — {productLabel(s.product)}</td>
                   <td className="px-4 py-3 tabular-nums">{formatQuantity(s.quantity)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{s.batch_no || '—'}</td>
                 </tr>
@@ -735,7 +736,7 @@ export default function WarehousePage() {
               <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">مخزن</th><th className="px-4 py-3">نوع</th><th className="px-4 py-3">صنف</th><th className="px-4 py-3" title={t('common.quantityUnit')}>كمية</th><th className="px-4 py-3">دفعة/تسلسلي</th></tr>
             </thead>
             <tbody>
-              {(movements.data || []).map((m: { id: number; movement_number: string; type: string; quantity: number; batch_no?: string; serial_no?: string; warehouse?: { name: string }; product?: { name: string } }) => (
+              {(movements.data || []).map((m: { id: number; movement_number: string; type: string; quantity: number; batch_no?: string; serial_no?: string; warehouse?: { name: string }; product?: { name: string; brand?: string; model?: string } }) => (
                 <tr
                   key={m.id}
                   className="row-clickable border-t border-black/5"
@@ -745,7 +746,7 @@ export default function WarehousePage() {
                   <td className="px-4 py-3 font-mono text-xs">{m.movement_number}</td>
                   <td className="px-4 py-3">{m.warehouse?.name || '—'}</td>
                   <td className="px-4 py-3">{m.type}</td>
-                  <td className="px-4 py-3">{m.product?.name}</td>
+                  <td className="px-4 py-3">{productLabel(m.product)}</td>
                   <td className="px-4 py-3 tabular-nums">{formatQuantity(m.quantity)}</td>
                   <td className="px-4 py-3 font-mono text-xs">{m.batch_no || m.serial_no || '—'}</td>
                 </tr>
@@ -759,10 +760,10 @@ export default function WarehousePage() {
         <Panel>
           <table className="w-full text-sm">
             <thead className="bg-mist text-right text-black/60">
-              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">من</th><th className="px-4 py-3">إلى</th><th className="px-4 py-3">حالة</th></tr>
+              <tr><th className="px-4 py-3">رقم</th><th className="px-4 py-3">من</th><th className="px-4 py-3">إلى</th><th className="px-4 py-3">الأصناف</th><th className="px-4 py-3">حالة</th></tr>
             </thead>
             <tbody>
-              {(transfers.data || []).map((tr: { id: number; transfer_number: string; status: string; from_warehouse?: { name: string }; to_warehouse?: { name: string } }) => (
+              {(transfers.data || []).map((tr: { id: number; transfer_number: string; status: string; from_warehouse?: { name: string }; to_warehouse?: { name: string }; lines?: { product?: { name?: string; brand?: string; model?: string }; quantity?: number }[] }) => (
                 <tr
                   key={tr.id}
                   className="row-clickable border-t border-black/5"
@@ -772,6 +773,11 @@ export default function WarehousePage() {
                   <td className="px-4 py-3 font-mono text-xs">{tr.transfer_number}</td>
                   <td className="px-4 py-3">{tr.from_warehouse?.name}</td>
                   <td className="px-4 py-3">{tr.to_warehouse?.name}</td>
+                  <td className="px-4 py-3">
+                    {(tr.lines || []).length === 0 ? '—' : (tr.lines || []).map((line, i) => (
+                      <div key={i} className="text-xs">{productLabel(line.product)} × {formatQuantity(line.quantity ?? 0)}</div>
+                    ))}
+                  </td>
                   <td className="px-4 py-3">{tr.status}</td>
                 </tr>
               ))}
@@ -954,7 +960,7 @@ export default function WarehousePage() {
               required
             >
               <option value="">—</option>
-              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {productList.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
             </select>
           </Field>
           <Field label="كمية">
@@ -1051,9 +1057,19 @@ export default function WarehousePage() {
               required
             >
               <option value="">—</option>
-              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {productList.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
             </select>
           </Field>
+          {trForm.product_id && (
+            <>
+              <Field label={t('warehouse.brand')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={trProduct?.brand || '—'} />
+              </Field>
+              <Field label={t('warehouse.model')}>
+                <input className={`${inputClass} bg-black/5`} readOnly value={trProduct?.model || '—'} />
+              </Field>
+            </>
+          )}
           <Field label="كمية">
             <NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} />
             {stockInfo && trForm.product_id && trForm.from_warehouse_id && (
@@ -1100,9 +1116,9 @@ export default function WarehousePage() {
             <div className="flex justify-between gap-4"><dt className="text-black/50">من</dt><dd>{(viewRow.from_warehouse as { name?: string } | undefined)?.name}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">إلى</dt><dd>{(viewRow.to_warehouse as { name?: string } | undefined)?.name}</dd></div>
             <div className="flex justify-between gap-4"><dt className="text-black/50">حالة</dt><dd>{String(viewRow.status)}</dd></div>
-            {Array.isArray(viewRow.lines) && (viewRow.lines as { product?: { name?: string }; quantity?: number; batch_no?: string; serial_no?: string }[]).map((line, i) => (
+            {Array.isArray(viewRow.lines) && (viewRow.lines as { product?: { name?: string; brand?: string; model?: string }; quantity?: number; batch_no?: string; serial_no?: string }[]).map((line, i) => (
               <div key={i} className="rounded border border-black/5 p-2 text-xs">
-                <div>{line.product?.name} — {formatQuantity(line.quantity ?? 0)}</div>
+                <div>{productLabel(line.product)} — {formatQuantity(line.quantity ?? 0)}</div>
                 {(line.batch_no || line.serial_no) && (
                   <div className="font-mono text-black/50">
                     {line.batch_no ? `${t('common.batch')}: ${line.batch_no}` : ''}
@@ -1156,7 +1172,7 @@ export default function WarehousePage() {
               required
             >
               <option value="">—</option>
-              {productList.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {productList.map((p) => <option key={p.id} value={p.id}>{productLabel(p)}</option>)}
             </select>
           </Field>
           <Field label="الكمية المعدودة">

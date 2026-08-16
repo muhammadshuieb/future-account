@@ -236,6 +236,8 @@ class ReportService
                 'id' => $p->id,
                 'sku' => $p->sku,
                 'name' => $p->name,
+                'brand' => $p->brand,
+                'model' => $p->model,
                 'on_hand' => (float) ($p->on_hand ?? 0),
                 'cost_price' => (float) $p->cost_price,
                 'value' => round((float) ($p->on_hand ?? 0) * (float) $p->cost_price, 2),
@@ -300,11 +302,14 @@ class ReportService
             ->orderBy('movement_date')
             ->get();
 
+        $product = Product::query()->find($productId, ['id', 'sku', 'name', 'brand', 'model']);
+
         return [
             'from' => $from,
             'to' => $to,
             'branch_id' => $branchId,
             'warehouse_id' => $warehouseId,
+            'product' => $product,
             'rows' => $rows,
         ];
     }

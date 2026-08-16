@@ -152,6 +152,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('sales-quotes', [SalesQuoteController::class, 'index']);
     Route::post('sales-quotes', [SalesQuoteController::class, 'store']);
+    Route::post('sales-quotes/stock-warnings', [SalesQuoteController::class, 'previewStockWarnings']);
     Route::get('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'show']);
     Route::put('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'update']);
     Route::delete('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'destroy']);

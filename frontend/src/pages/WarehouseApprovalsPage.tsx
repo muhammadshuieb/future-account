@@ -5,6 +5,7 @@ import api from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { Button, EmptyState, Modal, Msg, PageHeader, Panel, Tabs, useFormMessage } from '@/components/ui'
 import { formatDateTimeLocal } from '@/lib/dates'
+import { productLabel } from '@/lib/productLabel'
 
 type Approval = {
   id: number
@@ -22,7 +23,7 @@ type Approval = {
     source_warehouse?: { id: number; name: string; code: string }
     target_warehouse?: { id: number; name: string; code: string }
     lines: {
-      product?: { id: number; name: string; sku: string }
+      product?: { id: number; name: string; sku: string; brand?: string | null; model?: string | null }
       quantity: number
       batch_no?: string | null
       serial_no?: string | null
@@ -151,7 +152,7 @@ function TransferReviewContext({ context }: { context: NonNullable<Approval['rev
           <tbody>
             {context.lines.map((line, index) => (
               <tr key={`${line.product?.id ?? index}-${index}`}>
-                <td>{line.product?.sku} — {line.product?.name}</td>
+                <td>{line.product?.sku} — {productLabel(line.product)}</td>
                 <td>{line.quantity}</td>
                 <td>{line.batch_no || line.serial_no || '—'}</td>
                 <td>{line.source_current_stock}</td>

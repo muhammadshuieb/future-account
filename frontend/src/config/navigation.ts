@@ -15,6 +15,7 @@ import {
   ScrollText,
   Building2,
   ClipboardCheck,
+  FileSpreadsheet,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -57,6 +58,7 @@ export const navGroups: NavGroup[] = [
     labelKey: 'nav.group.operations',
     items: [
       { to: '/sales', key: 'sales', icon: ShoppingCart, permission: 'sales.view' },
+      { to: '/quotes', key: 'quotes', icon: FileSpreadsheet, permission: 'quotes.view' },
       { to: '/purchases', key: 'purchases', icon: Truck, permission: 'purchases.view' },
       { to: '/warehouse', key: 'warehouse', icon: Warehouse, permission: 'warehouse.view' },
       { to: '/warehouse-approvals', key: 'warehouseApprovals', icon: ClipboardCheck, permission: 'warehouse.approvals.view_own' },

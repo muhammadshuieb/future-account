@@ -199,9 +199,10 @@ class ExcelExportService
                 $p->sale_price, $p->cost_price, $p->barcode, $p->is_active ? '1' : '0',
             ])->all());
 
-        $book->addSheet('أرصدة المخزون', ['المعرف', 'الصنف', 'المستودع', 'الكمية', 'رقم الدفعة'],
+        $book->addSheet('أرصدة المخزون', ['المعرف', 'الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية', 'رقم الدفعة'],
             StockLevel::query()->with(['product', 'warehouse'])->orderBy('id')->get()->map(fn (StockLevel $s) => [
-                $s->id, $s->product?->name, $s->warehouse?->name, $s->quantity, $s->batch_no,
+                $s->id, $s->product?->name, $s->product?->brand, $s->product?->model,
+                $s->warehouse?->name, $s->quantity, $s->batch_no,
             ])->all());
 
         $book->addSheet('فواتير المبيعات', [
@@ -212,9 +213,10 @@ class ExcelExportService
         ])->all());
 
         $book->addSheet('بنود فواتير المبيعات', [
-            'المعرف', 'الفاتورة', 'الصنف', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
+            'المعرف', 'الفاتورة', 'الصنف', 'الماركة', 'الموديل', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
         ], SalesInvoiceLine::query()->with('product')->orderBy('id')->get()->map(fn (SalesInvoiceLine $l) => [
-            $l->id, $l->sales_invoice_id, $l->product?->name, $l->quantity, $l->unit_price, $l->tax_rate, $l->line_total,
+            $l->id, $l->sales_invoice_id, $l->product?->name, $l->product?->brand, $l->product?->model,
+            $l->quantity, $l->unit_price, $l->tax_rate, $l->line_total,
         ])->all());
 
         $book->addSheet('فواتير المشتريات', [
@@ -227,9 +229,10 @@ class ExcelExportService
         ])->all());
 
         $book->addSheet('بنود فواتير المشتريات', [
-            'المعرف', 'الفاتورة', 'الصنف', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
+            'المعرف', 'الفاتورة', 'الصنف', 'الماركة', 'الموديل', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
         ], PurchaseInvoiceLine::query()->with('product')->orderBy('id')->get()->map(fn (PurchaseInvoiceLine $l) => [
-            $l->id, $l->purchase_invoice_id, $l->product?->name, $l->quantity, $l->unit_price, $l->tax_rate, $l->line_total,
+            $l->id, $l->purchase_invoice_id, $l->product?->name, $l->product?->brand, $l->product?->model,
+            $l->quantity, $l->unit_price, $l->tax_rate, $l->line_total,
         ])->all());
 
         $book->addSheet('المقبوضات', [
@@ -588,9 +591,10 @@ class ExcelExportService
         if ($request->filled('warehouse_id')) {
             $q->where('warehouse_id', $request->query('warehouse_id'));
         }
-        $book->addSheet('أرصدة المخزون', ['الصنف', 'المستودع', 'الكمية', 'رقم الدفعة'],
+        $book->addSheet('أرصدة المخزون', ['الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية', 'رقم الدفعة'],
             $q->get()->map(fn ($s) => [
-                $s->product?->name, $s->warehouse?->name, $s->quantity, $s->batch_no,
+                $s->product?->name, $s->product?->brand, $s->product?->model,
+                $s->warehouse?->name, $s->quantity, $s->batch_no,
             ])->all());
     }
 
@@ -604,10 +608,11 @@ class ExcelExportService
         if ($request->filled('warehouse_id')) {
             $q->where('warehouse_id', $request->query('warehouse_id'));
         }
-        $book->addSheet('حركات المخزون', ['التاريخ', 'الصنف', 'المستودع', 'النوع', 'الكمية', 'المرجع'],
+        $book->addSheet('حركات المخزون', ['التاريخ', 'الصنف', 'الماركة', 'الموديل', 'المستودع', 'النوع', 'الكمية', 'المرجع'],
             $q->limit(10000)->get()->map(fn ($m) => [
                 optional($m->movement_date ?? $m->created_at)?->format('Y-m-d'),
-                $m->product?->name, $m->warehouse?->name, $m->type ?? $m->movement_type,
+                $m->product?->name, $m->product?->brand, $m->product?->model,
+                $m->warehouse?->name, $m->type ?? $m->movement_type,
                 $m->quantity, $m->reference ?? $m->notes,
             ])->all());
     }
