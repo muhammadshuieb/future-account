@@ -56,7 +56,10 @@ class ProductController extends ApiController
         if ($request->filled('barcode')) {
             $query->where('barcode', $request->string('barcode'));
         } else {
-        ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model']);
+        ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model'], [
+            'category' => ['name'],
+            'unit' => ['name', 'symbol'],
+        ]);
         }
 
         $products = $query->get()->map(function (Product $product) {
