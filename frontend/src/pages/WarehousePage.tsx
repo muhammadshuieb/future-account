@@ -12,6 +12,7 @@ import { excelModuleForWarehouseTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { productLabel } from '@/lib/productLabel'
+import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
 import { useAuth } from '@/context/AuthContext'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
@@ -228,9 +229,16 @@ export default function WarehousePage() {
   async function handleProductBarcodeScan(code: string) {
     try {
       const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
-      const found = (res.data.data as { id: number; name: string; sku: string; barcode?: string; brand?: string; model?: string; cost_price: number; sale_price: number; category_id?: number; unit_id?: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean }[])[0]
+      const rows = res.data.data as { id: number; name: string; sku: string; barcode?: string; brand?: string; model?: string; cost_price: number; sale_price: number; category_id?: number; unit_id?: number; reorder_level?: number; track_batch?: boolean; track_serial?: boolean }[]
+      const { product: found, ambiguous } = matchScannedProduct(rows, code)
       if (!found) {
-        msg.setError('لم يُعثر على صنف بهذا الباركود')
+        if (ambiguous.length) {
+          search.setQ(code)
+          setTab('products')
+          msg.setError(t('sales.barcodeMultiple', { count: ambiguous.length, matches: describeMatches(ambiguous) }))
+        } else {
+          msg.setError(t('sales.barcodeNotFound'))
+        }
         return
       }
       search.setQ(found.name)

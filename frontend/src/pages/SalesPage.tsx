@@ -20,10 +20,11 @@ import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, P
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import { productLabel } from '@/lib/productLabel'
+import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
 
-type ProductRow = { id: number; name: string; brand?: string; model?: string; sale_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
+type ProductRow = { id: number; name: string; sku?: string; barcode?: string; brand?: string; model?: string; sale_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
 
 type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
 
@@ -279,9 +280,12 @@ export default function SalesPage() {
   async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
     try {
       const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
-      const found = (res.data.data as ProductRow[])[0]
+      const rows = res.data.data as ProductRow[]
+      const { product: found, ambiguous } = matchScannedProduct(rows, code)
       if (!found) {
-        msg.setError(t('sales.barcodeNotFound'))
+        msg.setError(ambiguous.length
+          ? t('sales.barcodeMultiple', { count: ambiguous.length, matches: describeMatches(ambiguous) })
+          : t('sales.barcodeNotFound'))
         return
       }
       const patch = { product_id: String(found.id), unit_price: String(found.sale_price) }

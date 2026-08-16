@@ -20,6 +20,7 @@ use App\Services\WarehouseApprovalService;
 use App\Support\ListSearch;
 use App\Support\ProductSku;
 use App\Support\WarehouseAccess;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -54,12 +55,12 @@ class ProductController extends ApiController
             ))
             ->orderBy('sku');
         if ($request->filled('barcode')) {
-            $query->where('barcode', $request->string('barcode'));
+            $this->applyScanLookup($query, trim((string) $request->string('barcode')));
         } else {
-        ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model'], [
-            'category' => ['name'],
-            'unit' => ['name', 'symbol'],
-        ]);
+            ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model'], [
+                'category' => ['name'],
+                'unit' => ['name', 'symbol'],
+            ]);
         }
 
         $products = $query->get()->map(function (Product $product) {
@@ -79,6 +80,28 @@ class ProductController extends ApiController
         });
 
         return $this->ok($products);
+    }
+
+    /**
+     * Scan field lookup: an exact barcode or SKU wins, otherwise fall back to a
+     * partial match on name, brand, and model so typed text still finds products.
+     */
+    protected function applyScanLookup(Builder $query, string $term): void
+    {
+        $like = '%'.$term.'%';
+
+        $query->where(function (Builder $q) use ($term, $like) {
+            ListSearch::whereLike($q, 'barcode', $term);
+            ListSearch::whereLike($q, 'sku', $term, false);
+            ListSearch::whereLike($q, 'name', $like, false);
+            ListSearch::whereLike($q, 'brand', $like, false);
+            ListSearch::whereLike($q, 'model', $like, false);
+        });
+
+        $wrap = fn (string $column) => $query->getQuery()->getGrammar()->wrap($column);
+        $query->reorder()
+            ->orderByRaw("CASE WHEN {$wrap('barcode')} = ? THEN 0 WHEN {$wrap('sku')} = ? THEN 1 ELSE 2 END", [$term, $term])
+            ->orderBy('sku');
     }
 
     public function store(Request $request): JsonResponse

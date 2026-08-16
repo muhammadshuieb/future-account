@@ -43,25 +43,34 @@ class ListSearch
 
         return $query->where(function (Builder $q) use ($columns, $relations, $like) {
             foreach ($columns as $i => $column) {
-                if ($i === 0) {
-                    $q->where($column, 'like', $like);
-                } else {
-                    $q->orWhere($column, 'like', $like);
-                }
+                self::whereLike($q, $column, $like, $i === 0);
             }
 
             foreach ($relations as $relation => $relColumns) {
                 $q->orWhereHas($relation, function (Builder $rq) use ($relColumns, $like) {
                     foreach ($relColumns as $i => $column) {
-                        if ($i === 0) {
-                            $rq->where($column, 'like', $like);
-                        } else {
-                            $rq->orWhere($column, 'like', $like);
-                        }
+                        self::whereLike($rq, $column, $like, $i === 0);
                     }
                 });
             }
         });
+    }
+
+    /**
+     * Case-insensitive partial match. Values are cast to text so numeric and date
+     * columns stay searchable on PostgreSQL, where LIKE is also case-sensitive.
+     */
+    public static function whereLike(Builder $query, string $column, string $like, bool $first = true): Builder
+    {
+        $driver = $query->getConnection()->getDriverName();
+        $cast = in_array($driver, ['mysql', 'mariadb'], true) ? 'CHAR' : 'TEXT';
+        $operator = $driver === 'pgsql' ? 'ILIKE' : 'LIKE';
+        $wrapped = $query->getQuery()->getGrammar()->wrap($column);
+        $expression = "CAST({$wrapped} AS {$cast}) {$operator} ?";
+
+        return $first
+            ? $query->whereRaw($expression, [$like])
+            : $query->orWhereRaw($expression, [$like]);
     }
 
     /**
