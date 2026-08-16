@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Field, inputClass } from '@/components/ui'
+import SearchableSelect from '@/components/SearchableSelect'
+import { Field } from '@/components/ui'
 
 export type ProductVariantOption = {
   id: number
@@ -58,53 +59,51 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
 
   return (
     <>
-      <Field label={t('common.product')}>
-        <select
-          className={inputClass}
+      <Field label={t('common.product')} hint={t('common.typeToSearchHint', { count: names.length })}>
+        <SearchableSelect
+          options={names.map((name) => ({ value: name, label: name }))}
           value={selectedName}
           disabled={disabled}
-          onChange={(event) => {
-            setSelectedName(event.target.value)
+          required
+          onChange={(name) => {
+            setSelectedName(name)
             setSelectedBrand(null)
             setSelectedModel(null)
             onChange('')
           }}
-          required
-        >
-          <option value="">—</option>
-          {names.map((name) => <option key={name} value={name}>{name}</option>)}
-        </select>
+        />
       </Field>
 
       {selectedName && (
         <Field label={t('warehouse.brand')}>
-          <select
-            className={inputClass}
+          <SearchableSelect
+            options={brands.map((brand) => ({ value: encode(brand), label: brand || t('common.notSpecified') }))}
             value={selectedBrand === null ? '' : encode(selectedBrand)}
             disabled={disabled}
-            onChange={(event) => {
-              setSelectedBrand(decode(event.target.value))
+            required
+            onChange={(encoded) => {
+              setSelectedBrand(encoded === '' ? null : decode(encoded))
               setSelectedModel(null)
               onChange('')
             }}
-            required
-          >
-            <option value="">—</option>
-            {brands.map((brand) => (
-              <option key={encode(brand)} value={encode(brand)}>{brand || t('common.notSpecified')}</option>
-            ))}
-          </select>
+          />
         </Field>
       )}
 
       {selectedName && selectedBrand !== null && (
         <Field label={t('warehouse.model')}>
-          <select
-            className={inputClass}
+          <SearchableSelect
+            options={models.map((model) => ({ value: encode(model), label: model || t('common.notSpecified') }))}
             value={selectedModel === null ? '' : encode(selectedModel)}
             disabled={disabled}
-            onChange={(event) => {
-              const model = decode(event.target.value)
+            required
+            onChange={(encoded) => {
+              if (encoded === '') {
+                setSelectedModel(null)
+                onChange('')
+                return
+              }
+              const model = decode(encoded)
               setSelectedModel(model)
               const product = products.find((candidate) =>
                 candidate.name.trim() === selectedName
@@ -112,13 +111,7 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
                 && clean(candidate.model) === model)
               onChange(product ? String(product.id) : '')
             }}
-            required
-          >
-            <option value="">—</option>
-            {models.map((model) => (
-              <option key={encode(model)} value={encode(model)}>{model || t('common.notSpecified')}</option>
-            ))}
-          </select>
+          />
         </Field>
       )}
     </>
