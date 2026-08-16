@@ -90,7 +90,7 @@ export default function SearchableSelect({
       <input
         ref={inputRef}
         type="text"
-        className={inputClass}
+        className={`${inputClass} pl-8`}
         value={open ? query : selectedLabel}
         placeholder={placeholder ?? t('common.typeToSearch')}
         disabled={disabled}
@@ -125,6 +125,10 @@ export default function SearchableSelect({
           }
         }}
       />
+
+      {(!value || disabled) && (
+        <span className="pointer-events-none absolute inset-y-0 left-3 my-auto h-4 text-xs leading-4 text-black/30">▾</span>
+      )}
 
       {value && !disabled && (
         <button

@@ -50,6 +50,9 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
     () => unique(products.filter((product) => product.name.trim() === selectedName).map((product) => clean(product.brand))),
     [products, selectedName],
   )
+  /** A single remaining option needs no search prompt. */
+  const searchHint = (key: string, count: number) => count > 1 ? t(key, { count }) : undefined
+
   const models = useMemo(
     () => unique(products
       .filter((product) => product.name.trim() === selectedName && clean(product.brand) === selectedBrand)
@@ -59,7 +62,7 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
 
   return (
     <>
-      <Field label={t('common.product')} hint={t('common.typeToSearchHint', { count: names.length })}>
+      <Field label={t('common.product')} hint={searchHint('common.typeToSearchHint', names.length)}>
         <SearchableSelect
           options={names.map((name) => ({ value: name, label: name }))}
           value={selectedName}
@@ -75,7 +78,7 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
       </Field>
 
       {selectedName && (
-        <Field label={t('warehouse.brand')}>
+        <Field label={t('warehouse.brand')} hint={searchHint('common.typeToSearchBrandHint', brands.length)}>
           <SearchableSelect
             options={brands.map((brand) => ({ value: encode(brand), label: brand || t('common.notSpecified') }))}
             value={selectedBrand === null ? '' : encode(selectedBrand)}
@@ -91,7 +94,7 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
       )}
 
       {selectedName && selectedBrand !== null && (
-        <Field label={t('warehouse.model')}>
+        <Field label={t('warehouse.model')} hint={searchHint('common.typeToSearchModelHint', models.length)}>
           <SearchableSelect
             options={models.map((model) => ({ value: encode(model), label: model || t('common.notSpecified') }))}
             value={selectedModel === null ? '' : encode(selectedModel)}

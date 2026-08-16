@@ -177,6 +177,8 @@
     "clearSearch": "Aramayı temizle",
     "typeToSearch": "Aramak için yazın…",
     "typeToSearchHint": "{{count}} ürün arasında aramak için ad yazın",
+    "typeToSearchBrandHint": "{{count}} marka arasında aramak için yazın",
+    "typeToSearchModelHint": "{{count}} model arasında aramak için yazın",
     "refineSearch": "{{count}} sonuç daha — filtrelemek için yazmaya devam edin",
     "noSearchResults": "Eşleşen sonuç yok",
     "allBranches": "Tüm şubeler",

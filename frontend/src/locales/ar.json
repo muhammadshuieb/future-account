@@ -179,6 +179,8 @@
     "clearSearch": "مسح البحث",
     "typeToSearch": "اكتب للبحث…",
     "typeToSearchHint": "اكتب اسم الصنف للبحث بين {{count}} صنف",
+    "typeToSearchBrandHint": "اكتب للبحث بين {{count}} ماركة",
+    "typeToSearchModelHint": "اكتب للبحث بين {{count}} موديل",
     "refineSearch": "و{{count}} نتيجة أخرى — تابع الكتابة للتصفية",
     "noSearchResults": "لا توجد نتائج مطابقة",
     "allBranches": "كل الفروع",

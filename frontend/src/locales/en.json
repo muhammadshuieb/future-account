@@ -179,6 +179,8 @@
     "clearSearch": "Clear search",
     "typeToSearch": "Type to search…",
     "typeToSearchHint": "Type a product name to search {{count}} items",
+    "typeToSearchBrandHint": "Type to search {{count}} brands",
+    "typeToSearchModelHint": "Type to search {{count}} models",
     "refineSearch": "{{count}} more results — keep typing to filter",
     "noSearchResults": "No matching results",
     "allBranches": "All branches",
