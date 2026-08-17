@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -67,6 +69,8 @@ class _SynaShellState extends State<SynaShell> {
         allowFileAccess: true,
         allowContentAccess: true,
         geolocationEnabled: false,
+        applicationNameForUserAgent:
+            Platform.isWindows ? 'SynaCoApp/windows' : 'SynaCoApp/android',
       );
 
   bool _isAppHost(Uri uri) {

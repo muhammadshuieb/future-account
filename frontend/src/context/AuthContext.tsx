@@ -9,6 +9,7 @@ import {
 } from 'react'
 import api from '@/lib/api'
 import type { User } from '@/types'
+import { authClient, authDeviceName, clearAuthToken, getAuthToken, setAuthToken } from '@/lib/authStorage'
 
 type AuthContextValue = {
   user: User | null
@@ -25,7 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   const loadUser = useCallback(async () => {
-    const token = localStorage.getItem('fa_token')
+    const token = getAuthToken()
     if (!token) {
       setUser(null)
       setLoading(false)
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data } = await api.get('/auth/me')
       setUser(data.user)
     } catch {
-      localStorage.removeItem('fa_token')
+      clearAuthToken()
       setUser(null)
     } finally {
       setLoading(false)
@@ -48,8 +49,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUser])
 
   const login = useCallback(async (username: string, password: string) => {
-    const { data } = await api.post('/auth/login', { username, password })
-    localStorage.setItem('fa_token', data.token)
+    const { data } = await api.post('/auth/login', {
+      username,
+      password,
+      client: authClient(),
+      device_name: authDeviceName(),
+    })
+    setAuthToken(data.token)
     const authenticatedUser = data.user as User
     setUser(authenticatedUser)
     return { user: authenticatedUser, landingPath: data.landing_path as string }
@@ -61,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // ignore
     }
-    localStorage.removeItem('fa_token')
+    clearAuthToken()
     setUser(null)
   }, [])
 
