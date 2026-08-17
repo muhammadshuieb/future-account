@@ -88,6 +88,9 @@ export default function LoginPage() {
             >
               {submitting ? 'جاري الدخول...' : 'تسجيل الدخول'}
             </button>
+            <p className="text-center text-xs text-black/45">
+              تطبيق أندرويد: افتح الموقع من Chrome على الموبايل، ثم القائمة ← تثبيت التطبيق
+            </p>
           </form>
         </div>
         <p className="mt-6 text-center text-[11px] tracking-wide text-white/40">
