@@ -45,7 +45,65 @@ class AuditLogTest extends TestCase
             'action' => 'customer.created',
             'auditable_type' => Customer::class,
             'auditable_id' => $customer->id,
+            'reference' => 'CUS-AUD',
         ]);
+    }
+
+    public function test_audit_log_records_external_ip_behind_proxy(): void
+    {
+        AuditLog::query()->delete();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.18.0.4'])
+            ->withHeaders([
+                'X-Forwarded-For' => '203.0.113.50, 127.0.0.1',
+                'X-Real-IP' => '203.0.113.50',
+            ])
+            ->postJson('/api/customers', [
+                'code' => 'CUS-IP',
+                'name' => 'عميل IP',
+                'credit_limit' => 0,
+                'is_active' => true,
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'customer.created',
+            'reference' => 'CUS-IP',
+            'ip_address' => '203.0.113.50',
+        ]);
+    }
+
+    public function test_audit_logs_search_by_document_number_and_arabic_label(): void
+    {
+        AuditLog::query()->delete();
+
+        AuditLog::query()->create([
+            'user_id' => $this->user->id,
+            'action' => 'sales_invoice.created',
+            'auditable_type' => \App\Models\SalesInvoice::class,
+            'auditable_id' => 99,
+            'reference' => 'SI-FIND-ME',
+            'ip_address' => '203.0.113.10',
+        ]);
+        AuditLog::query()->create([
+            'user_id' => $this->user->id,
+            'action' => 'purchase_invoice.updated',
+            'auditable_type' => \App\Models\PurchaseInvoice::class,
+            'auditable_id' => 88,
+            'reference' => 'PI-FIND-ME',
+            'ip_address' => '203.0.113.11',
+        ]);
+
+        $this->getJson('/api/audit-logs?q=SI-FIND-ME')
+            ->assertOk()
+            ->assertJsonFragment(['reference' => 'SI-FIND-ME'])
+            ->assertJsonMissing(['reference' => 'PI-FIND-ME']);
+
+        $sales = $this->getJson('/api/audit-logs?q='.rawurlencode('مبيع'));
+        $sales->assertOk()->assertJsonFragment(['reference' => 'SI-FIND-ME']);
+
+        $purchases = $this->getJson('/api/audit-logs?q='.rawurlencode('شراء'));
+        $purchases->assertOk()->assertJsonFragment(['reference' => 'PI-FIND-ME']);
     }
 
     public function test_updating_customer_writes_audit_log(): void
@@ -93,6 +151,7 @@ class AuditLogTest extends TestCase
                 'action' => 'customer.created',
                 'entity_type' => 'customer',
                 'entity_id' => $customer->id,
+                'reference' => 'CUS-API',
             ]);
     }
 

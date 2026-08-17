@@ -13,6 +13,7 @@ type AuditRow = {
   entity_id?: number | string | null
   auditable_type?: string | null
   auditable_id?: number | string | null
+  reference?: string | null
   ip_address?: string | null
   created_at: string
   user?: { name: string } | null
@@ -20,11 +21,10 @@ type AuditRow = {
   new_values?: Record<string, unknown> | null
 }
 
-function entityLabel(row: AuditRow): string {
-  const type = row.entity_type || (row.auditable_type ? row.auditable_type.split('\\').pop() : null)
-  const id = row.entity_id ?? row.auditable_id
-  if (!type) return '—'
-  return id != null ? `${type} #${id}` : type
+function entityKey(row: AuditRow): string | null {
+  if (row.entity_type) return row.entity_type
+  const raw = row.action.split('.')[0]
+  return raw || (row.auditable_type ? row.auditable_type.split('\\').pop() || null : null)
 }
 
 function actionKey(action: string): string {
@@ -34,8 +34,29 @@ function actionKey(action: string): string {
   if (normalized.endsWith('.deleted') || normalized === 'deleted') return 'deleted'
   if (normalized.endsWith('.posted') || normalized === 'posted' || normalized.includes('.posted')) return 'posted'
   if (normalized.includes('void')) return 'voided'
+  if (normalized.includes('requested')) return 'requested'
+  if (normalized.includes('approved')) return 'approved'
+  if (normalized.includes('rejected')) return 'rejected'
   if (normalized.startsWith('stock.')) return 'stock'
   return action
+}
+
+function referenceOf(row: AuditRow): string {
+  if (row.reference) return row.reference
+  const bags = [row.new_values, row.old_values]
+  for (const bag of bags) {
+    if (!bag) continue
+    for (const key of [
+      'invoice_number', 'quote_number', 'order_number', 'request_number', 'return_number',
+      'receipt_number', 'payment_number', 'entry_number', 'transfer_number', 'exchange_number',
+      'count_number', 'movement_number', 'employee_number', 'sku', 'code', 'username', 'name', 'key',
+    ]) {
+      const value = bag[key]
+      if (value != null && String(value).trim()) return String(value).trim()
+    }
+  }
+  const id = row.entity_id ?? row.auditable_id
+  return id != null ? `#${id}` : ''
 }
 
 export default function AuditLogPage() {
@@ -70,15 +91,19 @@ export default function AuditLogPage() {
               <tr>
                 <th>{t('common.date')}</th>
                 <th>{t('audit.user')}</th>
-                <th>{t('audit.action')}</th>
-                <th>{t('audit.entity')}</th>
+                <th>{t('audit.operation')}</th>
                 <th>{t('audit.ip')}</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => {
                 const key = actionKey(row.action)
-                const label = t(`audit.actions.${key}`, { defaultValue: row.action })
+                const verb = t(`audit.actions.${key}`, { defaultValue: row.action })
+                const entity = entityKey(row)
+                const entityLabel = entity
+                  ? t(`audit.entities.${entity}`, { defaultValue: entity.replaceAll('_', ' ') })
+                  : ''
+                const number = referenceOf(row)
                 return (
                   <tr key={row.id}>
                     <td className="whitespace-nowrap font-mono text-xs">
@@ -86,19 +111,19 @@ export default function AuditLogPage() {
                     </td>
                     <td>{row.user?.name || '—'}</td>
                     <td>
-                      <div>{label}</div>
-                      {key !== row.action && (
-                        <div className="font-mono text-[11px] text-black/45">{row.action}</div>
-                      )}
+                      <div className="font-medium">
+                        {verb}
+                        {entityLabel ? ` — ${entityLabel}` : ''}
+                        {number ? ` ${number}` : ''}
+                      </div>
                     </td>
-                    <td className="text-black/60">{entityLabel(row)}</td>
                     <td className="font-mono text-xs">{row.ip_address || '—'}</td>
                   </tr>
                 )
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={4}>
                     <EmptyState title={t('audit.empty')} />
                   </td>
                 </tr>

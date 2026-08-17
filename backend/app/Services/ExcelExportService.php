@@ -700,11 +700,14 @@ class ExcelExportService
     {
         $q = AuditLog::query()->with('user')->orderByDesc('id');
         $this->applyDateFilter($q, 'created_at', $request);
-        $book->addSheet('سجل التدقيق', ['التاريخ', 'المستخدم', 'الإجراء', 'الكيان', 'المعرّف', 'عنوان IP'],
+        $book->addSheet('سجل التدقيق', ['التاريخ', 'المستخدم', 'الإجراء', 'العملية', 'رقم العملية', 'عنوان IP'],
             $q->limit(20000)->get()->map(fn ($a) => [
                 optional($a->created_at)?->format('Y-m-d H:i:s'),
-                $a->user?->name, $a->action, $a->auditable_type ?? $a->entity_type,
-                $a->auditable_id ?? $a->entity_id, $a->ip_address,
+                $a->user?->name,
+                $a->action,
+                $a->entity_type,
+                $a->reference ?: ($a->auditable_id ?? $a->entity_id),
+                $a->ip_address,
             ])->all());
     }
 

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\AuditCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -39,9 +40,10 @@ class AuditLogger
             'action' => $action,
             'auditable_type' => $model ? $model::class : null,
             'auditable_id' => $model?->getKey(),
+            'reference' => AuditCatalog::referenceFrom($model, $old, $new),
             'old_values' => $old ? $this->sanitize($old) : null,
             'new_values' => $new ? $this->sanitize($new) : null,
-            'ip_address' => request()?->ip(),
+            'ip_address' => AuditCatalog::clientIp(),
         ]));
     }
 
