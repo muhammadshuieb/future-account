@@ -375,10 +375,9 @@ function fitImageOnSinglePage(
   pdf.addImage(img, 'PNG', x, y, w, h)
 }
 
-/** Draw a canvas onto A4: scale-to-fit one page when near invoice height; else slice. */
+/** Draw a canvas onto portrait A4: scale-to-fit one page when near invoice height; else slice. */
 function canvasToMultiPagePdf(canvas: HTMLCanvasElement): Blob {
-  const orientation = canvas.width >= canvas.height * 1.15 ? 'landscape' : 'portrait'
-  const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' })
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const box = a4PageBox(pdf)
   const imgData = canvas.toDataURL('image/png')
 
@@ -470,7 +469,14 @@ export async function captureElement(
           const style = doc.createElement('style')
           style.id = 'pdf-capture-compact-style'
           style.textContent = `
-            .pdf-capture-root { font-size: 11px !important; line-height: 1.35 !important; }
+            .pdf-capture-root {
+              width: 210mm !important;
+              max-width: 210mm !important;
+              box-sizing: border-box !important;
+              font-size: 11px !important;
+              line-height: 1.35 !important;
+            }
+            .pdf-capture-root table { width: 100% !important; max-width: 100% !important; }
             .pdf-capture-root .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.5rem !important; }
             .pdf-capture-root .space-y-2 > :not([hidden]) ~ :not([hidden]) { margin-top: 0.35rem !important; }
             .pdf-capture-root .print-brand-header { display: flex !important; flex-wrap: nowrap !important; align-items: flex-start !important; justify-content: space-between !important; padding-bottom: 0.4rem !important; gap: 0.75rem !important; }
@@ -577,8 +583,8 @@ export async function captureFromPrintPopup(
     position: 'fixed',
     left: '0',
     top: '0',
-    width: '920px',
-    height: '1400px',
+    width: '794px',
+    height: '1123px',
     opacity: '0',
     pointerEvents: 'none',
     border: '0',

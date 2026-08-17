@@ -58,6 +58,7 @@ class CurrencyConversionTest extends TestCase
         $this->assertEqualsWithDelta(1 / 15000, $svc->getRate('SYP', 'USD'), 0.0000001);
         $this->assertEqualsWithDelta(450 / 15000, $svc->getRate('TRY', 'USD'), 0.0000001);
         $this->assertEqualsWithDelta(1 / 6.75, $svc->getRate('CNY', 'USD'), 0.0000001);
+        $this->assertEqualsWithDelta(1 / 3.75, $svc->getRate('SAR', 'USD'), 0.0000001);
     }
 
     public function test_cny_is_seeded_and_listed(): void
@@ -77,5 +78,25 @@ class CurrencyConversionTest extends TestCase
         $cny = collect($res->json('data.currencies'))->firstWhere('code', 'CNY');
         $this->assertSame('اليوان الصيني', $cny['name']);
         $this->assertEqualsWithDelta(1 / 6.75, (float) $cny['rate_to_base'], 0.0000001);
+    }
+
+    public function test_sar_is_seeded_and_listed(): void
+    {
+        $svc = app(CurrencyService::class);
+        $this->assertContains('SAR', $svc->supportedCodes());
+        $this->assertEqualsWithDelta(3.75, $svc->getRate('USD', 'SAR'), 0.0000001);
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('admin');
+        Sanctum::actingAs($user);
+
+        $res = $this->getJson('/api/currencies');
+        $res->assertOk();
+        $codes = collect($res->json('data.currencies'))->pluck('code')->all();
+        $this->assertContains('SAR', $codes);
+
+        $sar = collect($res->json('data.currencies'))->firstWhere('code', 'SAR');
+        $this->assertSame('الريال السعودي', $sar['name']);
+        $this->assertEqualsWithDelta(1 / 3.75, (float) $sar['rate_to_base'], 0.0000001);
     }
 }

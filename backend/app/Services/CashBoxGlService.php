@@ -18,6 +18,7 @@ class CashBoxGlService
         'TRY' => ['code' => '1107', 'name' => 'صندوق نقدية ليرة تركية', 'name_en' => 'Cash TRY'],
         'CNY' => ['code' => '1108', 'name' => 'صندوق نقدية يوان صيني', 'name_en' => 'Cash CNY'],
         'EUR' => ['code' => '1109', 'name' => 'صندوق نقدية يورو', 'name_en' => 'Cash EUR'],
+        'SAR' => ['code' => '1110', 'name' => 'صندوق نقدية ريال سعودي', 'name_en' => 'Cash SAR'],
     ];
 
     /**
@@ -262,8 +263,8 @@ class CashBoxGlService
 
     protected function nextAvailableCashCode(): string
     {
-        // Reserve 1110–1199 for additional cash boxes / currencies.
-        for ($n = 1110; $n <= 1199; $n++) {
+        // Reserve 1111–1199 for additional cash boxes / currencies (1110 = SAR).
+        for ($n = 1111; $n <= 1199; $n++) {
             $code = (string) $n;
             if (! Account::query()->where('code', $code)->exists()) {
                 return $code;

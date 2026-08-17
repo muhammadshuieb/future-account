@@ -113,12 +113,13 @@ class CurrencyService
 
     public function ensureSeeded(): void
     {
-        // USD is the system base; SYP, TRY, and CNY are secondary.
+        // USD is the system base; SYP, TRY, CNY, and SAR are secondary.
         $defaults = [
             ['code' => 'USD', 'name' => 'الدولار الأمريكي', 'name_en' => 'US Dollar', 'symbol' => '$', 'decimal_places' => 2],
             ['code' => 'SYP', 'name' => 'الليرة السورية', 'name_en' => 'Syrian Pound', 'symbol' => 'ل.س', 'decimal_places' => 2],
             ['code' => 'TRY', 'name' => 'الليرة التركية', 'name_en' => 'Turkish Lira', 'symbol' => '₺', 'decimal_places' => 2],
             ['code' => 'CNY', 'name' => 'اليوان الصيني', 'name_en' => 'Chinese Yuan', 'symbol' => 'CN¥', 'decimal_places' => 2],
+            ['code' => 'SAR', 'name' => 'الريال السعودي', 'name_en' => 'Saudi Riyal', 'symbol' => 'ر.س', 'decimal_places' => 2],
         ];
 
         foreach ($defaults as $row) {
@@ -132,13 +133,17 @@ class CurrencyService
         $this->ensureSeeded();
 
         // Rates: 1 FROM = rate TO. Base is USD (1 USD = 1 base).
-        // SYP/TRY/CNY are quoted relative to USD
-        // (demo: 1 USD = 15000 SYP, 1 USD ≈ 33.333 TRY, 1 USD = 6.75 CNY).
+        // Secondary currencies quoted relative to USD
+        // (demo: 1 USD = 15000 SYP, 1 USD ≈ 33.333 TRY, 1 USD = 6.75 CNY, 1 USD = 3.75 SAR).
         $usdToSyp = 15000;
         $usdToTry = round(15000 / 450, 8);
         $usdToCny = 6.75;
+        $usdToSar = 3.75;
         $cnyToSyp = round($usdToSyp / $usdToCny, 8);
         $cnyToTry = round($usdToTry / $usdToCny, 8);
+        $sarToSyp = round($usdToSyp / $usdToSar, 8);
+        $sarToTry = round($usdToTry / $usdToSar, 8);
+        $sarToCny = round($usdToCny / $usdToSar, 8);
         $rows = [
             ['from_currency' => 'USD', 'to_currency' => 'SYP', 'rate' => $usdToSyp],
             ['from_currency' => 'SYP', 'to_currency' => 'USD', 'rate' => round(1 / $usdToSyp, 8)],
@@ -152,6 +157,14 @@ class CurrencyService
             ['from_currency' => 'SYP', 'to_currency' => 'CNY', 'rate' => round(1 / $cnyToSyp, 8)],
             ['from_currency' => 'CNY', 'to_currency' => 'TRY', 'rate' => $cnyToTry],
             ['from_currency' => 'TRY', 'to_currency' => 'CNY', 'rate' => round(1 / $cnyToTry, 8)],
+            ['from_currency' => 'USD', 'to_currency' => 'SAR', 'rate' => $usdToSar],
+            ['from_currency' => 'SAR', 'to_currency' => 'USD', 'rate' => round(1 / $usdToSar, 8)],
+            ['from_currency' => 'SAR', 'to_currency' => 'SYP', 'rate' => $sarToSyp],
+            ['from_currency' => 'SYP', 'to_currency' => 'SAR', 'rate' => round(1 / $sarToSyp, 8)],
+            ['from_currency' => 'SAR', 'to_currency' => 'TRY', 'rate' => $sarToTry],
+            ['from_currency' => 'TRY', 'to_currency' => 'SAR', 'rate' => round(1 / $sarToTry, 8)],
+            ['from_currency' => 'SAR', 'to_currency' => 'CNY', 'rate' => $sarToCny],
+            ['from_currency' => 'CNY', 'to_currency' => 'SAR', 'rate' => round(1 / $sarToCny, 8)],
         ];
 
         foreach ($rows as $row) {

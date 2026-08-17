@@ -318,6 +318,7 @@ export default function DashboardPage() {
         { code: 'SYP', name: 'ليرة سورية' },
         { code: 'TRY', name: 'ليرة تركية' },
         { code: 'CNY', name: 'اليوان الصيني' },
+        { code: 'SAR', name: 'الريال السعودي' },
       ]
 
   const { data, isLoading, error, isFetching } = useQuery({

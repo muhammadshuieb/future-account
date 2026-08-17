@@ -21,6 +21,7 @@ class ChartOfAccountsSeeder extends Seeder
                     ['code' => '1107', 'name' => 'صندوق نقدية ليرة تركية', 'name_en' => 'Cash TRY', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1108', 'name' => 'صندوق نقدية يوان صيني', 'name_en' => 'Cash CNY', 'type' => 'asset', 'nature' => 'debit'],
                     ['code' => '1109', 'name' => 'صندوق نقدية يورو', 'name_en' => 'Cash EUR', 'type' => 'asset', 'nature' => 'debit'],
+                    ['code' => '1110', 'name' => 'صندوق نقدية ريال سعودي', 'name_en' => 'Cash SAR', 'type' => 'asset', 'nature' => 'debit'],
                 ]],
                 ['code' => '12', 'name' => 'الأصول الثابتة', 'name_en' => 'Fixed Assets', 'type' => 'asset', 'nature' => 'debit', 'is_group' => true, 'children' => [
                     ['code' => '1201', 'name' => 'الأثاث والمعدات', 'name_en' => 'Furniture & Equipment', 'type' => 'asset', 'nature' => 'debit'],
