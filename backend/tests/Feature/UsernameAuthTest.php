@@ -78,4 +78,74 @@ class UsernameAuthTest extends TestCase
             'password' => 'password123',
         ])->assertOk()->assertJsonPath('user.username', 'ahmad_ali');
     }
+
+    public function test_public_registration_is_disabled(): void
+    {
+        $this->postJson('/api/auth/register', [
+            'first_name' => 'سامي',
+            'last_name' => 'محمد',
+            'username' => 'sami_m',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertNotFound();
+    }
+
+    public function test_web_login_token_does_not_expire(): void
+    {
+        $this->seed(AdminUserSeeder::class);
+
+        $response = $this->postJson('/api/auth/login', [
+            'username' => 'admin',
+            'password' => 'password',
+        ]);
+        $response->assertOk();
+        $token = $response->json('token');
+        $this->assertNotEmpty($token);
+
+        $row = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+        $this->assertNotNull($row);
+        $this->assertNull($row->expires_at);
+        $this->assertSame('web', $row->name);
+    }
+
+    public function test_android_login_token_expires_in_90_days(): void
+    {
+        $this->seed(AdminUserSeeder::class);
+
+        $response = $this->postJson('/api/auth/login', [
+            'username' => 'admin',
+            'password' => 'password',
+            'client' => 'android',
+            'device_name' => 'Pixel',
+        ]);
+        $response->assertOk();
+        $token = $response->json('token');
+        $row = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+        $this->assertNotNull($row);
+        $this->assertSame('Pixel', $row->name);
+        $this->assertNotNull($row->expires_at);
+        $this->assertTrue($row->expires_at->between(now()->addDays(89), now()->addDays(91)));
+    }
+
+    public function test_warehouse_user_cannot_update_settings(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('warehouse');
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/settings', [
+            'settings' => [['key' => 'tax_rate', 'value' => '99']],
+        ])->assertForbidden();
+    }
+
+    public function test_admin_can_update_settings(): void
+    {
+        $admin = User::factory()->create(['is_active' => true]);
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin);
+
+        $this->putJson('/api/settings', [
+            'settings' => [['key' => 'tax_rate', 'value' => '10']],
+        ])->assertOk();
+    }
 }

@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -17,6 +16,8 @@ class AuthController extends Controller
         $credentials = $request->validate([
             'username' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
+            'device_name' => ['nullable', 'string', 'max:64'],
+            'client' => ['nullable', 'string', 'in:web,android,windows,ios'],
         ]);
 
         /** @var User|null $user */
@@ -34,49 +35,18 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('api')->plainTextToken;
+        $client = $credentials['client'] ?? 'web';
+        $deviceName = trim((string) ($credentials['device_name'] ?? '')) ?: $client;
+        $expiresAt = in_array($client, ['android', 'windows', 'ios'], true)
+            ? now()->addDays(90)
+            : null;
+        $token = $user->createToken($deviceName, ['*'], $expiresAt)->plainTextToken;
 
         return response()->json([
             'token' => $token,
             'user' => $this->userPayload($user),
             'landing_path' => $this->landingPath($user),
         ]);
-    }
-
-    public function register(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:255', 'alpha_dash', 'unique:users,username'],
-            'mobile' => ['nullable', 'string', 'max:40'],
-            'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'confirmed', Password::defaults()],
-        ]);
-
-        $name = User::composeDisplayName($data['first_name'], $data['last_name']);
-        $email = $data['email'] ?? ($data['username'].'@users.local');
-
-        $user = User::query()->create([
-            'name' => $name,
-            'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
-            'username' => $data['username'],
-            'mobile' => $data['mobile'] ?? null,
-            'email' => $email,
-            'password' => $data['password'],
-            'is_active' => true,
-        ]);
-
-        $user->assignRole('accountant');
-
-        $token = $user->createToken('api')->plainTextToken;
-
-        return response()->json([
-            'token' => $token,
-            'user' => $this->userPayload($user),
-            'landing_path' => $this->landingPath($user),
-        ], 201);
     }
 
     public function me(Request $request): JsonResponse

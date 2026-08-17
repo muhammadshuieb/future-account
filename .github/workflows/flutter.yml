@@ -1,0 +1,60 @@
+name: Flutter apps
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/syna_co/**'
+      - '.github/workflows/flutter.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/syna_co/**'
+      - '.github/workflows/flutter.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/syna_co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build apk --release --dart-define=SYNA_APP_URL=https://synaacc.cloud
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syna-co-android
+          path: apps/syna_co/build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    name: Windows exe
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: apps/syna_co
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter test
+      - run: flutter build windows --release --dart-define=SYNA_APP_URL=https://synaacc.cloud
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syna-co-windows
+          path: apps/syna_co/build/windows/x64/runner/Release

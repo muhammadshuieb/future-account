@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class SettingController extends Controller
+class SettingController extends ApiController
 {
     public function bootstrap(): JsonResponse
     {
@@ -34,6 +33,8 @@ class SettingController extends Controller
 
     public function update(Request $request): JsonResponse
     {
+        $this->authorizePermission('settings.manage');
+
         $data = $request->validate([
             'settings' => ['required', 'array'],
             'settings.*.key' => ['required', 'string'],

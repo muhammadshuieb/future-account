@@ -1,0 +1,28 @@
+{
+  "id": "/",
+  "name": "شركة ساينا | Syna Co",
+  "short_name": "Syna Co",
+  "description": "نظام المحاسبة والمخازن والمبيعات",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "dir": "rtl",
+  "lang": "ar",
+  "theme_color": "#0d7377",
+  "background_color": "#0a1f2a",
+  "icons": [
+    {
+      "src": "/logo-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
