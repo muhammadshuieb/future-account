@@ -17,7 +17,6 @@ import { excelModuleForPurchasesTab } from '@/lib/excelExport'
 import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
-import { productLabel } from '@/lib/productLabel'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 
 type ProductRow = { id: number; name: string; brand?: string; model?: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
@@ -640,6 +639,8 @@ export default function PurchasesPage() {
               <thead>
                 <tr>
                   <th>{t('common.product')}</th>
+                  <th>{t('warehouse.brand')}</th>
+                  <th>{t('warehouse.model')}</th>
                   <th>{t('common.unit')}</th>
                   <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
                   <th>{t('common.total')}</th>
@@ -648,7 +649,9 @@ export default function PurchasesPage() {
               <tbody>
                 {(data.items || data.lines).map((line: any, index: number) => (
                   <tr key={index}>
-                    <td>{productLabel(line.product)}</td>
+                    <td>{line.product?.name || '—'}</td>
+                    <td>{line.product?.brand || '—'}</td>
+                    <td>{line.product?.model || '—'}</td>
                     <td>{unitFromProduct(line.product)}</td>
                     <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
                     <td>{line.line_total}</td>

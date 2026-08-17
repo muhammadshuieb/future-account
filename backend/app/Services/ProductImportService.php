@@ -70,12 +70,12 @@ class ProductImportService
             ],
         ]);
         $book->addSheet('تعليمات', ['البند', 'الشرح'], [
-            ['اسم الصنف', 'مطلوب'],
+            ['اسم الصنف', 'مطلوب — اسم الصنف فقط، بدون الماركة أو الموديل'],
             ['التصنيف', 'اختياري — إن لم يوجد يُنشأ تلقائياً بالاسم المكتوب'],
             ['الوحدة', 'اختياري — إن فرغت تُستخدم «قطعة»؛ وإن لم توجد تُنشأ تلقائياً'],
             ['الباركود', 'اختياري — يجب أن يكون فريداً إن وُجد'],
-            ['الماركة', 'اختياري — اسم الماركة / العلامة التجارية'],
-            ['الموديل', 'اختياري — رقم أو اسم الموديل'],
+            ['الماركة', 'اختياري — عمود مستقل، لا تضعها داخل اسم الصنف'],
+            ['الموديل', 'اختياري — عمود مستقل، لا تضعه داخل اسم الصنف'],
             ['سعر التكلفة', 'اختياري — افتراضي 0'],
             ['سعر البيع', 'اختياري — افتراضي 0'],
             ['المخزن', 'مطلوب — اسم أو رمز مخزن موجود. إن لم يكن لديك أي مخزن يُنشأ «المخزن الرئيسي» تلقائياً'],
@@ -108,7 +108,7 @@ class ProductImportService
      *   imported: int,
      *   failed: int,
      *   total_rows: int,
-     *   products: list<array{id:int,sku:string,name:string}>,
+     *   products: list<array{id:int,sku:string,name:string,brand:?string,model:?string}>,
      *   errors: list<array{row:int,message:string}>
      * }
      */
@@ -165,6 +165,8 @@ class ProductImportService
                     'id' => $product->id,
                     'sku' => $product->sku,
                     'name' => $product->name,
+                    'brand' => $product->brand,
+                    'model' => $product->model,
                 ];
                 if ($product->barcode) {
                     $seenBarcodes[mb_strtolower($product->barcode)] = true;
@@ -382,7 +384,7 @@ class ProductImportService
     {
         $map = [];
         $aliases = [
-            'اسم الصنف' => ['اسم الصنف', 'الاسم', 'الصنف', 'name'],
+            'اسم الصنف' => ['اسم الصنف', 'الاسم', 'اسم', 'الصنف', 'name'],
             'التصنيف' => ['التصنيف', 'تصنيف', 'category'],
             'الوحدة' => ['الوحدة', 'وحدة', 'unit'],
             'الباركود' => ['الباركود', 'باركود', 'barcode'],

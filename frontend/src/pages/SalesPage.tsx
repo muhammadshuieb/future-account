@@ -19,7 +19,6 @@ import { excelModuleForSalesTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
-import { productLabel } from '@/lib/productLabel'
 import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
@@ -983,6 +982,8 @@ export default function SalesPage() {
               <thead>
                 <tr>
                   <th>{t('common.product')}</th>
+                  <th>{t('warehouse.brand')}</th>
+                  <th>{t('warehouse.model')}</th>
                   <th>{t('common.unit')}</th>
                   <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
                   {lines.some((l) => l.serial_no) && <th>{t('common.serial')}</th>}
@@ -993,7 +994,9 @@ export default function SalesPage() {
               <tbody>
                 {lines.map((line, index) => (
                   <tr key={index}>
-                    <td>{productLabel(line.product)}</td>
+                    <td>{line.product?.name || '—'}</td>
+                    <td>{line.product?.brand || '—'}</td>
+                    <td>{line.product?.model || '—'}</td>
                     <td>{unitFromProduct(line.product)}</td>
                     <td className="tabular-nums">{formatQuantity(line.quantity)}</td>
                     {lines.some((l) => l.serial_no) && (

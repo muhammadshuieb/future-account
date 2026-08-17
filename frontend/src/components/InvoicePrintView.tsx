@@ -4,8 +4,8 @@ import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime } from '@/lib/dates'
+import { ProductIdentityCells } from '@/components/ProductIdentityCells'
 import { unitFromProduct } from '@/lib/productUnit'
-import { productDetails, type ProductIdentity } from '@/lib/productLabel'
 
 export type SalesInvoicePrintData = {
   invoice_number: string
@@ -73,13 +73,14 @@ type StructuredEInvoice = {
   tax_breakdown?: { rate: number; taxable: number; tax: number }[]
 }
 
-function ProductCell({ product }: { product?: ProductIdentity | null }) {
-  const details = productDetails(product)
+function ProductIdentityHeaders() {
+  const { t } = useTranslation()
   return (
-    <td>
-      <span>{product?.name || '—'}</span>
-      {details && <span className="block text-[10px] text-black/55">{details}</span>}
-    </td>
+    <>
+      <th>{t('common.product')}</th>
+      <th>{t('warehouse.brand')}</th>
+      <th>{t('warehouse.model')}</th>
+    </>
   )
 }
 
@@ -238,7 +239,7 @@ export function SalesInvoicePrintView({
       <table className="data-table text-[11px]">
         <thead>
           <tr>
-            <th>{t('common.product')}</th>
+            <ProductIdentityHeaders />
             <th>{t('common.unit')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.price')}</th>
@@ -249,7 +250,7 @@ export function SalesInvoicePrintView({
         <tbody>
           {(invoice.lines || []).map((l, i) => (
             <tr key={i}>
-              <ProductCell product={l.product} />
+              <ProductIdentityCells product={l.product} />
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
@@ -378,7 +379,7 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
       <table className="data-table text-[11px]">
         <thead>
           <tr>
-            <th>{t('common.product')}</th>
+            <ProductIdentityHeaders />
             <th>{t('common.unit')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.price')}</th>
@@ -388,7 +389,7 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
-              <ProductCell product={l.product} />
+              <ProductIdentityCells product={l.product} />
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
@@ -478,7 +479,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
       <table className="data-table text-[11px]">
         <thead>
           <tr>
-            <th>{t('common.product')}</th>
+            <ProductIdentityHeaders />
             <th>{t('common.unit')}</th>
             <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
             <th>{t('common.cost')}</th>
@@ -489,7 +490,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         <tbody>
           {lines.map((l, i) => (
             <tr key={i}>
-              <ProductCell product={l.product} />
+              <ProductIdentityCells product={l.product} />
               <td>{unitFromProduct(l.product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_cost ?? l.unit_price ?? '—'}</td>

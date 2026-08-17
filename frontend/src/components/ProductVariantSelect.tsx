@@ -61,7 +61,7 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
   )
 
   return (
-    <>
+    <div className="form-grid-3">
       <Field label={t('common.product')} hint={searchHint('common.typeToSearchHint', names.length)}>
         <SearchableSelect
           options={names.map((name) => ({ value: name, label: name }))}
@@ -77,46 +77,42 @@ export default function ProductVariantSelect({ products, value, onChange, disabl
         />
       </Field>
 
-      {selectedName && (
-        <Field label={t('warehouse.brand')} hint={searchHint('common.typeToSearchBrandHint', brands.length)}>
-          <SearchableSelect
-            options={brands.map((brand) => ({ value: encode(brand), label: brand || t('common.notSpecified') }))}
-            value={selectedBrand === null ? '' : encode(selectedBrand)}
-            disabled={disabled}
-            required
-            onChange={(encoded) => {
-              setSelectedBrand(encoded === '' ? null : decode(encoded))
+      <Field label={t('warehouse.brand')} hint={selectedName ? searchHint('common.typeToSearchBrandHint', brands.length) : undefined}>
+        <SearchableSelect
+          options={brands.map((brand) => ({ value: encode(brand), label: brand || t('common.notSpecified') }))}
+          value={selectedBrand === null ? '' : encode(selectedBrand)}
+          disabled={disabled || !selectedName}
+          required={Boolean(selectedName)}
+          onChange={(encoded) => {
+            setSelectedBrand(encoded === '' ? null : decode(encoded))
+            setSelectedModel(null)
+            onChange('')
+          }}
+        />
+      </Field>
+
+      <Field label={t('warehouse.model')} hint={selectedBrand !== null ? searchHint('common.typeToSearchModelHint', models.length) : undefined}>
+        <SearchableSelect
+          options={models.map((model) => ({ value: encode(model), label: model || t('common.notSpecified') }))}
+          value={selectedModel === null ? '' : encode(selectedModel)}
+          disabled={disabled || selectedBrand === null}
+          required={selectedBrand !== null}
+          onChange={(encoded) => {
+            if (encoded === '') {
               setSelectedModel(null)
               onChange('')
-            }}
-          />
-        </Field>
-      )}
-
-      {selectedName && selectedBrand !== null && (
-        <Field label={t('warehouse.model')} hint={searchHint('common.typeToSearchModelHint', models.length)}>
-          <SearchableSelect
-            options={models.map((model) => ({ value: encode(model), label: model || t('common.notSpecified') }))}
-            value={selectedModel === null ? '' : encode(selectedModel)}
-            disabled={disabled}
-            required
-            onChange={(encoded) => {
-              if (encoded === '') {
-                setSelectedModel(null)
-                onChange('')
-                return
-              }
-              const model = decode(encoded)
-              setSelectedModel(model)
-              const product = products.find((candidate) =>
-                candidate.name.trim() === selectedName
-                && clean(candidate.brand) === selectedBrand
-                && clean(candidate.model) === model)
-              onChange(product ? String(product.id) : '')
-            }}
-          />
-        </Field>
-      )}
-    </>
+              return
+            }
+            const model = decode(encoded)
+            setSelectedModel(model)
+            const product = products.find((candidate) =>
+              candidate.name.trim() === selectedName
+              && clean(candidate.brand) === selectedBrand
+              && clean(candidate.model) === model)
+            onChange(product ? String(product.id) : '')
+          }}
+        />
+      </Field>
+    </div>
   )
 }

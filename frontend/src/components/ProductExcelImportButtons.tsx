@@ -9,7 +9,7 @@ export type ProductImportResult = {
   imported: number
   failed: number
   total_rows: number
-  products: { id: number; sku: string; name: string }[]
+  products: { id: number; sku: string; name: string; brand?: string | null; model?: string | null }[]
   errors: { row: number; message: string }[]
 }
 

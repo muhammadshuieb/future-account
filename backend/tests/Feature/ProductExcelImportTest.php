@@ -101,6 +101,8 @@ class ProductExcelImportTest extends TestCase
         $this->assertSame('BC-100', $p1->barcode);
         $this->assertSame('سامسونج', $p1->brand);
         $this->assertSame('S24', $p1->model);
+        $this->assertSame('سامسونج', $res->json('data.products.0.brand'));
+        $this->assertSame('S24', $res->json('data.products.0.model'));
         $this->assertSame(10.0, (float) StockLevel::query()
             ->where('product_id', $p1->id)
             ->where('warehouse_id', $wh->id)
@@ -242,6 +244,44 @@ class ProductExcelImportTest extends TestCase
         $this->assertNotNull($product);
         $this->assertSame('PRD-00001', $product->sku);
         $this->assertNotSame('USER-SKU', $product->sku);
+        @unlink($path);
+    }
+
+    public function test_import_accepts_short_arabic_headers_for_name_brand_model(): void
+    {
+        Warehouse::query()->create([
+            'code' => 'WH-NM',
+            'name' => 'مخزن الأسماء',
+            'is_active' => true,
+        ]);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('الأصناف');
+        $headers = ['الاسم', 'ماركة', 'موديل', 'المخزن', 'سعر التكلفة', 'سعر البيع'];
+        foreach ($headers as $i => $h) {
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1).'1', $h);
+        }
+        $row = ['راوتر', 'تي بي لينك', 'Archer C6', 'مخزن الأسماء', '20', '35'];
+        foreach ($row as $i => $v) {
+            $sheet->setCellValue(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1).'2', $v);
+        }
+        $path = tempnam(sys_get_temp_dir(), 'nm').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+        $file = new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $res = $this->post('/api/imports/products', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
+        $this->assertSame(1, $res->json('data.imported'));
+
+        $product = Product::query()->where('name', 'راوتر')->first();
+        $this->assertNotNull($product);
+        $this->assertSame('راوتر', $product->name);
+        $this->assertSame('تي بي لينك', $product->brand);
+        $this->assertSame('Archer C6', $product->model);
+        $this->assertNotSame('راوتر تي بي لينك Archer C6', $product->name);
         @unlink($path);
     }
 
