@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { formatDateTimeLocal } from '@/lib/dates'
 import ExcelExportButton from '@/components/ExcelExportButton'
-import { EmptyState, ListSearchInput, LoadingBlock, PageHeader, Panel } from '@/components/ui'
+import { EmptyState, ListSearchInput, LoadingBlock, PageHeader, Panel, inputClass } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 
 type AuditRow = {
@@ -20,6 +21,21 @@ type AuditRow = {
   old_values?: Record<string, unknown> | null
   new_values?: Record<string, unknown> | null
 }
+
+type AuditMeta = {
+  current_page: number
+  last_page: number
+  per_page: number
+  total: number
+  from: number | null
+  to: number | null
+  period: string
+}
+
+type PeriodId = 'day' | 'week' | 'month' | 'year' | 'all'
+
+const PERIODS: PeriodId[] = ['day', 'week', 'month', 'year', 'all']
+const PAGE_SIZES = [10, 25, 50, 100, 200]
 
 function entityKey(row: AuditRow): string | null {
   if (row.entity_type) return row.entity_type
@@ -62,14 +78,43 @@ function referenceOf(row: AuditRow): string {
 export default function AuditLogPage() {
   const { t } = useTranslation()
   const search = useListSearch()
+  const [period, setPeriod] = useState<PeriodId>('month')
+  const [perPage, setPerPage] = useState(25)
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    setPage(1)
+  }, [search.debouncedQ, period, perPage])
+
   const logs = useQuery({
-    queryKey: ['audit-logs', search.debouncedQ],
-    queryFn: async () => (await api.get('/audit-logs', { params: search.params })).data.data as AuditRow[],
+    queryKey: ['audit-logs', search.debouncedQ, period, perPage, page],
+    queryFn: async () => {
+      const res = await api.get('/audit-logs', {
+        params: {
+          ...search.params,
+          period,
+          per_page: perPage,
+          page,
+        },
+      })
+      return res.data as { data: AuditRow[]; meta: AuditMeta }
+    },
+    placeholderData: keepPreviousData,
   })
 
-  if (logs.isLoading) return <LoadingBlock />
+  if (logs.isLoading && !logs.data) return <LoadingBlock />
 
-  const rows = logs.data || []
+  const rows = logs.data?.data || []
+  const meta = logs.data?.meta
+  const lastPage = Math.max(1, meta?.last_page || 1)
+  const currentPage = meta?.current_page || page
+  const periodLabel: Record<PeriodId, string> = {
+    day: t('audit.periodDay'),
+    week: t('audit.periodWeek'),
+    month: t('audit.periodMonth'),
+    year: t('audit.periodYear'),
+    all: t('audit.periodAll'),
+  }
 
   return (
     <div className="space-y-6">
@@ -79,10 +124,41 @@ export default function AuditLogPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ListSearchInput value={search.q} onChange={search.setQ} />
-            <ExcelExportButton path="/exports/audit-logs" />
+            <ExcelExportButton path="/exports/audit-logs" params={{ period, q: search.debouncedQ || undefined }} />
           </div>
         }
       />
+
+      <div className="print-hide flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1">
+          {PERIODS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPeriod(id)}
+              className={[
+                'rounded-lg px-3 py-2 text-sm font-medium transition',
+                period === id ? 'bg-teal text-white' : 'text-black/65 hover:bg-mist hover:text-ink',
+              ].join(' ')}
+            >
+              {periodLabel[id]}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-2 text-sm text-black/65">
+          <span>{t('audit.perPage')}</span>
+          <select
+            className={`${inputClass} w-auto min-w-[5rem]`}
+            value={perPage}
+            onChange={(event) => setPerPage(Number(event.target.value))}
+          >
+            {PAGE_SIZES.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {search.debouncedQ && rows.length === 0 ? <EmptyState title={t('common.noSearchResults')} /> : null}
       <Panel>
         <div className="table-wrap">
@@ -131,6 +207,38 @@ export default function AuditLogPage() {
             </tbody>
           </table>
         </div>
+        {meta && meta.total > 0 && (
+          <div className="print-hide flex flex-wrap items-center justify-between gap-3 border-t border-[var(--color-line)] px-4 py-3 text-sm text-black/60">
+            <p>
+              {t('audit.showing', {
+                from: meta.from ?? 0,
+                to: meta.to ?? 0,
+                total: meta.total,
+              })}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-black/10 px-3 py-1.5 disabled:opacity-40"
+                disabled={currentPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                {t('audit.prevPage')}
+              </button>
+              <span className="tabular-nums">
+                {t('audit.pageOf', { page: currentPage, pages: lastPage })}
+              </span>
+              <button
+                type="button"
+                className="rounded-lg border border-black/10 px-3 py-1.5 disabled:opacity-40"
+                disabled={currentPage >= lastPage}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                {t('audit.nextPage')}
+              </button>
+            </div>
+          </div>
+        )}
       </Panel>
     </div>
   )

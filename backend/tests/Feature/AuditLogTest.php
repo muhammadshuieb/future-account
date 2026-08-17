@@ -175,4 +175,50 @@ class AuditLogTest extends TestCase
             'auditable_id' => $customer->id,
         ]);
     }
+
+    public function test_audit_logs_paginate_and_filter_by_period(): void
+    {
+        AuditLog::query()->delete();
+
+        foreach (range(1, 3) as $i) {
+            AuditLog::query()->create([
+                'user_id' => $this->user->id,
+                'action' => 'sales_invoice.created',
+                'auditable_type' => \App\Models\SalesInvoice::class,
+                'auditable_id' => $i,
+                'reference' => 'ROW-'.$i,
+                'ip_address' => '203.0.113.20',
+            ]);
+        }
+
+        $old = AuditLog::query()->create([
+            'user_id' => $this->user->id,
+            'action' => 'purchase_invoice.created',
+            'auditable_type' => \App\Models\PurchaseInvoice::class,
+            'auditable_id' => 9,
+            'reference' => 'OLD-ROW',
+            'ip_address' => '203.0.113.21',
+        ]);
+        AuditLog::query()->where('id', $old->id)->update([
+            'created_at' => now()->startOfMonth()->subDay(),
+        ]);
+
+        $page1 = $this->getJson('/api/audit-logs?period=all&per_page=2&page=1');
+        $page1->assertOk()
+            ->assertJsonPath('meta.per_page', 2)
+            ->assertJsonPath('meta.total', 4)
+            ->assertJsonPath('meta.last_page', 2);
+        $this->assertCount(2, $page1->json('data'));
+
+        $page2 = $this->getJson('/api/audit-logs?period=all&per_page=2&page=2');
+        $page2->assertOk();
+        $this->assertCount(2, $page2->json('data'));
+
+        $month = $this->getJson('/api/audit-logs?period=month&per_page=50');
+        $month->assertOk();
+        $refs = collect($month->json('data'))->pluck('reference');
+        $this->assertTrue($refs->contains('ROW-1'));
+        $this->assertFalse($refs->contains('OLD-ROW'));
+        $this->assertSame(3, $month->json('meta.total'));
+    }
 }

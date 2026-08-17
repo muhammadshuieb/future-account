@@ -2,8 +2,10 @@
 
 namespace App\Support;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class AuditCatalog
 {
@@ -67,6 +69,42 @@ class AuditCatalog
         'satış' => ['sales_invoice'],
         'alış' => ['purchase_invoice'],
     ];
+
+    public const PERIODS = ['day', 'week', 'month', 'year', 'all'];
+
+    public static function normalizePeriod(?string $period): string
+    {
+        $period = strtolower(trim((string) $period));
+
+        return in_array($period, self::PERIODS, true) ? $period : 'month';
+    }
+
+    public static function periodStart(?string $period): ?Carbon
+    {
+        $period = self::normalizePeriod($period);
+        if ($period === 'all') {
+            return null;
+        }
+
+        $now = now();
+
+        return match ($period) {
+            'day' => $now->copy()->startOfDay(),
+            'week' => $now->copy()->startOfWeek(Carbon::SATURDAY),
+            'year' => $now->copy()->startOfYear(),
+            default => $now->copy()->startOfMonth(),
+        };
+    }
+
+    public static function applyPeriod(Builder $query, ?string $period, string $column = 'created_at'): Builder
+    {
+        $start = self::periodStart($period);
+        if ($start) {
+            $query->where($column, '>=', $start);
+        }
+
+        return $query;
+    }
 
     public static function referenceFrom(?Model $model, ?array $old = null, ?array $new = null): ?string
     {

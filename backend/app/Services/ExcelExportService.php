@@ -42,6 +42,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
 use App\Services\Excel\ExcelWorkbook;
+use App\Support\AuditCatalog;
 use App\Support\WarehouseAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -700,6 +701,9 @@ class ExcelExportService
     {
         $q = AuditLog::query()->with('user')->orderByDesc('id');
         $this->applyDateFilter($q, 'created_at', $request);
+        if ($request->filled('period')) {
+            AuditCatalog::applyPeriod($q, (string) $request->query('period'));
+        }
         $book->addSheet('سجل التدقيق', ['التاريخ', 'المستخدم', 'الإجراء', 'العملية', 'رقم العملية', 'عنوان IP'],
             $q->limit(20000)->get()->map(fn ($a) => [
                 optional($a->created_at)?->format('Y-m-d H:i:s'),

@@ -37,6 +37,25 @@ class AuditLogController extends ApiController
             });
         }
 
-        return $this->ok($query->limit(200)->get());
+        $period = AuditCatalog::normalizePeriod($request->query('period', 'month'));
+        AuditCatalog::applyPeriod($query, $period);
+
+        $perPage = min(200, max(1, $request->integer('per_page', 25)));
+
+        $page = max(1, $request->integer('page', 1));
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'data' => $paginator->getCollection()->values(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+                'period' => $period,
+            ],
+        ]);
     }
 }
