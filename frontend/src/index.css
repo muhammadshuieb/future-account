@@ -114,7 +114,7 @@ body {
 /*
  * Dedicated print routes: on-screen preview matches a physical A4 sheet
  * (210mm × 297mm). Padding simulates @page margins so WYSIWYG ≈ print dialog.
- * PDF capture still targets .print-area (content only — no sheet chrome).
+ * PDF export captures .print-area and applies the same @page margins in jsPDF.
  */
 @media screen {
   body:has(.print-document) {
@@ -132,12 +132,12 @@ body {
     max-width: 100%;
     min-height: 297mm;
     margin: 0 auto;
-    padding: 10mm 12mm;
+    padding: 10mm 12mm 12mm 12mm;
     box-sizing: border-box;
     background: #fff;
     box-shadow: 0 2px 16px rgba(12, 26, 34, 0.22);
     border-radius: 1px;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .print-document .print-area {
