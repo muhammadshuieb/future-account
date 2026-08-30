@@ -8,10 +8,11 @@ type Props = {
   hint?: string
   className?: string
   disabled?: boolean
+  compact?: boolean
 }
 
 /** Captures USB HID keyboard-wedge barcode scanners (rapid keystrokes + Enter). */
-export default function BarcodeScanInput({ onScan, label = 'مسح باركود', hint, className = '', disabled }: Props) {
+export default function BarcodeScanInput({ onScan, label = 'مسح باركود', hint, className = '', disabled, compact = false }: Props) {
   const [value, setValue] = useState('')
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -25,9 +26,9 @@ export default function BarcodeScanInput({ onScan, label = 'مسح باركود'
 
   return (
     <div className={className}>
-      <label className="block text-sm">
-        <span className="mb-1.5 flex items-center gap-2 font-medium text-black/65">
-          <ScanLine size={16} className="text-teal" />
+      <label className={`block ${compact ? 'text-xs' : 'text-sm'}`}>
+        <span className={`flex items-center gap-2 font-medium text-black/65 ${compact ? 'mb-1' : 'mb-1.5'}`}>
+          <ScanLine size={compact ? 14 : 16} className="text-teal" />
           {label}
         </span>
         <div className="relative">
@@ -42,7 +43,7 @@ export default function BarcodeScanInput({ onScan, label = 'مسح باركود'
             spellCheck={false}
             inputMode="numeric"
             placeholder="انقر هنا ثم امسح الباركود..."
-            className={`${inputClass} touch-target pr-10 font-mono text-sm ${focused ? 'border-teal/50 ring-2 ring-teal/20' : ''}`}
+            className={`${inputClass} touch-target pr-10 font-mono ${compact ? 'py-1.5 text-sm' : 'text-sm'} ${focused ? 'border-teal/50 ring-2 ring-teal/20' : ''}`}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

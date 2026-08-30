@@ -56,6 +56,19 @@ export function TableActions({ children, className = '' }: { children: ReactNode
   return <div className={`table-actions ${className}`.trim()}>{children}</div>
 }
 
+export function FormStack({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`form-stack ${className}`.trim()}>{children}</div>
+}
+
+export function FormSection({ title, children, className = '' }: { title?: string; children: ReactNode; className?: string }) {
+  return (
+    <section className={`form-section ${className}`.trim()}>
+      {title ? <h3 className="form-section-title">{title}</h3> : null}
+      {children}
+    </section>
+  )
+}
+
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block text-sm">
@@ -292,7 +305,7 @@ export function Modal({
   if (!open) return null
 
   const sizeClass =
-    size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-5xl' : 'max-w-xl'
+    size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-4xl' : size === 'xl' ? 'max-w-6xl' : 'max-w-2xl'
 
   return (
     <div className="modal-root" role="presentation">
@@ -313,7 +326,7 @@ export function Modal({
             ×
           </button>
         </header>
-        <div className="modal-body">{children}</div>
+        <div className="modal-body form-compact">{children}</div>
         {footer && <footer className="modal-footer">{footer}</footer>}
       </div>
     </div>

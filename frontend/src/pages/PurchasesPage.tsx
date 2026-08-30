@@ -14,7 +14,7 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
-import { Button, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
@@ -462,46 +462,75 @@ export default function PurchasesPage() {
     }))
   }
 
-  const productFields = <T extends { product_id: string; quantity: string; unit_cost: string; batch_no: string; serial_no: string }>(
-    state: T,
-    setState: Dispatch<SetStateAction<T>>,
-  ) => (
+  const supplierFields = <T extends { supplier_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
     <>
-      <ProductVariantSelect
-        products={products.data || []}
-        value={state.product_id}
-        onChange={(productId) => setState((prev) => ({ ...prev, product_id: productId }))}
-      />
-      {state.product_id && (
-        <Field label={t('common.unit')}>
-          <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit((products.data || []).find((p) => String(p.id) === state.product_id)?.unit)} />
+      <Field label={t('common.supplier')}>
+        <select className={inputClass} value={state.supplier_id} onChange={(e) => setState({ ...state, supplier_id: e.target.value })} required>
+          <option value="">—</option>
+          {(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+      </Field>
+      {warehouse && (
+        <Field label={t('common.warehouse')}>
+          <select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })} required>
+            <option value="">—</option>
+            {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
         </Field>
-      )}
-      <div className="grid grid-cols-2 gap-2">
-        <Field label={t('common.quantity')} hint={t('common.quantityUnit')}><NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} /></Field>
-        <Field label={t('common.cost')}><NumericInput value={state.unit_cost} onChange={(v) => setState((prev) => ({ ...prev, unit_cost: v }))} /></Field>
-      </div>
-      {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_batch && (
-        <Field label={t('common.batch')}><input className={inputClass} value={state.batch_no} onChange={(e) => setState({ ...state, batch_no: e.target.value })} required /></Field>
-      )}
-      {(products.data || []).find((p) => String(p.id) === state.product_id)?.track_serial && (
-        <Field label={t('common.serial')}><input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required /></Field>
       )}
     </>
   )
 
+  const productFields = <T extends { product_id: string; quantity: string; unit_cost: string; batch_no: string; serial_no: string }>(
+    state: T,
+    setState: Dispatch<SetStateAction<T>>,
+  ) => {
+    const product = (products.data || []).find((p) => String(p.id) === state.product_id)
+    return (
+      <>
+        <ProductVariantSelect
+          products={products.data || []}
+          value={state.product_id}
+          onChange={(productId) => setState((prev) => ({ ...prev, product_id: productId }))}
+        />
+        <div className="form-grid-3">
+          {state.product_id && (
+            <Field label={t('common.unit')}>
+              <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+            </Field>
+          )}
+          <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+            <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
+          </Field>
+          <Field label={t('common.cost')}>
+            <NumericInput value={state.unit_cost} onChange={(v) => setState((prev) => ({ ...prev, unit_cost: v }))} />
+          </Field>
+        </div>
+        {product?.track_batch && (
+          <Field label={t('common.batch')}>
+            <input className={inputClass} value={state.batch_no} onChange={(e) => setState({ ...state, batch_no: e.target.value })} required />
+          </Field>
+        )}
+        {product?.track_serial && (
+          <Field label={t('common.serial')}>
+            <input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required />
+          </Field>
+        )}
+      </>
+    )
+  }
+
   const invoiceLinesEditor = (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-black/55">{t('common.lines')}</p>
+    <FormSection title={t('common.lines')}>
+      <div className="flex justify-end">
         <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
       </div>
       {inv.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
         return (
-          <div key={index} className="rounded-lg border border-black/10 bg-black/[0.02] p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-black/50">{t('common.lineN', { n: index + 1 })}</span>
+          <div key={index} className="form-line-card">
+            <div className="form-line-card-header">
+              <span>{t('common.lineN', { n: index + 1 })}</span>
               {inv.lines.length > 1 && (
                 <button type="button" className="text-xs text-rose-600" onClick={() => removeInvLine(index)}>
                   {t('common.removeLine')}
@@ -512,21 +541,21 @@ export default function PurchasesPage() {
               products={products.data || []}
               value={line.product_id}
               onChange={(productId) => {
-                  const selected = (products.data || []).find((p) => String(p.id) === productId)
-                  updateInvLine(index, {
-                    product_id: productId,
-                    unit_cost: selected ? String(selected.cost_price) : line.unit_cost,
-                    serial_no: selected?.track_serial ? line.serial_no : '',
-                    batch_no: selected?.track_batch ? line.batch_no : '',
-                  })
+                const selected = (products.data || []).find((p) => String(p.id) === productId)
+                updateInvLine(index, {
+                  product_id: productId,
+                  unit_cost: selected ? String(selected.cost_price) : line.unit_cost,
+                  serial_no: selected?.track_serial ? line.serial_no : '',
+                  batch_no: selected?.track_batch ? line.batch_no : '',
+                })
               }}
             />
-            {line.product_id && (
-              <Field label={t('common.unit')}>
-                <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-              </Field>
-            )}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="form-grid-3">
+              {line.product_id && (
+                <Field label={t('common.unit')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                </Field>
+              )}
               <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
                 <NumericInput value={line.quantity} onChange={(v) => updateInvLine(index, { quantity: v })} />
               </Field>
@@ -547,7 +576,7 @@ export default function PurchasesPage() {
           </div>
         )
       })}
-    </div>
+    </FormSection>
   )
 
   const detailPath = tab === 'requests' ? 'purchase-requests' : tab === 'orders' ? 'purchase-orders' : tab === 'invoices' ? 'purchase-invoices' : tab === 'returns' ? 'purchase-returns' : 'supplier-payments'
@@ -576,13 +605,6 @@ export default function PurchasesPage() {
       exchange_rate: String(data.exchange_rate || ''),
     })
   }, [detail.data, modal])
-
-  const supplierFields = <T extends { supplier_id: string; warehouse_id?: string }>(state: T, setState: Dispatch<SetStateAction<T>>, warehouse = true) => (
-    <>
-      <Field label={t('common.supplier')}><select className={inputClass} value={state.supplier_id} onChange={(e) => setState({ ...state, supplier_id: e.target.value })} required><option value="">—</option>{(suppliers.data || []).map((s: { id: number; name: string }) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>
-      {warehouse && <Field label={t('common.warehouse')}><select className={inputClass} value={state.warehouse_id} onChange={(e) => setState({ ...state, warehouse_id: e.target.value })} required><option value="">—</option>{(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>}
-    </>
-  )
 
   const summary = (data: Record<string, any>) => {
     if (tab === 'invoices' && data.invoice_number) {
@@ -880,7 +902,7 @@ export default function PurchasesPage() {
               : modal === 'pay' ? t('purchases.payRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'md'}
+        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'lg'}
         footer={
           modal === 'pay' ? (
             <>
@@ -1002,26 +1024,95 @@ export default function PurchasesPage() {
               </select>
             </Field>
           </form>
-        ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : <form id="purchase-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
-          {tab === 'requests' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>{supplierFields(req, setReq)}<DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(req, setReq)}</>}
-          {tab === 'orders' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>{supplierFields(po, setPo)}<DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(po, setPo)}</>}
-          {tab === 'invoices' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>{supplierFields(inv, setInv)}<DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invoiceEstTotal} />{invoiceLinesEditor}
-            <div className="rounded-lg border border-dashed border-black/15 bg-black/[0.02] p-3 space-y-2">
-              <p className="text-xs font-medium text-black/55">{t('purchases.costExtrasHint')}</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label={t('purchases.customs')}><NumericInput value={inv.customs_amount} onChange={(v) => setInv((prev) => ({ ...prev, customs_amount: v }))} /></Field>
-                <Field label={t('purchases.transportFees')}><NumericInput value={inv.transport_fees} onChange={(v) => setInv((prev) => ({ ...prev, transport_fees: v }))} /></Field>
-                <Field label={t('purchases.fines')}><NumericInput value={inv.fines_amount} onChange={(v) => setInv((prev) => ({ ...prev, fines_amount: v }))} /></Field>
-                <Field label={t('purchases.otherFees')}><NumericInput value={inv.other_fees} onChange={(v) => setInv((prev) => ({ ...prev, other_fees: v }))} /></Field>
-              </div>
-              {invoiceExtrasSum > 0 && (
-                <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{invoiceExtrasSum}</span></p>
-              )}
-            </div>
-            <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" /><Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field><PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} /></>}
-          {tab === 'returns' && <><Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>{supplierFields(ret, setRet)}<Field label={t('common.invoice')}><select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />{productFields(ret, setRet)}</>}
-          {tab === 'payments' && <><p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>{supplierFields(pay, setPay, false)}<Field label={t('common.invoice')}><select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}><option value="">—</option>{(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}</select></Field><Field label={t('common.cashBox')}><select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}><option value="">—</option>{(cashBoxes.data || []).filter((c) => !pay.currency || (c.currency || 'USD').toUpperCase() === (pay.currency || 'USD').toUpperCase()).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>)}</select></Field><PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} /></>}
-        </form>}
+        ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
+          <form id="purchase-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>
+            {tab === 'requests' && (
+              <FormStack>
+                <div className="form-grid-4">
+                  <Field label={t('common.date')}><input type="date" className={inputClass} value={req.request_date} onChange={(e) => setReq({ ...req, request_date: e.target.value })} /></Field>
+                  {supplierFields(req, setReq)}
+                </div>
+                <DocumentCurrencyFields state={req} setState={setReq} currencies={currencyList} baseCurrency={baseCurrency} />
+                {productFields(req, setReq)}
+              </FormStack>
+            )}
+            {tab === 'orders' && (
+              <FormStack>
+                <div className="form-grid-4">
+                  <Field label={t('common.date')}><input type="date" className={inputClass} value={po.order_date} onChange={(e) => setPo({ ...po, order_date: e.target.value })} /></Field>
+                  {supplierFields(po, setPo)}
+                </div>
+                <DocumentCurrencyFields state={po} setState={setPo} currencies={currencyList} baseCurrency={baseCurrency} />
+                {productFields(po, setPo)}
+              </FormStack>
+            )}
+            {tab === 'invoices' && (
+              <FormStack>
+                <div className="form-grid-4">
+                  <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
+                  {supplierFields(inv, setInv)}
+                </div>
+                <DocumentCurrencyFields state={inv} setState={setInv} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={invoiceEstTotal} />
+                {invoiceLinesEditor}
+                <FormSection title={t('purchases.costExtrasHint')}>
+                  <div className="form-grid-2">
+                    <Field label={t('purchases.customs')}><NumericInput value={inv.customs_amount} onChange={(v) => setInv((prev) => ({ ...prev, customs_amount: v }))} /></Field>
+                    <Field label={t('purchases.transportFees')}><NumericInput value={inv.transport_fees} onChange={(v) => setInv((prev) => ({ ...prev, transport_fees: v }))} /></Field>
+                    <Field label={t('purchases.fines')}><NumericInput value={inv.fines_amount} onChange={(v) => setInv((prev) => ({ ...prev, fines_amount: v }))} /></Field>
+                    <Field label={t('purchases.otherFees')}><NumericInput value={inv.other_fees} onChange={(v) => setInv((prev) => ({ ...prev, other_fees: v }))} /></Field>
+                  </div>
+                  {invoiceExtrasSum > 0 && (
+                    <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{invoiceExtrasSum}</span></p>
+                  )}
+                </FormSection>
+                <div className="form-grid-2">
+                  <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" />
+                  <Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field>
+                </div>
+                <PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} />
+              </FormStack>
+            )}
+            {tab === 'returns' && (
+              <FormStack>
+                <div className="form-grid-4">
+                  <Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>
+                  {supplierFields(ret, setRet)}
+                  <Field label={t('common.invoice')}>
+                    <select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}>
+                      <option value="">—</option>
+                      {(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />
+                {productFields(ret, setRet)}
+              </FormStack>
+            )}
+            {tab === 'payments' && (
+              <FormStack>
+                <p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>
+                <div className="form-grid-3">
+                  {supplierFields(pay, setPay, false)}
+                  <Field label={t('common.invoice')}>
+                    <select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}>
+                      <option value="">—</option>
+                      {(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}
+                    </select>
+                  </Field>
+                  <Field label={t('common.cashBox')}>
+                    <select className={inputClass} value={pay.cash_box_id} onChange={(e) => setPay({ ...pay, cash_box_id: e.target.value })}>
+                      <option value="">—</option>
+                      {(cashBoxes.data || []).filter((c) => !pay.currency || (c.currency || 'USD').toUpperCase() === (pay.currency || 'USD').toUpperCase()).map((c: { id: number; name: string; currency?: string; is_default?: boolean }) => (
+                        <option key={c.id} value={c.id}>{c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <PaymentCurrencyFields state={pay} setState={setPay} currencies={currencyList} baseCurrency={baseCurrency} />
+              </FormStack>
+            )}
+          </form>
+        )}
       </Modal>
     </div>
   )

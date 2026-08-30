@@ -74,8 +74,8 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
       : null
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-2">
+    <>
+      <div className="form-grid-2">
         <Field label={t('common.currency')}>
           <select className={inputClass} value={state.currency} onChange={(e) => onCurrency(e.target.value)} required>
             {list.map((c) => (
@@ -97,7 +97,7 @@ export function DocumentCurrencyFields<T extends CurrencyFxState>({
           {t('common.baseEquivalent', { amount: fmt(basePreview), currency: baseCurrency })}
         </p>
       )}
-    </div>
+    </>
   )
 }
 
