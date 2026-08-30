@@ -55,6 +55,8 @@ Route::prefix('auth')->group(function () {
 
 Route::get('public/bootstrap', [SettingController::class, 'bootstrap']);
 
+Route::get('backups/destinations/google-drive/callback', [BackupController::class, 'googleDriveCallback']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('auth/me', [AuthController::class, 'me']);
     Route::post('auth/logout', [AuthController::class, 'logout']);
@@ -90,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);
+    Route::get('backups/destinations/google-drive/auth-url', [BackupController::class, 'googleDriveAuthUrl']);
     Route::put('backups/destinations/google-drive', [BackupController::class, 'saveGoogleDrive']);
     Route::post('backups/destinations/google-drive/test', [BackupController::class, 'testGoogleDrive']);
     Route::delete('backups/destinations/google-drive', [BackupController::class, 'disconnectGoogleDrive']);

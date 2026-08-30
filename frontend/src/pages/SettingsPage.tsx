@@ -99,9 +99,15 @@ export default function SettingsPage() {
     configured: boolean
     status: 'connected' | 'disconnected' | 'error' | string
     source?: string
+    method?: 'rclone' | 'legacy_api' | string | null
+    oauth_available?: boolean
+    oauth_connected?: boolean
+    rclone_available?: boolean
     credentials_set?: boolean
     folder_id_set?: boolean
     folder_id_masked?: string | null
+    folder_name?: string | null
+    folder_url_masked?: string | null
     token_set?: boolean
     chat_id_set?: boolean
     chat_id_masked?: string | null
@@ -134,9 +140,7 @@ export default function SettingsPage() {
     retry: false,
   })
 
-  const driveFileInputRef = useRef<HTMLInputElement>(null)
-  const [driveCredentials, setDriveCredentials] = useState('')
-  const [driveFolderId, setDriveFolderId] = useState('')
+  const [driveFolderUrl, setDriveFolderUrl] = useState('')
   const [telegramToken, setTelegramToken] = useState('')
   const [telegramChatId, setTelegramChatId] = useState('')
 
@@ -309,16 +313,42 @@ export default function SettingsPage() {
     onError: msg.fromErr,
   })
 
+  useEffect(() => {
+    if (tab !== 'backup') return
+    const params = new URLSearchParams(window.location.search)
+    const gdrive = params.get('gdrive')
+    if (!gdrive) return
+    if (gdrive === 'connected') {
+      msg.setMessage(t('settings.driveOAuthConnected'))
+    } else if (gdrive === 'error') {
+      msg.setError(decodeURIComponent(params.get('message') || t('settings.driveOAuthFailed')))
+    }
+    params.delete('gdrive')
+    params.delete('message')
+    const next = `${window.location.pathname}?${params.toString()}`
+    window.history.replaceState({}, '', next.endsWith('?') ? next.slice(0, -1) : next)
+    void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
+  }, [tab, queryClient, t, msg.setMessage, msg.setError])
+
+  const connectDrive = useMutation({
+    mutationFn: async () => {
+      const res = await api.get('/backups/destinations/google-drive/auth-url')
+      return res.data.data as { url: string }
+    },
+    onSuccess: (data) => {
+      window.location.href = data.url
+    },
+    onError: msg.fromErr,
+  })
+
   const saveDrive = useMutation({
     mutationFn: () =>
       api.put('/backups/destinations/google-drive', {
-        credentials_json: driveCredentials.trim() || undefined,
-        folder_id: driveFolderId.trim() || undefined,
+        folder_url: driveFolderUrl.trim() || undefined,
       }),
     onSuccess: (res) => {
       msg.setMessage(res.data?.data?.message || t('settings.driveSaved'))
-      setDriveCredentials('')
-      setDriveFolderId('')
+      setDriveFolderUrl('')
       void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
     },
     onError: msg.fromErr,
@@ -337,8 +367,7 @@ export default function SettingsPage() {
     mutationFn: () => api.delete('/backups/destinations/google-drive'),
     onSuccess: (res) => {
       msg.setMessage(res.data?.data?.message || t('settings.driveDisconnected'))
-      setDriveCredentials('')
-      setDriveFolderId('')
+      setDriveFolderUrl('')
       void queryClient.invalidateQueries({ queryKey: ['backups-status'] })
     },
     onError: msg.fromErr,
@@ -717,54 +746,54 @@ export default function SettingsPage() {
                     <p className={`mt-1 text-xs font-medium ${destStatusClass(backupStatus.data?.google_drive.status)}`}>
                       {destStatusLabel(backupStatus.data?.google_drive.status)}
                     </p>
+                    {backupStatus.data?.google_drive.method === 'rclone' && (
+                      <p className="mt-1 text-[11px] text-black/45">{t('settings.driveViaRclone')}</p>
+                    )}
                   </div>
                   {backupStatus.data?.google_drive.folder_id_masked && (
                     <p className="font-mono text-[11px] text-black/40">
                       {t('settings.folderId')}: {backupStatus.data.google_drive.folder_id_masked}
                     </p>
                   )}
+                  {backupStatus.data?.google_drive.oauth_connected && backupStatus.data?.google_drive.folder_id_set && (
+                    <p className="mt-2 text-xs text-black/55">{t('settings.driveAutoFolder')}</p>
+                  )}
                 </div>
 
-                <Field label={t('settings.driveCredentialsJson')}>
-                  <textarea
-                    className={`${inputClass} min-h-[96px] font-mono text-xs`}
-                    value={driveCredentials}
-                    onChange={(e) => setDriveCredentials(e.target.value)}
-                    placeholder={backupStatus.data?.google_drive.credentials_set ? t('settings.secretKeepHint') : '{"type":"service_account",...}'}
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button type="button" variant="secondary" onClick={() => driveFileInputRef.current?.click()}>
-                      {t('settings.uploadJsonFile')}
-                    </Button>
-                    <input
-                      ref={driveFileInputRef}
-                      type="file"
-                      accept="application/json,.json"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        e.target.value = ''
-                        if (!file) return
-                        const reader = new FileReader()
-                        reader.onload = () => setDriveCredentials(String(reader.result ?? ''))
-                        reader.readAsText(file)
-                      }}
-                    />
+                {!backupStatus.data?.google_drive.oauth_available && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {t('settings.driveOAuthNotConfigured')}
                   </div>
-                  <p className="mt-1 text-xs text-black/45">{t('settings.driveCredentialsHint')}</p>
-                </Field>
+                )}
 
-                <Field label={t('settings.folderId')}>
-                  <input
-                    className={inputClass}
-                    value={driveFolderId}
-                    onChange={(e) => setDriveFolderId(e.target.value)}
-                    placeholder={backupStatus.data?.google_drive.folder_id_set ? t('settings.secretKeepHint') : t('settings.folderIdPlaceholder')}
-                    autoComplete="off"
-                  />
-                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    disabled={connectDrive.isPending || !backupStatus.data?.google_drive.oauth_available || backupStatus.data?.google_drive.oauth_connected}
+                    onClick={() => connectDrive.mutate()}
+                  >
+                    {backupStatus.data?.google_drive.oauth_connected ? t('settings.driveConnected') : t('settings.connectGoogleDrive')}
+                  </Button>
+                  {backupStatus.data?.google_drive.oauth_connected && (
+                    <span className="self-center text-xs text-success">{t('settings.driveAccountLinked')}</span>
+                  )}
+                </div>
+
+                <details className="rounded-lg border border-[var(--color-line)] p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-black/65">{t('settings.driveCustomFolderHint')}</summary>
+                  <div className="mt-3">
+                    <Field label={t('settings.driveFolderUrl')}>
+                      <input
+                        className={inputClass}
+                        value={driveFolderUrl}
+                        onChange={(e) => setDriveFolderUrl(e.target.value)}
+                        placeholder={t('settings.driveFolderUrlPlaceholder')}
+                        autoComplete="off"
+                      />
+                    </Field>
+                  </div>
+                </details>
 
                 {(backupStatus.data?.google_drive.last_success_at || backupStatus.data?.google_drive.last_error) && (
                   <div className="space-y-1 text-xs text-black/55">
@@ -778,14 +807,16 @@ export default function SettingsPage() {
                 )}
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    disabled={saveDrive.isPending || (!driveCredentials.trim() && !driveFolderId.trim())}
-                    onClick={() => saveDrive.mutate()}
-                  >
-                    {t('settings.save')}
-                  </Button>
+                  {driveFolderUrl.trim() ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={saveDrive.isPending || !backupStatus.data?.google_drive.oauth_connected}
+                      onClick={() => saveDrive.mutate()}
+                    >
+                      {t('settings.save')}
+                    </Button>
+                  ) : null}
                   <Button
                     type="button"
                     variant="secondary"

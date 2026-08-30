@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\BackupDistributionService;
+use App\Services\GoogleDriveOAuthService;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -22,10 +23,14 @@ class BackupDestinationConfigTest extends TestCase
 
         putenv('GOOGLE_DRIVE_CREDENTIALS_JSON=');
         putenv('GOOGLE_DRIVE_FOLDER_ID=');
+        putenv('GOOGLE_DRIVE_OAUTH_CLIENT_ID=');
+        putenv('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=');
         putenv('TELEGRAM_BOT_TOKEN=');
         putenv('TELEGRAM_CHAT_ID=');
         $_ENV['GOOGLE_DRIVE_CREDENTIALS_JSON'] = '';
         $_ENV['GOOGLE_DRIVE_FOLDER_ID'] = '';
+        $_ENV['GOOGLE_DRIVE_OAUTH_CLIENT_ID'] = '';
+        $_ENV['GOOGLE_DRIVE_OAUTH_CLIENT_SECRET'] = '';
         $_ENV['TELEGRAM_BOT_TOKEN'] = '';
         $_ENV['TELEGRAM_CHAT_ID'] = '';
     }
@@ -118,26 +123,64 @@ class BackupDestinationConfigTest extends TestCase
         $this->assertNull(Setting::getEncrypted(BackupDistributionService::KEY_TELEGRAM_TOKEN));
     }
 
-    public function test_admin_can_save_google_drive_and_mask_credentials(): void
+    public function test_admin_can_save_google_drive_folder_after_oauth(): void
     {
         $this->actingAsAdmin();
-        $json = $this->sampleServiceAccountJson();
+        Setting::setEncrypted(
+            GoogleDriveOAuthService::KEY_OAUTH_TOKEN,
+            json_encode([
+                'access_token' => 'access',
+                'token_type' => 'Bearer',
+                'refresh_token' => 'refresh-token',
+                'expiry' => now()->addHour()->toIso8601String(),
+            ], JSON_THROW_ON_ERROR),
+            'backup',
+        );
+
+        Http::fake([
+            'www.googleapis.com/drive/v3/files*' => Http::response([
+                'files' => [],
+            ], 200),
+            'www.googleapis.com/drive/v3/files' => Http::response(['id' => 'created-folder-id'], 200),
+        ]);
+
         $folderId = '1AbCdEfGhIjKlMnOpQrStUvWxYz';
+        $folderUrl = 'https://drive.google.com/drive/folders/'.$folderId;
 
         $save = $this->putJson('/api/backups/destinations/google-drive', [
-            'credentials_json' => $json,
-            'folder_id' => $folderId,
+            'folder_url' => $folderUrl,
         ])->assertOk();
 
         $save->assertJsonPath('data.google_drive.configured', true);
-        $save->assertJsonPath('data.google_drive.credentials_set', true);
+        $save->assertJsonPath('data.google_drive.oauth_connected', true);
+        $save->assertJsonPath('data.google_drive.method', 'rclone');
         $this->assertStringNotContainsString($folderId, $save->getContent());
-        $this->assertStringNotContainsString('BEGIN PRIVATE KEY', $save->getContent());
-        $this->assertStringNotContainsString('syna-backup@example', $save->getContent());
 
         $status = $this->getJson('/api/backups/status')->assertOk();
         $status->assertJsonPath('data.google_drive.configured', true);
-        $this->assertStringNotContainsString('BEGIN PRIVATE KEY', $status->getContent());
+        $status->assertJsonPath('data.google_drive.folder_id_set', true);
+    }
+
+    public function test_save_google_drive_folder_requires_oauth(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->putJson('/api/backups/destinations/google-drive', [
+            'folder_url' => 'https://drive.google.com/drive/folders/abc123folder4567',
+        ])->assertStatus(422);
+    }
+
+    public function test_admin_can_get_google_drive_auth_url_when_oauth_configured(): void
+    {
+        putenv('GOOGLE_DRIVE_OAUTH_CLIENT_ID=test-client-id');
+        putenv('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=test-client-secret');
+        $_ENV['GOOGLE_DRIVE_OAUTH_CLIENT_ID'] = 'test-client-id';
+        $_ENV['GOOGLE_DRIVE_OAUTH_CLIENT_SECRET'] = 'test-client-secret';
+
+        $this->actingAsAdmin();
+
+        $res = $this->getJson('/api/backups/destinations/google-drive/auth-url')->assertOk();
+        $this->assertStringContainsString('accounts.google.com', (string) $res->json('data.url'));
     }
 
     public function test_telegram_test_sends_message_when_mocked(): void
@@ -191,7 +234,7 @@ class BackupDestinationConfigTest extends TestCase
         }
         file_put_contents($path, 'x');
 
-        $service = new BackupDistributionService;
+        $service = app(BackupDistributionService::class);
         $results = $service->distribute($path, 'test_pref.dump');
 
         $this->assertTrue($results['telegram']['ok']);

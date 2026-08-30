@@ -4,17 +4,20 @@ namespace App\Http\Controllers\Api;
 
 use App\Services\BackupDistributionService;
 use App\Services\BackupService;
+use App\Services\GoogleDriveOAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 
 class BackupController extends ApiController
 {
     public function __construct(
         protected BackupService $backups,
         protected BackupDistributionService $distribution,
+        protected GoogleDriveOAuthService $googleOAuth,
     ) {}
 
     protected function authorizeAdmin(): void
@@ -166,34 +169,86 @@ class BackupController extends ApiController
         return $this->ok(['message' => 'تم حذف الملف.']);
     }
 
+    public function googleDriveAuthUrl(): JsonResponse
+    {
+        $this->authorizeAdmin();
+
+        try {
+            $url = $this->googleOAuth->createAuthUrl((int) auth()->id());
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->ok([
+            'url' => $url,
+            'redirect_uri' => $this->googleOAuth->redirectUri(),
+        ]);
+    }
+
+    public function googleDriveCallback(Request $request): RedirectResponse
+    {
+        $frontend = rtrim((string) env('FRONTEND_URL', '/'), '/');
+        $settingsUrl = $frontend.'/settings?tab=backup';
+
+        if ($request->filled('error')) {
+            return redirect($settingsUrl.'&gdrive=error&message='.urlencode((string) $request->query('error')));
+        }
+
+        $code = (string) $request->query('code', '');
+        $state = (string) $request->query('state', '');
+
+        if ($code === '' || $state === '') {
+            return redirect($settingsUrl.'&gdrive=error&message='.urlencode('رمز الربط ناقص.'));
+        }
+
+        try {
+            $this->googleOAuth->handleCallback($code, $state);
+        } catch (RuntimeException $e) {
+            return redirect($settingsUrl.'&gdrive=error&message='.urlencode($e->getMessage()));
+        }
+
+        return redirect($settingsUrl.'&gdrive=connected');
+    }
+
     public function saveGoogleDrive(Request $request): JsonResponse
     {
         $this->authorizeAdmin();
 
         $data = $request->validate([
-            'credentials_json' => ['nullable', 'string', 'max:65535'],
-            'folder_id' => ['nullable', 'string', 'max:255'],
+            'folder_url' => ['nullable', 'string', 'max:2048'],
         ], [
-            'credentials_json.max' => 'ملف بيانات حساب الخدمة كبير جداً.',
-            'folder_id.max' => 'معرّف المجلد طويل جداً.',
+            'folder_url.max' => 'رابط المجلد طويل جداً.',
         ]);
 
-        if (empty($data['credentials_json']) && empty($data['folder_id'])) {
-            return response()->json(['message' => 'أدخل بيانات حساب الخدمة أو معرّف المجلد على الأقل.'], 422);
+        if (empty($data['folder_url'])) {
+            if ($this->googleOAuth->fullyConfigured()) {
+                return $this->ok([
+                    'google_drive' => $this->distribution->googleDriveStatus(),
+                    'message' => 'مجلد «'.$this->googleOAuth->defaultFolderName().'» جاهز على Google Drive.',
+                ]);
+            }
+
+            try {
+                $folder = $this->googleOAuth->ensureDefaultBackupFolder();
+            } catch (RuntimeException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return $this->ok([
+                'google_drive' => $this->distribution->googleDriveStatus(),
+                'message' => 'تم تجهيز مجلد «'.$folder['folder_name'].'» على Google Drive.',
+            ]);
         }
 
         try {
-            $status = $this->distribution->saveGoogleDrive(
-                $data['credentials_json'] ?? null,
-                $data['folder_id'] ?? null,
-            );
+            $status = $this->distribution->saveGoogleDriveFolder($data['folder_url']);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return $this->ok([
             'google_drive' => $status,
-            'message' => 'تم حفظ إعدادات Google Drive.',
+            'message' => 'تم حفظ مجلد Google Drive.',
         ]);
     }
 

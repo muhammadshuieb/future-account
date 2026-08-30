@@ -12,6 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo 'date.timezone=Asia/Damascus' > /usr/local/etc/php/conf.d/99-timezone.ini \
     && rm -rf /var/lib/apt/lists/*
 
+# Install rclone for Google Drive backups
+RUN curl -fsSL https://downloads.rclone.org/rclone-current-linux-amd64.deb -o /tmp/rclone.deb \
+    && apt-get update \
+    && apt-get install -y /tmp/rclone.deb \
+    && rm -f /tmp/rclone.deb \
+    && rm -rf /var/lib/apt/lists/* \
+    && rclone version
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html

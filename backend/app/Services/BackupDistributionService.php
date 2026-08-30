@@ -11,6 +11,7 @@ class BackupDistributionService
 {
     public const KEY_GDRIVE_CREDENTIALS = 'backup_gdrive_credentials_json';
 
+    /** @deprecated Legacy service-account folder key — prefer GoogleDriveOAuthService::KEY_FOLDER_ID */
     public const KEY_GDRIVE_FOLDER = 'backup_gdrive_folder_id';
 
     public const KEY_TELEGRAM_TOKEN = 'backup_telegram_bot_token';
@@ -24,6 +25,11 @@ class BackupDistributionService
     public const KEY_TELEGRAM_LAST_OK = 'backup_telegram_last_success_at';
 
     public const KEY_TELEGRAM_LAST_ERR = 'backup_telegram_last_error';
+
+    public function __construct(
+        protected GoogleDriveOAuthService $googleOAuth,
+        protected RcloneDriveService $rclone,
+    ) {}
 
     public function status(): array
     {
@@ -74,7 +80,12 @@ class BackupDistributionService
 
     public function googleDriveConfigured(): bool
     {
-        return filled($this->googleDriveCredentialsJson()) && filled($this->googleDriveFolderId());
+        return $this->googleOAuth->fullyConfigured() || $this->legacyServiceAccountConfigured();
+    }
+
+    protected function legacyServiceAccountConfigured(): bool
+    {
+        return filled($this->googleDriveCredentialsJson()) && filled($this->legacyGoogleDriveFolderId());
     }
 
     public function telegramConfigured(): bool
@@ -88,26 +99,35 @@ class BackupDistributionService
     public function googleDriveStatus(): array
     {
         $configured = $this->googleDriveConfigured();
-        $credsFromSettings = filled(Setting::getEncrypted(self::KEY_GDRIVE_CREDENTIALS));
-        $folderFromSettings = filled(Setting::getEncrypted(self::KEY_GDRIVE_FOLDER));
+        $oauthConnected = $this->googleOAuth->isConnected();
+        $folderId = $this->googleOAuth->folderId() ?: $this->legacyGoogleDriveFolderId();
+        $legacyCreds = filled(Setting::getEncrypted(self::KEY_GDRIVE_CREDENTIALS))
+            || filled(env('GOOGLE_DRIVE_CREDENTIALS_JSON'));
+
         $source = 'none';
-        if ($credsFromSettings || $folderFromSettings) {
+        if ($oauthConnected || filled(Setting::getEncrypted(GoogleDriveOAuthService::KEY_FOLDER_ID))) {
             $source = 'settings';
-        } elseif (filled(env('GOOGLE_DRIVE_CREDENTIALS_JSON')) || filled(env('GOOGLE_DRIVE_FOLDER_ID'))) {
+        } elseif ($legacyCreds || filled(env('GOOGLE_DRIVE_FOLDER_ID'))) {
             $source = 'env';
         }
 
         $lastOk = Setting::getValue(self::KEY_GDRIVE_LAST_OK);
         $lastErr = Setting::getValue(self::KEY_GDRIVE_LAST_ERR);
-        $folder = $this->googleDriveFolderId();
+        $method = $this->googleOAuth->fullyConfigured() ? 'rclone' : ($this->legacyServiceAccountConfigured() ? 'legacy_api' : null);
 
         return [
             'configured' => $configured,
             'status' => $this->connectionState($configured, is_string($lastErr) ? $lastErr : null),
             'source' => $source,
-            'credentials_set' => filled($this->googleDriveCredentialsJson()),
-            'folder_id_set' => filled($folder),
-            'folder_id_masked' => $this->maskId($folder),
+            'method' => $method,
+            'oauth_available' => $this->googleOAuth->oauthClientConfigured(),
+            'oauth_connected' => $oauthConnected,
+            'rclone_available' => $this->rclone->isAvailable(),
+            'credentials_set' => $legacyCreds,
+            'folder_id_set' => filled($folderId),
+            'folder_id_masked' => $this->maskId($folderId),
+            'folder_url_masked' => $this->maskFolderUrl($this->googleOAuth->folderUrl()),
+            'folder_name' => $this->googleOAuth->folderId() ? $this->googleOAuth->defaultFolderName() : null,
             'last_success_at' => is_string($lastOk) && $lastOk !== '' ? $lastOk : null,
             'last_error' => is_string($lastErr) && $lastErr !== '' ? $lastErr : null,
         ];
@@ -145,6 +165,21 @@ class BackupDistributionService
     }
 
     /**
+     * Save the Drive folder link (OAuth must be connected first).
+     *
+     * @throws RuntimeException
+     */
+    public function saveGoogleDriveFolder(string $folderReference): array
+    {
+        $this->googleOAuth->saveFolderReference($folderReference);
+        Setting::forgetKey(self::KEY_GDRIVE_LAST_ERR);
+
+        return $this->googleDriveStatus();
+    }
+
+    /**
+     * @deprecated Legacy service-account setup — kept for existing installs.
+     *
      * @throws RuntimeException
      */
     public function saveGoogleDrive(?string $credentialsJson, ?string $folderId): array
@@ -168,7 +203,7 @@ class BackupDistributionService
             );
         }
 
-        if (! $this->googleDriveConfigured()) {
+        if (! $this->legacyServiceAccountConfigured()) {
             throw new RuntimeException('يجب إدخال ملف بيانات حساب الخدمة ومعرّف المجلد معاً (أو إكمال الناقص).');
         }
 
@@ -219,10 +254,9 @@ class BackupDistributionService
 
     public function disconnectGoogleDrive(): array
     {
+        $this->googleOAuth->disconnect();
         Setting::forgetKey(self::KEY_GDRIVE_CREDENTIALS);
         Setting::forgetKey(self::KEY_GDRIVE_FOLDER);
-        Setting::forgetKey(self::KEY_GDRIVE_LAST_ERR);
-        Setting::forgetKey(self::KEY_GDRIVE_LAST_OK);
 
         return $this->googleDriveStatus();
     }
@@ -245,11 +279,42 @@ class BackupDistributionService
     public function testGoogleDrive(): array
     {
         if (! $this->googleDriveConfigured()) {
-            throw new RuntimeException('Google Drive غير مُعد. احفظ الإعدادات أولاً.');
+            throw new RuntimeException('Google Drive غير مُعد. اربط الحساب وأدخل رابط المجلد أولاً.');
+        }
+
+        if ($this->googleOAuth->fullyConfigured()) {
+            if (! $this->rclone->isAvailable()) {
+                throw new RuntimeException('rclone غير مثبت على الخادم.');
+            }
+
+            $folderId = (string) $this->googleOAuth->folderId();
+            $token = $this->googleOAuth->tokenPayload();
+            $filename = 'syna_connection_test_'.now()->format('YmdHis').'.txt';
+            $path = storage_path('app/'.$filename);
+            file_put_contents($path, 'Syna Co backup connection test — '.now()->toIso8601String());
+
+            try {
+                $this->rclone->uploadFile($path, $filename, $folderId, $token);
+                $this->rclone->deleteFile($filename, $folderId, $token);
+                $this->recordSuccess('google_drive');
+
+                return array_merge($this->googleDriveStatus(), [
+                    'ok' => true,
+                    'message' => 'تم الاتصال بنجاح مع Google Drive عبر rclone.',
+                ]);
+            } catch (\Throwable $e) {
+                $safe = $this->safeErrorMessage($e->getMessage());
+                $this->recordError('google_drive', $safe);
+                throw new RuntimeException('فشل اختبار Google Drive: '.$safe);
+            } finally {
+                if (is_file($path)) {
+                    @unlink($path);
+                }
+            }
         }
 
         $token = $this->googleAccessToken();
-        $folderId = $this->googleDriveFolderId();
+        $folderId = $this->legacyGoogleDriveFolderId();
         $filename = 'syna_connection_test_'.now()->format('YmdHis').'.txt';
         $content = 'Syna Co backup connection test — '.now()->toIso8601String();
 
@@ -315,7 +380,7 @@ class BackupDistributionService
         return filled($fromEnv) ? (string) $fromEnv : null;
     }
 
-    protected function googleDriveFolderId(): ?string
+    protected function legacyGoogleDriveFolderId(): ?string
     {
         $fromSettings = Setting::getEncrypted(self::KEY_GDRIVE_FOLDER);
         if (filled($fromSettings)) {
@@ -325,6 +390,11 @@ class BackupDistributionService
         $fromEnv = env('GOOGLE_DRIVE_FOLDER_ID');
 
         return filled($fromEnv) ? (string) $fromEnv : null;
+    }
+
+    protected function googleDriveFolderId(): ?string
+    {
+        return $this->googleOAuth->folderId() ?: $this->legacyGoogleDriveFolderId();
     }
 
     protected function telegramBotToken(): ?string
@@ -353,8 +423,20 @@ class BackupDistributionService
 
     protected function uploadToGoogleDrive(string $path, string $filename): string
     {
+        if ($this->googleOAuth->fullyConfigured()) {
+            if (! $this->rclone->isAvailable()) {
+                throw new RuntimeException('rclone غير مثبت على الخادم.');
+            }
+
+            $folderId = (string) $this->googleOAuth->folderId();
+            $token = $this->googleOAuth->tokenPayload();
+            $this->rclone->uploadFile($path, $filename, $folderId, $token);
+
+            return 'rclone:'.$filename;
+        }
+
         $token = $this->googleAccessToken();
-        $folderId = $this->googleDriveFolderId();
+        $folderId = $this->legacyGoogleDriveFolderId();
         $bytes = file_get_contents($path);
         if ($bytes === false) {
             throw new RuntimeException('تعذر قراءة ملف النسخة الاحتياطية.');
@@ -524,6 +606,15 @@ class BackupDistributionService
         $safe = preg_replace('/"private_key"\s*:\s*"[^"]*"/', '"private_key":"[REDACTED]"', $safe) ?? $safe;
 
         return mb_substr(trim($safe), 0, 500);
+    }
+
+    protected function maskFolderUrl(?string $value): ?string
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        return preg_replace('#/folders/([a-zA-Z0-9_-]+)#', '/folders/****', (string) $value);
     }
 
     protected function maskId(?string $value): ?string
