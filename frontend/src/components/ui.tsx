@@ -45,7 +45,7 @@ export function Tabs({
 
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`overflow-hidden rounded-xl border border-[var(--color-line)] bg-white shadow-[0_1px_2px_rgba(12,26,34,0.04)] ${className}`}>
+    <div className={`overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] shadow-[0_1px_2px_rgba(12,26,34,0.04)] ${className}`}>
       {children}
     </div>
   )
@@ -80,7 +80,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 export const inputClass =
-  'w-full rounded-lg border border-black/10 bg-white px-3 py-2 outline-none transition focus:border-teal/40 focus:ring-2 focus:ring-teal/20'
+  'w-full rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-3 py-2 text-ink outline-none transition focus:border-teal/40 focus:ring-2 focus:ring-teal/20'
 
 /** Text input that keeps partial decimals (e.g. "12.") while typing. */
 export function NumericInput({
@@ -208,7 +208,7 @@ export function StatTile({
     danger: 'text-danger',
   }
   return (
-    <div className="rounded-xl border border-[var(--color-line)] bg-white/95 p-4 shadow-[0_1px_2px_rgba(12,26,34,0.03)]">
+    <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)]/95 p-4 shadow-[0_1px_2px_rgba(12,26,34,0.03)]">
       <p className="text-xs font-medium tracking-wide text-black/45">{label}</p>
       {subtitle && <p className="mt-0.5 text-xs font-medium text-black/55">{subtitle}</p>}
       <p className={`mt-2 text-xl font-bold tabular-nums ${tones[tone]}`}>{value}</p>

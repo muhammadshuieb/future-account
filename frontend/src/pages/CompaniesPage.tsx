@@ -149,7 +149,7 @@ export default function CompaniesPage() {
   const showBranchEmpty = tab === 'branches' && !branches.isLoading && !search.debouncedQ && branchList.length === 0
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title={t('companies.title')}
         subtitle={t('companies.subtitle')}
@@ -269,24 +269,26 @@ export default function CompaniesPage() {
         }
       >
         <form
-          className="space-y-3"
+          className="form-stack"
           onSubmit={(e) => {
             e.preventDefault()
             saveCompany.mutate()
           }}
         >
-          <Field label={t('companies.code')}>
-            <input className={inputClass} value={coForm.code} onChange={(e) => setCoForm({ ...coForm, code: e.target.value })} required />
-          </Field>
-          <Field label={t('companies.nameAr')}>
-            <input className={inputClass} value={coForm.name} onChange={(e) => setCoForm({ ...coForm, name: e.target.value })} required />
-          </Field>
-          <Field label={t('companies.nameEn')}>
-            <input className={inputClass} value={coForm.name_en} onChange={(e) => setCoForm({ ...coForm, name_en: e.target.value })} />
-          </Field>
-          <Field label={t('companies.taxNumber')}>
-            <input className={inputClass} value={coForm.tax_number} onChange={(e) => setCoForm({ ...coForm, tax_number: e.target.value })} />
-          </Field>
+          <div className="form-grid-2">
+            <Field label={t('companies.code')}>
+              <input className={inputClass} value={coForm.code} onChange={(e) => setCoForm({ ...coForm, code: e.target.value })} required />
+            </Field>
+            <Field label={t('companies.nameAr')}>
+              <input className={inputClass} value={coForm.name} onChange={(e) => setCoForm({ ...coForm, name: e.target.value })} required />
+            </Field>
+            <Field label={t('companies.nameEn')}>
+              <input className={inputClass} value={coForm.name_en} onChange={(e) => setCoForm({ ...coForm, name_en: e.target.value })} />
+            </Field>
+            <Field label={t('companies.taxNumber')}>
+              <input className={inputClass} value={coForm.tax_number} onChange={(e) => setCoForm({ ...coForm, tax_number: e.target.value })} />
+            </Field>
+          </div>
         </form>
       </Modal>
 
@@ -304,40 +306,44 @@ export default function CompaniesPage() {
         }
       >
         <form
-          className="space-y-3"
+          className="form-stack"
           onSubmit={(e) => {
             e.preventDefault()
             saveBranch.mutate()
           }}
         >
-          <Field label={t('companies.company')}>
-            <select className={inputClass} value={brForm.company_id} onChange={(e) => setBrForm({ ...brForm, company_id: e.target.value })} required>
-              <option value="">—</option>
-              {(companies.data || []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label={t('companies.code')}>
-            <input className={inputClass} value={brForm.code} onChange={(e) => setBrForm({ ...brForm, code: e.target.value })} required />
-          </Field>
-          <Field label={t('companies.branchName')}>
-            <input className={inputClass} value={brForm.name} onChange={(e) => setBrForm({ ...brForm, name: e.target.value })} required />
-          </Field>
-          <Field label={t('companies.city')}>
-            <input className={inputClass} value={brForm.city} onChange={(e) => setBrForm({ ...brForm, city: e.target.value })} />
-          </Field>
+          <div className="form-grid-2">
+            <Field label={t('companies.company')}>
+              <select className={inputClass} value={brForm.company_id} onChange={(e) => setBrForm({ ...brForm, company_id: e.target.value })} required>
+                <option value="">—</option>
+                {(companies.data || []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label={t('companies.code')}>
+              <input className={inputClass} value={brForm.code} onChange={(e) => setBrForm({ ...brForm, code: e.target.value })} required />
+            </Field>
+            <Field label={t('companies.branchName')}>
+              <input className={inputClass} value={brForm.name} onChange={(e) => setBrForm({ ...brForm, name: e.target.value })} required />
+            </Field>
+            <Field label={t('companies.city')}>
+              <input className={inputClass} value={brForm.city} onChange={(e) => setBrForm({ ...brForm, city: e.target.value })} />
+            </Field>
+          </div>
           <Field label={t('companies.address')}>
             <input className={inputClass} value={brForm.address} onChange={(e) => setBrForm({ ...brForm, address: e.target.value })} />
           </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={brForm.is_main} onChange={(e) => setBrForm({ ...brForm, is_main: e.target.checked })} />
-            {t('companies.mainBranch')}
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={brForm.is_active} onChange={(e) => setBrForm({ ...brForm, is_active: e.target.checked })} />
-            {t('common.active')}
-          </label>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={brForm.is_main} onChange={(e) => setBrForm({ ...brForm, is_main: e.target.checked })} />
+              {t('companies.mainBranch')}
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={brForm.is_active} onChange={(e) => setBrForm({ ...brForm, is_active: e.target.checked })} />
+              {t('common.active')}
+            </label>
+          </div>
         </form>
       </Modal>
     </div>

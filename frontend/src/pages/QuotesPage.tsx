@@ -531,7 +531,7 @@ export default function QuotesPage() {
           )
         }
       >
-        <div className="space-y-3">
+        <div className="form-stack">
           <p className="print-hide rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-xs text-teal">
             {t('quotes.nonBindingNotice')}
           </p>
@@ -661,7 +661,7 @@ export default function QuotesPage() {
               const product = (products.data || []).find((p) => String(p.id) === line.product_id)
               const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
               return (
-                <div key={index} className="rounded-lg border border-black/10 bg-black/[0.02] p-3 space-y-2">
+                <div key={index} className="form-line-card">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-black/50">{t('common.lineN', { n: index + 1 })}</span>
                     {!readOnly && form.lines.length > 1 && (
@@ -676,12 +676,12 @@ export default function QuotesPage() {
                     disabled={readOnly}
                     onChange={(productId) => onProductChange(index, productId)}
                   />
-                  {line.product_id && (
-                    <Field label={t('common.unit')}>
-                      <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-                    </Field>
-                  )}
-                  <div className="form-grid-2">
+                  <div className="form-grid-4">
+                    {line.product_id && (
+                      <Field label={t('common.unit')}>
+                        <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                      </Field>
+                    )}
                     <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
                       <NumericInput
                         value={line.quantity}
@@ -696,10 +696,10 @@ export default function QuotesPage() {
                         onChange={(v) => updateLine(index, { unit_price: v })}
                       />
                     </Field>
+                    <Field label={t('common.total')}>
+                      <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
+                    </Field>
                   </div>
-                  <p className="text-xs text-black/55">
-                    {t('common.total')}: <span className="tabular-nums font-medium">{formatQuantity(lineTotal)}</span>
-                  </p>
                 </div>
               )
             })}

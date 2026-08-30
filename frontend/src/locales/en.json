@@ -177,6 +177,8 @@
     "search": "Search",
     "searchPlaceholder": "Search…",
     "clearSearch": "Clear search",
+    "themeDark": "Dark mode",
+    "themeLight": "Light mode",
     "typeToSearch": "Type to search…",
     "typeToSearchHint": "Type a product name to search {{count}} items",
     "typeToSearchBrandHint": "Type to search {{count}} brands",

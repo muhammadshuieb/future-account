@@ -186,7 +186,7 @@ function CashBanksSection({
     })
 
   return (
-    <section className="space-y-3">
+    <section className="form-stack">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-black/70">{t('nav.cash')}</h2>
@@ -484,7 +484,7 @@ export default function DashboardPage() {
         <>
           <CurrencyBreakdownTable rows={byCurrency} />
 
-          <section className="space-y-3">
+          <section className="form-stack">
             <div>
               <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات ({baseCurrency})</h2>
               <p className="text-xs text-black/45">
@@ -505,7 +505,7 @@ export default function DashboardPage() {
         </>
       ) : (
         <>
-          <section className="space-y-3">
+          <section className="form-stack">
             <div>
               <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات</h2>
               <p className="text-xs text-black/45">من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك</p>

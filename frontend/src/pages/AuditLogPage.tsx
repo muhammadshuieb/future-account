@@ -117,7 +117,7 @@ export default function AuditLogPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title={t('audit.title')}
         subtitle={t('audit.subtitle')}

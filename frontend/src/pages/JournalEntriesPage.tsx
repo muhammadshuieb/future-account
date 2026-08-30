@@ -156,7 +156,7 @@ export default function JournalEntriesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="القيود اليومية"
         subtitle="قيد مزدوج — مجموع المدين يجب أن يساوي مجموع الدائن"
@@ -243,8 +243,8 @@ export default function JournalEntriesPage() {
         {loadingEntry ? (
           <p className="text-sm text-black/50">جاري التحميل...</p>
         ) : (
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-3">
+          <div className="form-stack">
+            <div className="form-grid-4">
               <input
                 type="date"
                 value={entryDate}

@@ -38,6 +38,143 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── Dark theme ── */
+[data-theme="dark"] {
+  --color-ink: #e4edf0;
+  --color-mist: #1e2e38;
+  --color-paper: #121e26;
+  --color-surface: #1a2832;
+  --color-teal-soft: rgba(13, 115, 119, 0.22);
+  --color-line: rgba(255, 255, 255, 0.1);
+  color-scheme: dark;
+}
+
+[data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 90% 55% at 100% -10%, rgba(13, 115, 119, 0.14), transparent 55%),
+    radial-gradient(ellipse 50% 40% at -5% 100%, rgba(18, 48, 64, 0.22), transparent 50%),
+    linear-gradient(180deg, #0f1a22 0%, var(--color-paper) 100%);
+  color: var(--color-ink);
+}
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-white\/90,
+[data-theme="dark"] .bg-white\/95 {
+  background-color: var(--color-surface) !important;
+}
+
+[data-theme="dark"] .bg-paper {
+  background-color: var(--color-paper) !important;
+}
+
+[data-theme="dark"] .bg-mist,
+[data-theme="dark"] .hover\:bg-mist:hover {
+  background-color: var(--color-mist) !important;
+}
+
+[data-theme="dark"] .bg-red-50 {
+  background-color: rgba(180, 35, 24, 0.18) !important;
+}
+
+[data-theme="dark"] .bg-teal-soft\/60 {
+  background-color: rgba(13, 115, 119, 0.22) !important;
+}
+
+[data-theme="dark"] .text-teal-dark {
+  color: #6dd3d7;
+}
+
+[data-theme="dark"] .text-black\/40,
+[data-theme="dark"] .text-black\/45,
+[data-theme="dark"] .text-black\/50,
+[data-theme="dark"] .text-black\/55,
+[data-theme="dark"] .text-black\/60,
+[data-theme="dark"] .text-black\/65,
+[data-theme="dark"] .text-black\/70 {
+  color: rgba(228, 237, 240, 0.58);
+}
+
+[data-theme="dark"] .border-black\/5,
+[data-theme="dark"] .border-black\/10 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+[data-theme="dark"] .bg-black\/\[0\.02\] {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+[data-theme="dark"] .form-section {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .form-section-title {
+  color: rgba(228, 237, 240, 0.55);
+}
+
+[data-theme="dark"] .form-line-card {
+  background: var(--color-surface);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .form-line-card-header span {
+  color: rgba(228, 237, 240, 0.5);
+}
+
+[data-theme="dark"] .data-table th {
+  color: rgba(228, 237, 240, 0.65);
+}
+
+[data-theme="dark"] .data-table tbody tr:hover {
+  background: rgba(13, 115, 119, 0.08);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+[data-theme="dark"] .btn-danger {
+  background: rgba(180, 35, 24, 0.15);
+}
+
+[data-theme="dark"] .btn-ghost {
+  color: rgba(228, 237, 240, 0.72);
+}
+
+[data-theme="dark"] .empty-state {
+  color: rgba(228, 237, 240, 0.55);
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #1e2e38 25%, #263845 50%, #1e2e38 75%);
+  background-size: 200% 100%;
+}
+
+[data-theme="dark"] .toast {
+  background: var(--color-surface);
+}
+
+[data-theme="dark"] .modal-panel {
+  background: var(--color-surface);
+}
+
+[data-theme="dark"] .modal-footer {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .modal-close {
+  color: rgba(228, 237, 240, 0.55);
+}
+
+[data-theme="dark"] .row-clickable:hover {
+  background: rgba(13, 115, 119, 0.1) !important;
+}
+
+[data-theme="dark"] select option {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
 .brand-logo {
   display: block;
   width: auto;
@@ -266,6 +403,18 @@ textarea {
   }
 }
 
+.page-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .page-layout {
+    gap: 1.25rem;
+  }
+}
+
 /* Responsive forms and grids */
 .form-stack {
   display: flex;
@@ -322,7 +471,7 @@ textarea {
   padding: 0.75rem;
   border: 1px solid var(--color-line);
   border-radius: 0.625rem;
-  background: #fafbfc;
+  background: var(--color-paper);
 }
 
 .form-section-title {
@@ -337,9 +486,9 @@ textarea {
   flex-direction: column;
   gap: 0.5rem;
   padding: 0.625rem 0.75rem;
-  border: 1px solid rgba(12, 26, 34, 0.08);
+  border: 1px solid var(--color-line);
   border-radius: 0.625rem;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .form-line-card-header {
@@ -496,7 +645,7 @@ textarea {
 }
 
 .btn-secondary {
-  background: #fff;
+  background: var(--color-surface);
   border-color: var(--color-line);
   color: var(--color-ink);
 }
@@ -548,7 +697,7 @@ textarea {
   padding: 0.75rem 1.1rem;
   font-size: 0.875rem;
   box-shadow: 0 10px 30px rgba(12, 26, 34, 0.12);
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-line);
 }
 
@@ -584,7 +733,7 @@ textarea {
   flex-direction: column;
   width: 100%;
   max-height: 100%;
-  background: #fff;
+  background: var(--color-surface);
   box-shadow: 0 20px 50px rgba(12, 26, 34, 0.2);
   outline: none;
 }
@@ -646,7 +795,7 @@ textarea {
   flex-shrink: 0;
   padding: 0.85rem 1.25rem;
   border-top: 1px solid var(--color-line);
-  background: #fafbfc;
+  background: var(--color-paper);
 }
 
 .row-clickable {

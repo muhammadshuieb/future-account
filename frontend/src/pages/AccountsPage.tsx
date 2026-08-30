@@ -108,7 +108,7 @@ export default function AccountsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="دليل الحسابات"
         subtitle="هيكل حسابات هرمي مع أنواع القيد الخمسة"
@@ -189,40 +189,40 @@ export default function AccountsPage() {
           </>
         }
       >
-        <form onSubmit={onSubmit} className="space-y-3">
-          <input
-            required
-            value={form.code}
-            onChange={(e) => setForm({ ...form, code: e.target.value })}
-            placeholder="رمز الحساب"
-            className={inputClass}
-          />
-          <input
-            required
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="اسم الحساب"
-            className={inputClass}
-          />
-          <input
-            value={form.name_en}
-            onChange={(e) => setForm({ ...form, name_en: e.target.value })}
-            placeholder="الاسم بالإنجليزية (اختياري)"
-            className={inputClass}
-          />
-          <select
-            value={form.parent_id}
-            onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
-            className={inputClass}
-          >
-            <option value="">بدون أب (جذر)</option>
-            {parents.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.code} — {p.name}
-              </option>
-            ))}
-          </select>
-          <div className="grid grid-cols-2 gap-2">
+        <form onSubmit={onSubmit} className="form-stack">
+          <div className="form-grid-2">
+            <input
+              required
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              placeholder="رمز الحساب"
+              className={inputClass}
+            />
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="اسم الحساب"
+              className={inputClass}
+            />
+            <input
+              value={form.name_en}
+              onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+              placeholder="الاسم بالإنجليزية (اختياري)"
+              className={inputClass}
+            />
+            <select
+              value={form.parent_id}
+              onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
+              className={inputClass}
+            >
+              <option value="">بدون أب (جذر)</option>
+              {parents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} — {p.name}
+                </option>
+              ))}
+            </select>
             <select
               value={form.type}
               onChange={(e) => setForm({ ...form, type: e.target.value as Account['type'] })}
@@ -241,22 +241,24 @@ export default function AccountsPage() {
               <option value="credit">دائن</option>
             </select>
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_group}
-              onChange={(e) => setForm({ ...form, is_group: e.target.checked })}
-            />
-            حساب تجميعي (لا يُرحّل عليه)
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
-            />
-            نشط
-          </label>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.is_group}
+                onChange={(e) => setForm({ ...form, is_group: e.target.checked })}
+              />
+              حساب تجميعي (لا يُرحّل عليه)
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.is_active}
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
+              />
+              نشط
+            </label>
+          </div>
           {error && <p className="text-sm text-danger">{error}</p>}
         </form>
       </Modal>

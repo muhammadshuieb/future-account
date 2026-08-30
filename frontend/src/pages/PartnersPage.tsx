@@ -116,7 +116,7 @@ export default function PartnersPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="العملاء والموردون"
         subtitle="بطاقات الاتصال، حدود الائتمان، وكشوف الحساب"
@@ -308,24 +308,26 @@ export default function PartnersPage() {
         }
       >
         <form
-          className="space-y-3"
+          className="form-stack"
           onSubmit={(e) => {
             e.preventDefault()
             save.mutate()
           }}
         >
-          <Field label="الرمز">
-            <input className={inputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
-          </Field>
-          <Field label="الاسم">
-            <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          </Field>
-          <Field label="الهاتف">
-            <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          </Field>
-          <Field label="حد الائتمان">
-            <input className={inputClass} value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} />
-          </Field>
+          <div className="form-grid-2">
+            <Field label="الرمز">
+              <input className={inputClass} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
+            </Field>
+            <Field label="الاسم">
+              <input className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </Field>
+            <Field label="الهاتف">
+              <input className={inputClass} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </Field>
+            <Field label="حد الائتمان">
+              <input className={inputClass} value={form.credit_limit} onChange={(e) => setForm({ ...form, credit_limit: e.target.value })} />
+            </Field>
+          </div>
         </form>
       </Modal>
     </div>

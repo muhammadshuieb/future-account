@@ -9,6 +9,7 @@ import { resolveAlertHref } from '@/lib/alertLinks'
 import { APP_VERSION } from '@/version'
 import { LOGO } from '@/lib/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher'
+import ThemeSwitcher from '@/components/ThemeSwitcher'
 import HeaderLiveClock from '@/components/HeaderLiveClock'
 import { navGroups, type NavItem } from '@/config/navigation'
 import { isWarehouseManager } from '@/lib/authRouting'
@@ -193,7 +194,7 @@ export default function AppLayout() {
       )}
 
       <div className="app-shell-main flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="app-topbar print-hide sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-white/90 backdrop-blur-md">
+        <header className="app-topbar print-hide sticky top-0 z-20 shrink-0 border-b border-[var(--color-line)] bg-[var(--color-surface)]/90 backdrop-blur-md">
           <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -212,11 +213,12 @@ export default function AppLayout() {
 
             <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
               <HeaderLiveClock />
+              <ThemeSwitcher />
               <LanguageSwitcher />
               <div className="relative">
                 <button
                   type="button"
-                  className="touch-target relative rounded-lg border border-[var(--color-line)] bg-white p-2.5 text-ink/70 hover:bg-mist"
+                  className="touch-target relative rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5 text-ink/70 hover:bg-mist"
                   onClick={() => setNotifOpen((v) => !v)}
                   aria-label={t('nav.notifications')}
                   title={t('nav.notifications')}
@@ -229,7 +231,7 @@ export default function AppLayout() {
                   )}
                 </button>
                 {notifOpen && (
-                  <div className="absolute left-0 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[var(--color-line)] bg-white shadow-xl">
+                  <div className="absolute left-0 mt-2 w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-[var(--color-line)] bg-[var(--color-surface)] shadow-xl">
                     <div className="flex items-center justify-between border-b border-[var(--color-line)] px-3 py-2">
                       <p className="text-sm font-semibold">{t('nav.notifications')}</p>
                       <button type="button" className="touch-target text-xs text-teal" onClick={() => markAll.mutate()}>
@@ -259,7 +261,7 @@ export default function AppLayout() {
               <button
                 type="button"
                 onClick={() => void logout()}
-                className="touch-target inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] bg-white px-2.5 py-2 text-ink/70 transition hover:bg-mist hover:text-ink"
+                className="touch-target inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-2.5 py-2 text-ink/70 transition hover:bg-mist hover:text-ink"
                 aria-label={t('nav.logout')}
                 title={t('nav.logout')}
               >

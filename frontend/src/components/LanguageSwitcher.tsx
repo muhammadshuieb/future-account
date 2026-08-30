@@ -12,7 +12,7 @@ export default function LanguageSwitcher() {
 
   return (
     <select
-      className="rounded-lg border border-[var(--color-line)] bg-white px-2 py-1.5 text-xs text-ink/80"
+      className="rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] px-2 py-1.5 text-xs text-ink/80"
       value={i18n.language?.slice(0, 2) || 'ar'}
       onChange={(e) => setUserLanguage(e.target.value)}
       aria-label="Language"

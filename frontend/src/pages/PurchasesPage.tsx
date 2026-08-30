@@ -609,7 +609,7 @@ export default function PurchasesPage() {
   const summary = (data: Record<string, any>) => {
     if (tab === 'invoices' && data.invoice_number) {
       return (
-        <div className="space-y-3">
+        <div className="form-stack">
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             {data.payment_type && (
               <p><b>{t('common.paymentType')}:</b> {paymentTypeLabel(String(data.payment_type), t)}</p>
@@ -696,7 +696,7 @@ export default function PurchasesPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title={t('purchases.title')}
         subtitle={t('purchases.subtitle')}
@@ -969,7 +969,7 @@ export default function PurchasesPage() {
         {modal === 'pay' ? (
           <form
             id="purchase-pay-form"
-            className="space-y-3"
+            className="form-stack"
             onSubmit={(e) => { e.preventDefault(); payRemaining.mutate() }}
           >
             <p className="text-sm text-black/70">
@@ -981,48 +981,50 @@ export default function PurchasesPage() {
                 : null}
             </p>
             <p className="text-xs leading-relaxed text-black/55">{t('purchases.payRemainingHint')}</p>
-            <Field label={t('common.remainingAmount')}>
-              <input
-                className={inputClass}
-                readOnly
-                value={String(invoiceRemaining({
-                  total: Number(selectedRow?.total || 0),
-                  paid_amount: Number(selectedRow?.paid_amount || 0),
-                }))}
-              />
-            </Field>
-            <Field label={t('common.date')}>
-              <input
-                type="date"
-                className={inputClass}
-                value={payForm.payment_date}
-                onChange={(e) => setPayForm({ ...payForm, payment_date: e.target.value })}
-              />
-            </Field>
-            <Field label={t('common.amount')}>
-              <NumericInput
-                className={inputClass}
-                value={payForm.amount}
-                onChange={(v) => setPayForm({ ...payForm, amount: v })}
-              />
-            </Field>
-            <Field label={t('common.cashBox')}>
-              <select
-                className={inputClass}
-                value={payForm.cash_box_id}
-                onChange={(e) => setPayForm({ ...payForm, cash_box_id: e.target.value })}
-              >
-                <option value="">—</option>
-                {(cashBoxes.data || []).filter((c) => {
-                  const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
-                  return (c.currency || 'USD').toUpperCase() === cur
-                }).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="form-grid-2">
+              <Field label={t('common.remainingAmount')}>
+                <input
+                  className={inputClass}
+                  readOnly
+                  value={String(invoiceRemaining({
+                    total: Number(selectedRow?.total || 0),
+                    paid_amount: Number(selectedRow?.paid_amount || 0),
+                  }))}
+                />
+              </Field>
+              <Field label={t('common.date')}>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={payForm.payment_date}
+                  onChange={(e) => setPayForm({ ...payForm, payment_date: e.target.value })}
+                />
+              </Field>
+              <Field label={t('common.amount')}>
+                <NumericInput
+                  className={inputClass}
+                  value={payForm.amount}
+                  onChange={(v) => setPayForm({ ...payForm, amount: v })}
+                />
+              </Field>
+              <Field label={t('common.cashBox')}>
+                <select
+                  className={inputClass}
+                  value={payForm.cash_box_id}
+                  onChange={(e) => setPayForm({ ...payForm, cash_box_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {(cashBoxes.data || []).filter((c) => {
+                    const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
+                    return (c.currency || 'USD').toUpperCase() === cur
+                  }).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
           </form>
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
           <form id="purchase-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); if (tab === 'requests') modal === 'edit' && selectedId ? updateReq.mutate(selectedId) : saveReq.mutate(); else if (tab === 'orders') savePo.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else savePay.mutate() }}>

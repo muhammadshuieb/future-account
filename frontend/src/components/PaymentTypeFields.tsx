@@ -101,7 +101,7 @@ export default function PaymentTypeFields<T extends {
   }, [type, filteredBoxes, documentCurrency])
 
   return (
-    <div className="space-y-3">
+    <div className="form-stack">
       <Field label={t('common.paymentType')}>
         <div className="flex flex-wrap gap-3 text-sm">
           {([
@@ -151,7 +151,7 @@ export default function PaymentTypeFields<T extends {
       )}
 
       {type === 'partial' && (
-        <>
+        <div className="form-grid-2">
           <Field label={t('common.paidAmount')}>
             <NumericInput
               value={state.paid_amount}
@@ -160,14 +160,14 @@ export default function PaymentTypeFields<T extends {
             />
           </Field>
           {estimatedTotal > 0 && (
-            <p className="text-xs text-black/60">
+            <p className="self-end text-xs text-black/60 pb-2">
               {t('common.remainingAmount')}:{' '}
               <span className="font-mono tabular-nums">
                 {remaining.toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 2 })}
               </span>
             </p>
           )}
-        </>
+        </div>
       )}
 
       {showTaxToggle && onApplyTaxChange && (

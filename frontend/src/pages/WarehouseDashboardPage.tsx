@@ -76,7 +76,7 @@ export default function WarehouseDashboardPage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <header className="overflow-hidden rounded-2xl bg-gradient-to-l from-slate-panel to-teal px-6 py-7 text-white shadow-sm">
         <p className="text-sm text-white/70">{t('warehouseDashboard.eyebrow')}</p>
         <h1 className="mt-1 text-3xl font-extrabold">{t('warehouseDashboard.title')}</h1>

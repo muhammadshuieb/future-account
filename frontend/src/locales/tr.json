@@ -175,6 +175,8 @@
     "search": "Ara",
     "searchPlaceholder": "Ara…",
     "clearSearch": "Aramayı temizle",
+    "themeDark": "Karanlık mod",
+    "themeLight": "Aydınlık mod",
     "typeToSearch": "Aramak için yazın…",
     "typeToSearchHint": "{{count}} ürün arasında aramak için ad yazın",
     "typeToSearchBrandHint": "{{count}} marka arasında aramak için yazın",

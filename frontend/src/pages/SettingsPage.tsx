@@ -437,7 +437,7 @@ export default function SettingsPage() {
   if (isLoading) return <LoadingBlock />
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title={t('nav.settings')}
         subtitle={t('settings.subtitle')}
@@ -1107,16 +1107,16 @@ export default function SettingsPage() {
         </Panel>
       )}
       <Modal open={userModal !== null} onClose={() => { setUserModal(null); setEditingUserId(null) }} title={userModal === 'edit' ? t('common.edit') : t('settings.newUser')} footer={<><Button variant="secondary" onClick={() => { setUserModal(null); setEditingUserId(null) }}>{t('common.cancel')}</Button><Button type="submit" form="user-form" variant="primary" disabled={saveUser.isPending}>{t('common.save')}</Button></>}>
-        <form id="user-form" className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
-          <div className="grid gap-3 sm:grid-cols-2">
+        <form id="user-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); saveUser.mutate() }}>
+          <div className="form-grid-2">
             <Field label={t('settings.firstName')}><input className={inputClass} value={userForm.first_name} onChange={(e) => setUserForm({ ...userForm, first_name: e.target.value })} required /></Field>
             <Field label={t('settings.lastName')}><input className={inputClass} value={userForm.last_name} onChange={(e) => setUserForm({ ...userForm, last_name: e.target.value })} required /></Field>
+            <Field label={t('settings.username')}><input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} required autoComplete="username" /></Field>
+            <Field label={t('settings.mobile')}><input className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required inputMode="tel" /></Field>
+            <Field label={t('settings.email')} hint={t('settings.emailOptionalHint')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Field>
+            <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
+            <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
           </div>
-          <Field label={t('settings.username')}><input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} required autoComplete="username" /></Field>
-          <Field label={t('settings.mobile')}><input className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required inputMode="tel" /></Field>
-          <Field label={t('settings.email')} hint={t('settings.emailOptionalHint')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Field>
-          <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
-          <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
           {userForm.roles.includes('warehouse_manager') && (
             <Field label={t('settings.assignedWarehouses')} hint={t('settings.assignedWarehousesHint')}>
               <div className="grid gap-2 rounded-lg border border-[var(--color-line)] p-3 sm:grid-cols-2">

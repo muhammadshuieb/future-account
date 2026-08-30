@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { LOGO } from '@/lib/brand'
 import { landingPathForUser } from '@/lib/authRouting'
+import ThemeSwitcher from '@/components/ThemeSwitcher'
 
 export default function LoginPage() {
   const { user, loading, login } = useAuth()
@@ -39,6 +40,9 @@ export default function LoginPage() {
 
   return (
     <div className="relative grid min-h-screen place-items-center overflow-hidden px-4">
+      <div className="absolute left-4 top-4 z-10 sm:left-6 sm:top-6">
+        <ThemeSwitcher className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white" />
+      </div>
       <div
         className="pointer-events-none absolute inset-0"
         style={{

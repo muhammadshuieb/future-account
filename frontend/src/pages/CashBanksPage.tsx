@@ -454,7 +454,7 @@ export default function CashBanksPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="الصناديق والبنوك"
         subtitle="صناديق نقدية، حسابات بنكية، تحويلات، صرف عملة، وتسوية كشف حساب"
@@ -732,42 +732,44 @@ export default function CashBanksPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="رمز"><input className={inputClass} value={boxForm.code} onChange={(e) => setBoxForm({ ...boxForm, code: e.target.value })} required /></Field>
-          <Field label="اسم"><input className={inputClass} value={boxForm.name} onChange={(e) => setBoxForm({ ...boxForm, name: e.target.value })} required /></Field>
-          <Field label={t('common.branch')}>
-            <select
-              className={inputClass}
-              value={boxForm.branch_id}
-              onChange={(e) => setBoxForm({ ...boxForm, branch_id: e.target.value })}
-            >
-              <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
-              {activeBranches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="العملة">
-            <select
-              className={inputClass}
-              value={boxForm.currency}
-              onChange={(e) => {
-                const currency = e.target.value
-                setBoxForm((prev) => ({ ...prev, currency }))
-                void suggestBoxAccount(currency, editingId)
-              }}
-            >
-              {(currencyList.length ? currencyList : [
-                { id: 1, code: 'USD', name: 'دولار', is_active: true },
-                { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
-                { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
-                { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
-                { id: 5, code: 'SAR', name: 'الريال السعودي', is_active: true },
-              ]).map((c) => (
-                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-              ))}
-            </select>
-          </Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label="رمز"><input className={inputClass} value={boxForm.code} onChange={(e) => setBoxForm({ ...boxForm, code: e.target.value })} required /></Field>
+            <Field label="اسم"><input className={inputClass} value={boxForm.name} onChange={(e) => setBoxForm({ ...boxForm, name: e.target.value })} required /></Field>
+            <Field label={t('common.branch')}>
+              <select
+                className={inputClass}
+                value={boxForm.branch_id}
+                onChange={(e) => setBoxForm({ ...boxForm, branch_id: e.target.value })}
+              >
+                <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
+                {activeBranches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="العملة">
+              <select
+                className={inputClass}
+                value={boxForm.currency}
+                onChange={(e) => {
+                  const currency = e.target.value
+                  setBoxForm((prev) => ({ ...prev, currency }))
+                  void suggestBoxAccount(currency, editingId)
+                }}
+              >
+                {(currencyList.length ? currencyList : [
+                  { id: 1, code: 'USD', name: 'دولار', is_active: true },
+                  { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
+                  { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+                  { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
+                  { id: 5, code: 'SAR', name: 'الريال السعودي', is_active: true },
+                ]).map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
           <Field label="الحساب المحاسبي *">
             <select
               className={inputClass}
@@ -799,36 +801,38 @@ export default function CashBanksPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="رمز"><input className={inputClass} value={bankForm.code} onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })} required /></Field>
-          <Field label="اسم"><input className={inputClass} value={bankForm.name} onChange={(e) => setBankForm({ ...bankForm, name: e.target.value })} required /></Field>
-          <Field label={t('common.branch')}>
-            <select
-              className={inputClass}
-              value={bankForm.branch_id}
-              onChange={(e) => setBankForm({ ...bankForm, branch_id: e.target.value })}
-            >
-              <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
-              {activeBranches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="رقم الحساب"><input className={inputClass} value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} /></Field>
-          <Field label="العملة">
-            <select className={inputClass} value={bankForm.currency} onChange={(e) => setBankForm({ ...bankForm, currency: e.target.value })}>
-              {(currencyList.length ? currencyList : [
-                { id: 1, code: 'USD', name: 'دولار', is_active: true },
-                { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
-                { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
-                { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
-                { id: 5, code: 'SAR', name: 'الريال السعودي', is_active: true },
-              ]).map((c) => (
-                <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="رصيد افتتاحي"><NumericInput value={bankForm.opening_balance} onChange={(v) => setBankForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label="رمز"><input className={inputClass} value={bankForm.code} onChange={(e) => setBankForm({ ...bankForm, code: e.target.value })} required /></Field>
+            <Field label="اسم"><input className={inputClass} value={bankForm.name} onChange={(e) => setBankForm({ ...bankForm, name: e.target.value })} required /></Field>
+            <Field label={t('common.branch')}>
+              <select
+                className={inputClass}
+                value={bankForm.branch_id}
+                onChange={(e) => setBankForm({ ...bankForm, branch_id: e.target.value })}
+              >
+                <option value="">— بدون فرع (يظهر فقط عند «كل الفروع»)</option>
+                {activeBranches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="رقم الحساب"><input className={inputClass} value={bankForm.account_number} onChange={(e) => setBankForm({ ...bankForm, account_number: e.target.value })} /></Field>
+            <Field label="العملة">
+              <select className={inputClass} value={bankForm.currency} onChange={(e) => setBankForm({ ...bankForm, currency: e.target.value })}>
+                {(currencyList.length ? currencyList : [
+                  { id: 1, code: 'USD', name: 'دولار', is_active: true },
+                  { id: 2, code: 'SYP', name: 'ليرة سورية', is_active: true },
+                  { id: 3, code: 'TRY', name: 'ليرة تركية', is_active: true },
+                  { id: 4, code: 'CNY', name: 'اليوان الصيني', is_active: true },
+                  { id: 5, code: 'SAR', name: 'الريال السعودي', is_active: true },
+                ]).map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="رصيد افتتاحي"><NumericInput value={bankForm.opening_balance} onChange={(v) => setBankForm((prev) => ({ ...prev, opening_balance: v }))} /></Field>
+          </div>
         </div>
       </Modal>
 
@@ -843,7 +847,7 @@ export default function CashBanksPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="من نوع">
             <select className={inputClass} value={trForm.from_type} onChange={(e) => setTrForm({ ...trForm, from_type: e.target.value, from_id: '' })}>
               <option value="cash_box">صندوق</option>
@@ -899,7 +903,7 @@ export default function CashBanksPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="التاريخ">
             <input type="date" className={inputClass} value={exForm.exchange_date} onChange={(e) => setExForm({ ...exForm, exchange_date: e.target.value })} />
           </Field>
@@ -1085,7 +1089,7 @@ export default function CashBanksPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="بنك">
             <select className={inputClass} value={recForm.bank_id} onChange={(e) => setRecForm({ ...recForm, bank_id: e.target.value })} required>
               <option value="">—</option>

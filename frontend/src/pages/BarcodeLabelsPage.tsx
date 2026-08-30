@@ -108,7 +108,7 @@ export default function BarcodeLabelsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="الباركود والملصقات"
         subtitle="توليد باركود الأصناف وطباعة ملصقات Code128 / EAN"

@@ -1033,7 +1033,7 @@ export default function SalesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title={t('sales.title')}
         subtitle={t('sales.subtitle')}
@@ -1327,7 +1327,7 @@ export default function SalesPage() {
         {modal === 'collect' ? (
           <form
             id="sales-collect-form"
-            className="space-y-3"
+            className="form-stack"
             onSubmit={(e) => { e.preventDefault(); collectRemaining.mutate() }}
           >
             <p className="text-sm text-black/70">
@@ -1339,39 +1339,40 @@ export default function SalesPage() {
                 : null}
             </p>
             <p className="text-xs leading-relaxed text-black/55">{t('sales.collectHint')}</p>
-            <Field label={t('common.remainingAmount')}>
-              <input
-                className={inputClass}
-                readOnly
-                value={String(invoiceRemaining({
-                  total: Number(selectedRow?.total || 0),
-                  paid_amount: Number(selectedRow?.paid_amount || 0),
-                }))}
-              />
-            </Field>
-            <Field label={t('common.date')}>
-              <input
-                type="date"
-                className={inputClass}
-                value={collectForm.receipt_date}
-                onChange={(e) => setCollectForm({ ...collectForm, receipt_date: e.target.value })}
-              />
-            </Field>
-            <Field label={t('common.amount')}>
-              <NumericInput
-                className={inputClass}
-                value={collectForm.amount}
-                onChange={(v) => setCollectForm({ ...collectForm, amount: v })}
-              />
-            </Field>
-            <Field label={t('common.cashBox')}>
-              <select
-                className={inputClass}
-                value={collectForm.cash_box_id}
-                onChange={(e) => setCollectForm({ ...collectForm, cash_box_id: e.target.value })}
-              >
-                <option value="">—</option>
-                {(cashBoxes.data || []).filter((c) => {
+            <div className="form-grid-2">
+              <Field label={t('common.remainingAmount')}>
+                <input
+                  className={inputClass}
+                  readOnly
+                  value={String(invoiceRemaining({
+                    total: Number(selectedRow?.total || 0),
+                    paid_amount: Number(selectedRow?.paid_amount || 0),
+                  }))}
+                />
+              </Field>
+              <Field label={t('common.date')}>
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={collectForm.receipt_date}
+                  onChange={(e) => setCollectForm({ ...collectForm, receipt_date: e.target.value })}
+                />
+              </Field>
+              <Field label={t('common.amount')}>
+                <NumericInput
+                  className={inputClass}
+                  value={collectForm.amount}
+                  onChange={(v) => setCollectForm({ ...collectForm, amount: v })}
+                />
+              </Field>
+              <Field label={t('common.cashBox')}>
+                <select
+                  className={inputClass}
+                  value={collectForm.cash_box_id}
+                  onChange={(e) => setCollectForm({ ...collectForm, cash_box_id: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {(cashBoxes.data || []).filter((c) => {
                   const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
                   return (c.currency || 'USD').toUpperCase() === cur
                 }).map((c) => (
@@ -1381,6 +1382,7 @@ export default function SalesPage() {
                 ))}
               </select>
             </Field>
+            </div>
           </form>
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
           <form id="sales-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>

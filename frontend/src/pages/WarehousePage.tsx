@@ -465,7 +465,7 @@ export default function WarehousePage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="المخازن والمخزون"
         subtitle="مستودعات، أصناف، حركات، تحويلات، وتنبيهات إعادة الطلب"
@@ -853,10 +853,12 @@ export default function WarehousePage() {
 
       {/* Create/Edit modals */}
       <Modal open={modalOpen && tab === 'warehouses'} onClose={closeModal} title={editingId ? 'تعديل مخزن' : 'مخزن جديد'} footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveWh.isPending} onClick={() => saveWh.mutate()}>حفظ</Button></>}>
-        <div className="space-y-3">
-          <Field label="الرمز"><input className={inputClass} value={whForm.code} onChange={(e) => setWhForm({ ...whForm, code: e.target.value })} required /></Field>
-          <Field label="الاسم"><input className={inputClass} value={whForm.name} onChange={(e) => setWhForm({ ...whForm, name: e.target.value })} required /></Field>
-          <Field label="الموقع"><input className={inputClass} value={whForm.location} onChange={(e) => setWhForm({ ...whForm, location: e.target.value })} /></Field>
+        <div className="form-stack">
+          <div className="form-grid-3">
+            <Field label="الرمز"><input className={inputClass} value={whForm.code} onChange={(e) => setWhForm({ ...whForm, code: e.target.value })} required /></Field>
+            <Field label="الاسم"><input className={inputClass} value={whForm.name} onChange={(e) => setWhForm({ ...whForm, name: e.target.value })} required /></Field>
+            <Field label="الموقع"><input className={inputClass} value={whForm.location} onChange={(e) => setWhForm({ ...whForm, location: e.target.value })} /></Field>
+          </div>
         </div>
       </Modal>
 
@@ -865,7 +867,7 @@ export default function WarehousePage() {
           <Button variant="secondary" onClick={closeModal}>إلغاء</Button>
           <Button variant="primary" disabled={savePr.isPending} onClick={() => savePr.mutate()}>حفظ</Button>
         </>}>
-        <div className="space-y-3">
+        <div className="form-stack">
           {editingId ? (
             <Field label="SKU">
               <input className={inputClass} value={prForm.sku} readOnly />
@@ -875,8 +877,10 @@ export default function WarehousePage() {
               {t('warehouse.skuAutoHint')}
             </p>
           )}
-          <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>
-          <Field label="الاسم"><input className={inputClass} value={prForm.name} onChange={(e) => setPrForm({ ...prForm, name: e.target.value })} required /></Field>
+          <div className="form-grid-2">
+            <Field label="باركود"><input className={inputClass} value={prForm.barcode} onChange={(e) => setPrForm({ ...prForm, barcode: e.target.value })} /></Field>
+            <Field label="الاسم"><input className={inputClass} value={prForm.name} onChange={(e) => setPrForm({ ...prForm, name: e.target.value })} required /></Field>
+          </div>
           <div className="form-grid-2">
             <Field label={t('warehouse.brand')}><input className={inputClass} value={prForm.brand} onChange={(e) => setPrForm({ ...prForm, brand: e.target.value })} /></Field>
             <Field label={t('warehouse.model')}><input className={inputClass} value={prForm.model} onChange={(e) => setPrForm({ ...prForm, model: e.target.value })} /></Field>
@@ -901,8 +905,10 @@ export default function WarehousePage() {
               </Field>
             </div>
           )}
-          <Field label="فئة"><select className={inputClass} value={prForm.category_id} onChange={(e) => setPrForm({ ...prForm, category_id: e.target.value })}><option value="">—</option>{(categories.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
-          <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
+          <div className="form-grid-2">
+            <Field label="فئة"><select className={inputClass} value={prForm.category_id} onChange={(e) => setPrForm({ ...prForm, category_id: e.target.value })}><option value="">—</option>{(categories.data || []).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+            <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
+          </div>
           <div className="form-grid-3">
             <Field label="تكلفة"><NumericInput value={prForm.cost_price} onChange={(v) => setPrForm((prev) => ({ ...prev, cost_price: v }))} /></Field>
             <Field label="بيع"><NumericInput value={prForm.sale_price} onChange={(v) => setPrForm((prev) => ({ ...prev, sale_price: v }))} /></Field>
@@ -916,21 +922,25 @@ export default function WarehousePage() {
       </Modal>
 
       <Modal open={modalOpen && tab === 'categories'} onClose={closeModal} title={editingId ? 'تعديل تصنيف' : t('warehouse.newCategory')} footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveCat.isPending} onClick={() => saveCat.mutate()}>{t('common.save')}</Button></>}>
-        <div className="space-y-3">
-          <Field label={t('common.name')}><input className={inputClass} value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required /></Field>
-          <Field label="تصنيف أب"><select className={inputClass} value={catForm.parent_id} onChange={(e) => setCatForm({ ...catForm, parent_id: e.target.value })}><option value="">—</option>{(categories.data || []).filter((c: { id: number }) => c.id !== editingId).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label={t('common.name')}><input className={inputClass} value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required /></Field>
+            <Field label="تصنيف أب"><select className={inputClass} value={catForm.parent_id} onChange={(e) => setCatForm({ ...catForm, parent_id: e.target.value })}><option value="">—</option>{(categories.data || []).filter((c: { id: number }) => c.id !== editingId).map((c: { id: number; name: string }) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+          </div>
         </div>
       </Modal>
 
       <Modal open={modalOpen && tab === 'units'} onClose={closeModal} title={editingId ? 'تعديل وحدة' : t('warehouse.newUnit')} footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveUnit.isPending} onClick={() => saveUnit.mutate()}>{t('common.save')}</Button></>}>
-        <div className="space-y-3">
-          <Field label={t('common.name')}><input className={inputClass} value={unitForm.name} onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })} required /></Field>
-          <Field label="رمز"><input className={inputClass} value={unitForm.symbol} onChange={(e) => setUnitForm({ ...unitForm, symbol: e.target.value })} /></Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label={t('common.name')}><input className={inputClass} value={unitForm.name} onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })} required /></Field>
+            <Field label="رمز"><input className={inputClass} value={unitForm.symbol} onChange={(e) => setUnitForm({ ...unitForm, symbol: e.target.value })} /></Field>
+          </div>
         </div>
       </Modal>
 
       <Modal open={modalOpen && tab === 'movements' && !viewRow} onClose={closeModal} title="حركة يدوية" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveMv.isPending} onClick={() => saveMv.mutate()}>تسجيل</Button></>}>
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="النوع"><select className={inputClass} value={mvForm.type} onChange={(e) => setMvForm({ ...mvForm, type: e.target.value })}><option value="in">وارد</option><option value="out">منصرف</option><option value="adjustment">تسوية</option></select></Field>
           <Field label="مخزن">
             <select
@@ -1022,7 +1032,7 @@ export default function WarehousePage() {
       </Modal>
 
       <Modal open={modalOpen && tab === 'transfers' && !viewRow} onClose={closeModal} title="تحويل بين مخازن" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveTr.isPending} onClick={() => saveTr.mutate()}>ترحيل التحويل</Button></>}>
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="التاريخ"><input type="date" className={inputClass} value={trForm.transfer_date} onChange={(e) => setTrForm({ ...trForm, transfer_date: e.target.value })} /></Field>
           <Field label="من">
             <select
@@ -1125,7 +1135,7 @@ export default function WarehousePage() {
       </Modal>
 
       <Modal open={modalOpen && tab === 'counts' && !viewRow} onClose={closeModal} title={t('warehouse.newCount')} footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveCnt.isPending} onClick={() => saveCnt.mutate()}>{t('common.save')}</Button></>}>
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label={t('common.date')}><input type="date" className={inputClass} value={cntForm.count_date} onChange={(e) => setCntForm({ ...cntForm, count_date: e.target.value })} /></Field>
           <Field label={t('common.warehouse')}>
             <select

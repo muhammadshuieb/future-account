@@ -172,7 +172,7 @@ export default function ReportsPage() {
   const whatsappDisabled = exportDisabled
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="التقارير"
         subtitle="تقارير مالية وتشغيلية بالعملة الأساسية مع دعم الطباعة وتصدير PDF"

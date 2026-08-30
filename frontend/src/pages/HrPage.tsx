@@ -92,7 +92,7 @@ export default function HrPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="page-layout">
       <PageHeader
         title="الموارد البشرية"
         subtitle="موظفون، حضور، إجازات، وسجلات رواتب"
@@ -258,11 +258,13 @@ export default function HrPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="الرقم الوظيفي"><input className={inputClass} value={emp.employee_number} onChange={(e) => setEmp({ ...emp, employee_number: e.target.value })} required /></Field>
-          <Field label="الاسم"><input className={inputClass} value={emp.name} onChange={(e) => setEmp({ ...emp, name: e.target.value })} required /></Field>
-          <Field label="المسمى"><input className={inputClass} value={emp.job_title} onChange={(e) => setEmp({ ...emp, job_title: e.target.value })} /></Field>
-          <Field label="الراتب الأساسي"><NumericInput value={emp.basic_salary} onChange={(v) => setEmp((prev) => ({ ...prev, basic_salary: v }))} /></Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label="الرقم الوظيفي"><input className={inputClass} value={emp.employee_number} onChange={(e) => setEmp({ ...emp, employee_number: e.target.value })} required /></Field>
+            <Field label="الاسم"><input className={inputClass} value={emp.name} onChange={(e) => setEmp({ ...emp, name: e.target.value })} required /></Field>
+            <Field label="المسمى"><input className={inputClass} value={emp.job_title} onChange={(e) => setEmp({ ...emp, job_title: e.target.value })} /></Field>
+            <Field label="الراتب الأساسي"><NumericInput value={emp.basic_salary} onChange={(v) => setEmp((prev) => ({ ...prev, basic_salary: v }))} /></Field>
+          </div>
         </div>
       </Modal>
 
@@ -277,10 +279,12 @@ export default function HrPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="موظف"><select className={inputClass} value={att.employee_id} onChange={(e) => setAtt({ ...att, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
-          <Field label="تاريخ"><input type="date" className={inputClass} value={att.attendance_date} onChange={(e) => setAtt({ ...att, attendance_date: e.target.value })} /></Field>
-          <Field label="حالة"><select className={inputClass} value={att.status} onChange={(e) => setAtt({ ...att, status: e.target.value })}><option value="present">حاضر</option><option value="absent">غائب</option><option value="leave">إجازة</option></select></Field>
+        <div className="form-stack">
+          <div className="form-grid-3">
+            <Field label="موظف"><select className={inputClass} value={att.employee_id} onChange={(e) => setAtt({ ...att, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
+            <Field label="تاريخ"><input type="date" className={inputClass} value={att.attendance_date} onChange={(e) => setAtt({ ...att, attendance_date: e.target.value })} /></Field>
+            <Field label="حالة"><select className={inputClass} value={att.status} onChange={(e) => setAtt({ ...att, status: e.target.value })}><option value="present">حاضر</option><option value="absent">غائب</option><option value="leave">إجازة</option></select></Field>
+          </div>
         </div>
       </Modal>
 
@@ -310,10 +314,12 @@ export default function HrPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="form-stack">
           <Field label="موظف"><select className={inputClass} value={leave.employee_id} onChange={(e) => setLeave({ ...leave, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
-          <Field label="من"><input type="date" className={inputClass} value={leave.from_date} onChange={(e) => setLeave({ ...leave, from_date: e.target.value })} /></Field>
-          <Field label="إلى"><input type="date" className={inputClass} value={leave.to_date} onChange={(e) => setLeave({ ...leave, to_date: e.target.value })} /></Field>
+          <div className="form-grid-2">
+            <Field label="من"><input type="date" className={inputClass} value={leave.from_date} onChange={(e) => setLeave({ ...leave, from_date: e.target.value })} /></Field>
+            <Field label="إلى"><input type="date" className={inputClass} value={leave.to_date} onChange={(e) => setLeave({ ...leave, to_date: e.target.value })} /></Field>
+          </div>
           <Field label="السبب"><input className={inputClass} value={leave.reason} onChange={(e) => setLeave({ ...leave, reason: e.target.value })} /></Field>
         </div>
       </Modal>
@@ -329,11 +335,13 @@ export default function HrPage() {
           </>
         }
       >
-        <div className="space-y-3">
-          <Field label="موظف"><select className={inputClass} value={sal.employee_id} onChange={(e) => setSal({ ...sal, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
-          <Field label="الفترة (YYYY-MM)"><input className={inputClass} value={sal.period} onChange={(e) => setSal({ ...sal, period: e.target.value })} /></Field>
-          <Field label="بدلات"><NumericInput value={sal.allowances} onChange={(v) => setSal((prev) => ({ ...prev, allowances: v }))} /></Field>
-          <Field label="خصومات"><NumericInput value={sal.deductions} onChange={(v) => setSal((prev) => ({ ...prev, deductions: v }))} /></Field>
+        <div className="form-stack">
+          <div className="form-grid-2">
+            <Field label="موظف"><select className={inputClass} value={sal.employee_id} onChange={(e) => setSal({ ...sal, employee_id: e.target.value })} required><option value="">—</option>{(employees.data || []).map((e: { id: number; name: string }) => <option key={e.id} value={e.id}>{e.name}</option>)}</select></Field>
+            <Field label="الفترة (YYYY-MM)"><input className={inputClass} value={sal.period} onChange={(e) => setSal({ ...sal, period: e.target.value })} /></Field>
+            <Field label="بدلات"><NumericInput value={sal.allowances} onChange={(v) => setSal((prev) => ({ ...prev, allowances: v }))} /></Field>
+            <Field label="خصومات"><NumericInput value={sal.deductions} onChange={(v) => setSal((prev) => ({ ...prev, deductions: v }))} /></Field>
+          </div>
         </div>
       </Modal>
 

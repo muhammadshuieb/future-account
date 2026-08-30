@@ -177,6 +177,8 @@
     "search": "بحث",
     "searchPlaceholder": "بحث…",
     "clearSearch": "مسح البحث",
+    "themeDark": "الوضع الليلي",
+    "themeLight": "الوضع النهاري",
     "typeToSearch": "اكتب للبحث…",
     "typeToSearchHint": "اكتب اسم الصنف للبحث بين {{count}} صنف",
     "typeToSearchBrandHint": "اكتب للبحث بين {{count}} ماركة",
