@@ -761,8 +761,11 @@ export default function SettingsPage() {
                 </div>
 
                 {!backupStatus.data?.google_drive.oauth_available && (
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {t('settings.driveOAuthNotConfigured')}
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 space-y-2">
+                    <p>{t('settings.driveOAuthNotConfigured')}</p>
+                    <p className="text-xs font-mono break-all dir-ltr text-left">
+                      {t('settings.driveOAuthRedirect')}: {window.location.origin}/api/backups/destinations/google-drive/callback
+                    </p>
                   </div>
                 )}
 
