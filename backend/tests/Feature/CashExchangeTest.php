@@ -194,7 +194,7 @@ class CashExchangeTest extends TestCase
     {
         // Dedicated GL for the funding box so transfer/exchange keep distinct accounts.
         $fundingAccount = Account::query()->create([
-            'code' => '1110',
+            'code' => '1119',
             'name' => 'صندوق تمويل ليرة',
             'name_en' => 'SYP Funding Cash',
             'parent_id' => Account::query()->where('code', '11')->value('id'),

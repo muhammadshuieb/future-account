@@ -66,7 +66,7 @@ class BackupCommandTest extends TestCase
         putenv('TELEGRAM_BOT_TOKEN=');
         putenv('TELEGRAM_CHAT_ID=');
 
-        $service = new BackupDistributionService;
+        $service = app(BackupDistributionService::class);
         $status = $service->status();
 
         $this->assertFalse($status['telegram']['configured']);
@@ -87,7 +87,7 @@ class BackupCommandTest extends TestCase
         }
         file_put_contents($path, 'test backup content');
 
-        $service = new BackupDistributionService;
+        $service = app(BackupDistributionService::class);
         $results = $service->distribute($path, 'test_telegram.dump');
 
         $this->assertTrue($results['telegram']['ok']);
