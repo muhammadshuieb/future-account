@@ -9,6 +9,7 @@ use App\Models\Receipt;
 use App\Models\SalesInvoice;
 use App\Models\SalesInvoiceLine;
 use App\Models\SalesOrder;
+use App\Models\PrintInvoice;
 use App\Models\SalesQuote;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnLine;
@@ -948,6 +949,7 @@ class SalesService
             'RC' => Receipt::query()->where('receipt_number', 'like', $full.'%')->orderByDesc('receipt_number')->value('receipt_number'),
             'SQ' => SalesQuote::query()->where('quote_number', 'like', $full.'%')->orderByDesc('quote_number')->value('quote_number'),
             'SO' => SalesOrder::query()->where('order_number', 'like', $full.'%')->orderByDesc('order_number')->value('order_number'),
+            'PIN' => PrintInvoice::query()->where('invoice_number', 'like', $full.'%')->orderByDesc('invoice_number')->value('invoice_number'),
             default => null,
         };
 
@@ -1076,6 +1078,88 @@ class SalesService
         DB::transaction(function () use ($quote) {
             $quote->items()->delete();
             $quote->delete();
+        });
+    }
+
+    public function createPrintInvoice(array $data, array $lines, User $user): PrintInvoice
+    {
+        return DB::transaction(function () use ($data, $lines, $user) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? null,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null,
+                $data['invoice_date'] ?? null,
+            );
+
+            // Print invoices are for output only: no stock, cash, GL, or sales/purchase posting.
+            $invoice = PrintInvoice::query()->create([
+                'invoice_number' => $this->nextNumber('PIN'),
+                'invoice_date' => $data['invoice_date'],
+                'customer_id' => $data['customer_id'] ?? null,
+                'warehouse_id' => $data['warehouse_id'] ?? null,
+                'branch_id' => $data['branch_id'] ?? null,
+                'status' => $data['status'] ?? 'draft',
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $user->id,
+            ]);
+
+            foreach ($normalized as $line) {
+                $invoice->items()->create($line);
+            }
+
+            return $invoice->load(['items.product.unit', 'customer', 'warehouse', 'branch']);
+        });
+    }
+
+    public function updatePrintInvoice(PrintInvoice $invoice, array $data, array $lines): PrintInvoice
+    {
+        if ($invoice->status === 'cancelled') {
+            throw ValidationException::withMessages(['status' => ['لا يمكن تعديل فاتورة ملغاة.']]);
+        }
+
+        return DB::transaction(function () use ($invoice, $data, $lines) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? $invoice->currency,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : (float) $invoice->exchange_rate,
+                $data['invoice_date'] ?? $invoice->invoice_date?->toDateString(),
+            );
+            $invoice->update([
+                'invoice_date' => $data['invoice_date'] ?? $invoice->invoice_date,
+                'customer_id' => array_key_exists('customer_id', $data) ? $data['customer_id'] : $invoice->customer_id,
+                'warehouse_id' => array_key_exists('warehouse_id', $data) ? $data['warehouse_id'] : $invoice->warehouse_id,
+                'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $invoice->branch_id,
+                'notes' => array_key_exists('notes', $data) ? $data['notes'] : $invoice->notes,
+                'status' => $data['status'] ?? $invoice->status,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+            ]);
+            $invoice->items()->delete();
+            foreach ($normalized as $line) {
+                $invoice->items()->create($line);
+            }
+
+            return $invoice->fresh(['items.product.unit', 'customer', 'warehouse', 'branch']);
+        });
+    }
+
+    public function deletePrintInvoice(PrintInvoice $invoice): void
+    {
+        DB::transaction(function () use ($invoice) {
+            $invoice->items()->delete();
+            $invoice->delete();
         });
     }
 

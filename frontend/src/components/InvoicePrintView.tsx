@@ -421,6 +421,120 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
   )
 }
 
+export type PrintInvoicePrintData = {
+  invoice_number: string
+  invoice_date: string
+  created_at?: string | null
+  total: number
+  tax_amount?: number
+  subtotal: number
+  currency?: string
+  notes?: string | null
+  customer?: { name: string; tax_number?: string; phone?: string } | null
+  branch?: { name?: string; code?: string } | null
+  warehouse?: { name?: string } | null
+  items?: {
+    product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
+    quantity: number
+    unit_price: number
+    line_total: number
+  }[]
+}
+
+export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintData }) {
+  const { t } = useTranslation()
+  const lines = invoice.items || []
+
+  return (
+    <div className="space-y-2 text-xs" dir="rtl">
+      <InvoiceBrandHeader
+        documentLabel={t('printInvoices.documentTitle')}
+        invoiceNumber={invoice.invoice_number}
+        invoiceDate={invoice.invoice_date}
+        createdAt={invoice.created_at}
+      />
+
+      <div className="grid gap-1 sm:grid-cols-2">
+        <p>
+          <span className="text-black/55">{t('common.customer')}: </span>
+          {invoice.customer?.name || t('printInvoices.noCustomer')}
+        </p>
+        {invoice.customer?.tax_number && (
+          <p>
+            <span className="text-black/55">{t('companies.taxNumber')}: </span>
+            {invoice.customer.tax_number}
+          </p>
+        )}
+        {invoice.branch?.name && (
+          <p>
+            <span className="text-black/55">{t('common.branch')}: </span>
+            {invoice.branch.name}
+          </p>
+        )}
+        {invoice.warehouse?.name && (
+          <p>
+            <span className="text-black/55">{t('common.warehouse')}: </span>
+            {invoice.warehouse.name}
+          </p>
+        )}
+        <p>
+          <span className="text-black/55">{t('common.currency')}: </span>
+          {invoice.currency || 'USD'}
+        </p>
+      </div>
+
+      {invoice.notes ? (
+        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
+          <p className="text-[11px] font-semibold text-black/55">{t('common.notes')}</p>
+          <p className="mt-0.5 whitespace-pre-wrap">{invoice.notes}</p>
+        </div>
+      ) : null}
+
+      <table className="data-table text-[11px]">
+        <thead>
+          <tr>
+            <ProductIdentityHeaders />
+            <th>{t('common.unit')}</th>
+            <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
+            <th>{t('common.price')}</th>
+            <th>{t('common.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((l, i) => (
+            <tr key={i}>
+              <ProductIdentityCells product={l.product} />
+              <td>{unitFromProduct(l.product)}</td>
+              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
+              <td className="tabular-nums">{l.unit_price}</td>
+              <td className="tabular-nums">{l.line_total}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
+        <p>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
+          <span className="tabular-nums">{invoice.subtotal}</span>
+        </p>
+        {Number(invoice.tax_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.tax')}: </span>
+            <span className="tabular-nums">{invoice.tax_amount}</span>
+          </p>
+        )}
+        <p className="text-sm font-bold">
+          {t('common.total')} ({invoice.currency || 'USD'}):{' '}
+          <span className="tabular-nums">{invoice.total}</span>
+        </p>
+      </div>
+
+      <p className="mt-4 text-[10px] text-black/45">{t('printInvoices.printDisclaimer')}</p>
+    </div>
+  )
+}
+
 export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoicePrintData }) {
   const { t } = useTranslation()
   const lines = invoice.lines || invoice.items || []

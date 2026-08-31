@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SalaryRecordController;
 use App\Http\Controllers\Api\SalesInvoiceController;
 use App\Http\Controllers\Api\SalesOrderController;
+use App\Http\Controllers\Api\PrintInvoiceController;
 use App\Http\Controllers\Api\SalesQuoteController;
 use App\Http\Controllers\Api\SalesReturnController;
 use App\Http\Controllers\Api\SettingController;
@@ -159,6 +160,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'update']);
     Route::delete('sales-quotes/{salesQuote}', [SalesQuoteController::class, 'destroy']);
     Route::post('sales-quotes/{salesQuote}/convert-to-order', [SalesQuoteController::class, 'convertToOrder']);
+
+    Route::get('print-invoices', [PrintInvoiceController::class, 'index']);
+    Route::post('print-invoices', [PrintInvoiceController::class, 'store']);
+    Route::post('print-invoices/stock-warnings', [PrintInvoiceController::class, 'previewStockWarnings']);
+    Route::get('print-invoices/{printInvoice}', [PrintInvoiceController::class, 'show']);
+    Route::put('print-invoices/{printInvoice}', [PrintInvoiceController::class, 'update']);
+    Route::delete('print-invoices/{printInvoice}', [PrintInvoiceController::class, 'destroy']);
 
     Route::get('sales-orders', [SalesOrderController::class, 'index']);
     Route::post('sales-orders', [SalesOrderController::class, 'store']);
