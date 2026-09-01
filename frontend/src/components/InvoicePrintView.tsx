@@ -434,11 +434,23 @@ export type PrintInvoicePrintData = {
   branch?: { name?: string; code?: string } | null
   warehouse?: { name?: string } | null
   items?: {
+    product_name?: string | null
+    brand?: string | null
+    model?: string | null
     product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_price: number
     line_total: number
   }[]
+}
+
+function printLineProduct(item: NonNullable<PrintInvoicePrintData['items']>[number]) {
+  return {
+    name: item.product_name?.trim() || item.product?.name,
+    brand: item.brand?.trim() || item.product?.brand,
+    model: item.model?.trim() || item.product?.model,
+    unit: item.product?.unit,
+  }
 }
 
 export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintData }) {
@@ -501,15 +513,18 @@ export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintD
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
+          {lines.map((l, i) => {
+            const product = printLineProduct(l)
+            return (
             <tr key={i}>
-              <ProductIdentityCells product={l.product} />
-              <td>{unitFromProduct(l.product)}</td>
+              <ProductIdentityCells product={product} />
+              <td>{unitFromProduct(product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
               <td className="tabular-nums">{l.line_total}</td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
 

@@ -7,13 +7,12 @@ import { todayYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { formatProductUnit } from '@/lib/productUnit'
-import { productLabel } from '@/lib/productLabel'
 import { useListSearch } from '@/lib/useListSearch'
 import { useAuth } from '@/context/AuthContext'
 import { DocumentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
-import ProductVariantSelect from '@/components/ProductVariantSelect'
+import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import {
   Button,
   EmptyState,
@@ -42,11 +41,7 @@ type ProductRow = {
   unit?: { name?: string; symbol?: string } | null
 }
 
-type LineDraft = {
-  product_id: string
-  quantity: string
-  unit_price: string
-}
+type LineDraft = PrintInvoiceLineDraft
 
 type StockWarning = {
   product_id: number
@@ -74,7 +69,10 @@ type PrintInvoiceRow = {
   warehouse?: { id: number; name: string } | null
   branch?: { id: number; name: string } | null
   items?: {
-    product_id: number
+    product_id?: number | null
+    product_name?: string | null
+    brand?: string | null
+    model?: string | null
     quantity: number
     unit_price: number
     line_total: number
@@ -83,7 +81,14 @@ type PrintInvoiceRow = {
   stock_warnings?: StockWarning[]
 }
 
-const emptyLine = (): LineDraft => ({ product_id: '', quantity: '1', unit_price: '' })
+const emptyLine = (): LineDraft => ({
+  product_id: '',
+  product_name: '',
+  brand: '',
+  model: '',
+  quantity: '1',
+  unit_price: '',
+})
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
@@ -167,14 +172,11 @@ export default function PrintInvoicesPage() {
   const refreshWarnings = useCallback(async (next = form) => {
     const lines = next.lines
       .filter((l) => l.product_id && Number(l.quantity) > 0)
-      .map((l) => {
-        const product = (products.data || []).find((p) => String(p.id) === l.product_id)
-        return {
-          product_id: Number(l.product_id),
-          quantity: Number(l.quantity),
-          product_name: product ? productLabel(product) : undefined,
-        }
-      })
+      .map((l) => ({
+        product_id: Number(l.product_id),
+        quantity: Number(l.quantity),
+        product_name: l.product_name.trim() || undefined,
+      }))
     if (lines.length === 0) {
       setStockWarnings([])
       return
@@ -241,7 +243,10 @@ export default function PrintInvoicesPage() {
       exchange_rate: String((d as { exchange_rate?: number }).exchange_rate ?? 1),
       notes: d.notes || '',
       lines: (d.items || []).map((item) => ({
-        product_id: String(item.product_id),
+        product_id: item.product_id ? String(item.product_id) : '',
+        product_name: item.product_name || item.product?.name || '',
+        brand: item.brand || item.product?.brand || '',
+        model: item.model || item.product?.model || '',
         quantity: String(item.quantity),
         unit_price: String(item.unit_price),
       })) || [emptyLine()],
@@ -278,11 +283,14 @@ export default function PrintInvoicesPage() {
     exchange_rate: form.exchange_rate ? Number(form.exchange_rate) : undefined,
     notes: form.notes || undefined,
     lines: form.lines
-      .filter((l) => l.product_id)
+      .filter((l) => l.product_name.trim())
       .map((l) => ({
-        product_id: Number(l.product_id),
+        product_id: l.product_id ? Number(l.product_id) : undefined,
+        product_name: l.product_name.trim(),
+        brand: l.brand.trim() || undefined,
+        model: l.model.trim() || undefined,
         quantity: Number(l.quantity),
-        unit_price: Number(l.unit_price) || 0,
+        unit_price: l.unit_price !== '' ? Number(l.unit_price) : undefined,
         tax_rate: defaultTaxRate,
       })),
   })
@@ -325,14 +333,6 @@ export default function PrintInvoicesPage() {
       ...prev,
       lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
     }))
-  }
-
-  const onProductChange = (index: number, productId: string) => {
-    const product = (products.data || []).find((p) => String(p.id) === productId)
-    updateLine(index, {
-      product_id: productId,
-      unit_price: product ? String(product.sale_price ?? '') : '',
-    })
   }
 
   const addLine = () => setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyLine()] }))
@@ -602,7 +602,6 @@ export default function PrintInvoicesPage() {
               )}
             </div>
             {form.lines.map((line, index) => {
-              const product = (products.data || []).find((p) => String(p.id) === line.product_id)
               const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
               return (
                 <div key={index} className="form-line-card">
@@ -614,16 +613,23 @@ export default function PrintInvoicesPage() {
                       </button>
                     )}
                   </div>
-                  <ProductVariantSelect
+                  <PrintInvoiceLineFields
                     products={products.data || []}
-                    value={line.product_id}
+                    line={line}
+                    lineIndex={index}
                     disabled={readOnly}
-                    onChange={(productId) => onProductChange(index, productId)}
+                    onChange={(next) => updateLine(index, next)}
                   />
                   <div className="form-grid-4">
                     {line.product_id && (
                       <Field label={t('common.unit')}>
-                        <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                        <input
+                          className={`${inputClass} bg-black/5`}
+                          readOnly
+                          value={formatProductUnit(
+                            (products.data || []).find((p) => String(p.id) === line.product_id)?.unit,
+                          )}
+                        />
                       </Field>
                     )}
                     <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
@@ -633,7 +639,7 @@ export default function PrintInvoicesPage() {
                         onChange={(v) => updateLine(index, { quantity: v })}
                       />
                     </Field>
-                    <Field label={t('common.price')}>
+                    <Field label={t('common.price')} hint={t('printInvoices.priceHint')}>
                       <NumericInput
                         value={line.unit_price}
                         disabled={readOnly}

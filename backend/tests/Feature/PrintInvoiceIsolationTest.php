@@ -113,6 +113,29 @@ class PrintInvoiceIsolationTest extends TestCase
         $this->assertEquals(200, (float) $res->json('data.total'));
     }
 
+    public function test_print_invoice_allows_custom_free_text_line(): void
+    {
+        $res = $this->postJson('/api/print-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'currency' => 'USD',
+            'lines' => [
+                [
+                    'product_name' => 'خدمة تركيب',
+                    'brand' => 'ماركة خاصة',
+                    'model' => 'موديل X',
+                    'quantity' => 1,
+                    'unit_price' => 250,
+                    'tax_rate' => 0,
+                ],
+            ],
+        ])->assertCreated();
+
+        $this->assertNull($res->json('data.items.0.product_id'));
+        $this->assertSame('خدمة تركيب', $res->json('data.items.0.product_name'));
+        $this->assertSame('ماركة خاصة', $res->json('data.items.0.brand'));
+        $this->assertEquals(250, (float) $res->json('data.total'));
+    }
+
     public function test_print_invoices_permissions_assigned_to_sales_role(): void
     {
         $sales = \Spatie\Permission\Models\Role::findByName('sales', 'web');

@@ -728,6 +728,76 @@ class SalesService
         return [$subtotal, $tax, round($subtotal + $tax, 2), $normalized];
     }
 
+    /**
+     * Print invoice lines may be catalog products or free-text items (name/brand/model + price).
+     *
+     * @return array{0: float, 1: float, 2: float, 3: list<array<string, mixed>>}
+     */
+    protected function normalizePrintInvoiceLines(array $lines): array
+    {
+        $taxEnabled = Setting::taxEnabled();
+        $taxRateDefault = Setting::defaultTaxRate();
+        $subtotal = 0;
+        $tax = 0;
+        $normalized = [];
+
+        foreach ($lines as $index => $line) {
+            $product = ! empty($line['product_id'])
+                ? Product::query()->find($line['product_id'])
+                : null;
+
+            $name = trim((string) ($line['product_name'] ?? ''));
+            $brand = trim((string) ($line['brand'] ?? '')) ?: null;
+            $model = trim((string) ($line['model'] ?? '')) ?: null;
+
+            if ($product) {
+                $name = $name !== '' ? $name : (string) $product->name;
+                $brand = $brand ?? ($product->brand ? trim((string) $product->brand) : null);
+                $model = $model ?? ($product->model ? trim((string) $product->model) : null);
+            }
+
+            if ($name === '') {
+                throw ValidationException::withMessages([
+                    "lines.{$index}.product_name" => ['أدخل اسم البند أو اختر صنفاً من المخزون.'],
+                ]);
+            }
+
+            $qty = (float) $line['quantity'];
+            $hasPrice = array_key_exists('unit_price', $line) && $line['unit_price'] !== null && $line['unit_price'] !== '';
+            if ($product) {
+                $price = $hasPrice ? (float) $line['unit_price'] : (float) $product->sale_price;
+            } else {
+                if (! $hasPrice) {
+                    throw ValidationException::withMessages([
+                        "lines.{$index}.unit_price" => ['حدّد السعر للبند المكتوب يدوياً.'],
+                    ]);
+                }
+                $price = (float) $line['unit_price'];
+            }
+
+            $rate = $taxEnabled ? (float) ($line['tax_rate'] ?? $taxRateDefault) : 0.0;
+            $lineSub = round($qty * $price, 2);
+            $lineTax = round($lineSub * $rate / 100, 2);
+            $subtotal += $lineSub;
+            $tax += $lineTax;
+
+            $normalized[] = [
+                'product_id' => $product?->id,
+                'product_name' => $name,
+                'brand' => $brand,
+                'model' => $model,
+                'quantity' => $qty,
+                'unit_price' => $price,
+                'tax_rate' => $rate,
+                'line_total' => round($lineSub + $lineTax, 2),
+                'batch_no' => null,
+                'serial_no' => null,
+            ];
+        }
+
+        return [$subtotal, $tax, round($subtotal + $tax, 2), $normalized];
+    }
+
     /** Optional invoice-level discount (حسم); must be >= 0 and <= subtotal. */
     protected function normalizeDiscountAmount(mixed $raw, float $subtotal): float
     {
@@ -1084,7 +1154,7 @@ class SalesService
     public function createPrintInvoice(array $data, array $lines, User $user): PrintInvoice
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizePrintInvoiceLines($lines);
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? null,
@@ -1125,7 +1195,7 @@ class SalesService
         }
 
         return DB::transaction(function () use ($invoice, $data, $lines) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizePrintInvoiceLines($lines);
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? $invoice->currency,
