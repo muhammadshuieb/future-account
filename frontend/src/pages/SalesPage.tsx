@@ -488,7 +488,7 @@ export default function SalesPage() {
       const discountAmt = Math.max(0, Number(inv.discount_amount) || 0)
       const taxAmt = taxEnabled ? round2(lineSub * defaultTaxRate / 100) : 0
       const estTotal = round2(lineSub - discountAmt + taxAmt)
-      const res = await api.post('/sales-invoices', {
+      const body = {
         invoice_date: inv.invoice_date,
         customer_id: Number(inv.customer_id),
         warehouse_id: Number(inv.warehouse_id),
@@ -502,12 +502,20 @@ export default function SalesPage() {
         status: inv.status,
         notes: inv.notes || null,
         lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
-      })
+      }
+      const res = modal === 'edit' && selectedId
+        ? await api.put(`/sales-invoices/${selectedId}`, body)
+        : await api.post('/sales-invoices', body)
       const id = res.data?.data?.id as number | undefined
       if (id && pendingAttachment) await uploadAttachment('sales_invoice', id, pendingAttachment)
       return { res, estTotal }
     },
-    onSuccess: () => { msg.setMessage(t('sales.invoicePosted')); setPendingAttachment(null); invalidateSales(); closeModal() },
+    onSuccess: () => {
+      msg.setMessage(modal === 'edit' ? t('sales.invoiceUpdated') : t('sales.invoicePosted'))
+      setPendingAttachment(null)
+      invalidateSales()
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 
@@ -666,6 +674,41 @@ export default function SalesPage() {
       setStockInfo(null)
       return
     }
+    if (tab === 'invoices') {
+      const items = (d.lines || d.items || []) as {
+        product_id?: number
+        product?: { id?: number }
+        quantity?: number
+        unit_price?: number
+        batch_no?: string
+        serial_no?: string
+      }[]
+      setInv({
+        invoice_date: String(d.invoice_date || '').slice(0, 10),
+        status: String(d.status || 'posted'),
+        payment_type: String(d.payment_type || 'credit'),
+        paid_amount: d.payment_type === 'partial' ? String(d.paid_amount ?? '') : '',
+        cash_box_id: d.cash_box_id ? String(d.cash_box_id) : '',
+        discount_amount: d.discount_amount != null && Number(d.discount_amount) > 0 ? String(d.discount_amount) : '',
+        notes: String(d.notes || ''),
+        customer_id: String(d.customer_id || d.customer?.id || ''),
+        warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
+        branch_id: String(d.branch_id || d.branch?.id || ''),
+        currency: d.currency || baseCurrency,
+        exchange_rate: String(d.exchange_rate || '1'),
+        lines: items.length
+          ? items.map((line) => ({
+              product_id: String(line.product_id || line.product?.id || ''),
+              quantity: String(line.quantity || 1),
+              unit_price: String(line.unit_price || ''),
+              batch_no: line.batch_no || '',
+              serial_no: line.serial_no || '',
+            }))
+          : [emptyInvoiceLine()],
+      })
+      setStockInfo(null)
+      return
+    }
     const line = d.items?.[0] || d.lines?.[0] || {}
     setQuote({
       quote_date: String(d.quote_date || '').slice(0, 10),
@@ -683,7 +726,7 @@ export default function SalesPage() {
       }],
     })
     setStockInfo(null)
-  }, [detail.data, modal, tab])
+  }, [detail.data, modal, tab, baseCurrency])
 
   const tabs = [
     { id: 'quotes', label: t('sales.quotes') },
@@ -1160,6 +1203,7 @@ export default function SalesPage() {
                     <td>{documentStatusLabel(i.status)}</td>
                     <td>
                       <TableActions>
+                      <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       <span className="print-hide">
                         <PdfExportButton
@@ -1259,7 +1303,7 @@ export default function SalesPage() {
               : modal === 'collect' ? t('sales.collectRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'lg'}
+        size={tab === 'invoices' && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
         footer={
           modal === 'collect' ? (
             <>
@@ -1274,6 +1318,9 @@ export default function SalesPage() {
             <>
               {tab === 'invoices' && selectedId && (
                 <>
+                  <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
+                    {t('common.edit')}
+                  </Button>
                   {canCollectInvoice({
                     status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
                     total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),
@@ -1409,6 +1456,11 @@ export default function SalesPage() {
             )}
             {tab === 'invoices' && (
               <FormStack>
+                {modal === 'edit' && (
+                  <p className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-xs text-teal">
+                    {t('sales.safeEditNotice')}
+                  </p>
+                )}
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
                   {customerFields(inv, setInv, true, (warehouseId) => {

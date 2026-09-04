@@ -341,7 +341,7 @@ export default function PurchasesPage() {
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
       }
-      const res = await api.post('/purchase-invoices', {
+      const body = {
         invoice_date: inv.invoice_date,
         supplier_id: Number(inv.supplier_id),
         warehouse_id: Number(inv.warehouse_id),
@@ -357,12 +357,20 @@ export default function PurchasesPage() {
         fines_amount: inv.fines_amount ? Number(inv.fines_amount) : 0,
         other_fees: inv.other_fees ? Number(inv.other_fees) : 0,
         lines: filledLines.map((l) => purchaseLine(l.product_id, l.quantity, l.unit_cost, l.batch_no, l.serial_no, effectiveTaxRate)),
-      })
+      }
+      const res = modal === 'edit' && selectedId
+        ? await api.put(`/purchase-invoices/${selectedId}`, body)
+        : await api.post('/purchase-invoices', body)
       const id = res.data?.data?.id as number | undefined
       if (id && pendingAttachment) await uploadAttachment('purchase_invoice', id, pendingAttachment)
       return res
     },
-    onSuccess: () => { msg.setMessage(t('purchases.invoicePosted')); setPendingAttachment(null); invalidate(); closeModal() },
+    onSuccess: () => {
+      msg.setMessage(modal === 'edit' ? t('purchases.invoiceUpdated') : t('purchases.invoicePosted'))
+      setPendingAttachment(null)
+      invalidate()
+      closeModal()
+    },
     onError: msg.fromErr,
   })
 
@@ -590,6 +598,42 @@ export default function PurchasesPage() {
   useEffect(() => {
     if (modal !== 'edit' || !detail.data) return
     const data = detail.data
+    if (tab === 'invoices') {
+      const items = (data.lines || data.items || []) as {
+        product_id?: number
+        product?: { id?: number }
+        quantity?: number
+        unit_cost?: number
+        batch_no?: string
+        serial_no?: string
+      }[]
+      setInv({
+        invoice_date: String(data.invoice_date || '').slice(0, 10),
+        status: String(data.status || 'posted'),
+        payment_type: String(data.payment_type || 'credit'),
+        paid_amount: data.payment_type === 'partial' ? String(data.paid_amount ?? '') : '',
+        cash_box_id: data.cash_box_id ? String(data.cash_box_id) : '',
+        notes: String(data.notes || ''),
+        customs_amount: data.customs_amount != null && Number(data.customs_amount) > 0 ? String(data.customs_amount) : '',
+        transport_fees: data.transport_fees != null && Number(data.transport_fees) > 0 ? String(data.transport_fees) : '',
+        fines_amount: data.fines_amount != null && Number(data.fines_amount) > 0 ? String(data.fines_amount) : '',
+        other_fees: data.other_fees != null && Number(data.other_fees) > 0 ? String(data.other_fees) : '',
+        supplier_id: String(data.supplier_id || data.supplier?.id || ''),
+        warehouse_id: String(data.warehouse_id || data.warehouse?.id || ''),
+        currency: data.currency || 'USD',
+        exchange_rate: String(data.exchange_rate || '1'),
+        lines: items.length
+          ? items.map((line) => ({
+              product_id: String(line.product_id || line.product?.id || ''),
+              quantity: String(line.quantity || 1),
+              unit_cost: String(line.unit_cost || ''),
+              batch_no: line.batch_no || '',
+              serial_no: line.serial_no || '',
+            }))
+          : [emptyInvoiceLine()],
+      })
+      return
+    }
     const line = data.items?.[0] || data.lines?.[0] || {}
     setReq({
       request_date: String(data.request_date || '').slice(0, 10),
@@ -604,7 +648,7 @@ export default function PurchasesPage() {
       currency: data.currency || 'USD',
       exchange_rate: String(data.exchange_rate || ''),
     })
-  }, [detail.data, modal])
+  }, [detail.data, modal, tab])
 
   const summary = (data: Record<string, any>) => {
     if (tab === 'invoices' && data.invoice_number) {
@@ -808,6 +852,7 @@ export default function PurchasesPage() {
                     <td>{documentStatusLabel(i.status)}</td>
                     <td>
                       <TableActions>
+                      <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       <span className="print-hide">
                         <PdfExportButton
@@ -902,7 +947,7 @@ export default function PurchasesPage() {
               : modal === 'pay' ? t('purchases.payRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && (modal === 'view' || modal === 'create') ? 'xl' : 'lg'}
+        size={tab === 'invoices' && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
         footer={
           modal === 'pay' ? (
             <>
@@ -917,6 +962,9 @@ export default function PurchasesPage() {
             <>
               {tab === 'invoices' && selectedId && (
                 <>
+                  <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
+                    {t('common.edit')}
+                  </Button>
                   {canPayInvoice({
                     status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
                     total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),
@@ -1050,6 +1098,11 @@ export default function PurchasesPage() {
             )}
             {tab === 'invoices' && (
               <FormStack>
+                {modal === 'edit' && (
+                  <p className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-xs text-teal">
+                    {t('purchases.safeEditNotice')}
+                  </p>
+                )}
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={inv.invoice_date} onChange={(e) => setInv({ ...inv, invoice_date: e.target.value })} /></Field>
                   {supplierFields(inv, setInv)}

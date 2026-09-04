@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Customer;
+use App\Models\JournalEntry;
 use App\Models\Product;
 use App\Models\Receipt;
 use App\Models\SalesInvoice;
@@ -14,6 +15,7 @@ use App\Models\SalesQuote;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnLine;
 use App\Models\Setting;
+use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -279,6 +281,176 @@ class SalesService
 
             return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'branch', 'cashBox', 'journalEntry', 'attachments']);
         });
+    }
+
+    /**
+     * Safely update a sales invoice.
+     * Draft: rewrite header/lines only.
+     * Posted: reverse stock + GL + linked receipts, rewrite, then re-post so final balances stay consistent.
+     */
+    public function updateInvoice(SalesInvoice $invoice, array $data, array $lines, User $user): SalesInvoice
+    {
+        return DB::transaction(function () use ($invoice, $data, $lines, $user) {
+            $wasPosted = $invoice->status === 'posted';
+            if (! in_array($invoice->status, ['draft', 'posted'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['لا يمكن تعديل هذه الفاتورة بحالتها الحالية.'],
+                ]);
+            }
+
+            if ($wasPosted) {
+                $this->unpostInvoice($invoice, $user);
+                $invoice->refresh();
+            }
+
+            [$subtotal, $tax, , $normalized] = $this->normalizeSalesLines($lines);
+            $discount = $this->normalizeDiscountAmount($data['discount_amount'] ?? 0, $subtotal);
+            $total = round($subtotal - $discount + $tax, 2);
+
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? $invoice->currency,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : (float) $invoice->exchange_rate,
+                $data['invoice_date'] ?? $invoice->invoice_date?->toDateString(),
+            );
+
+            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total, $fx['currency']);
+
+            $wantPosted = ($data['status'] ?? ($wasPosted ? 'posted' : 'draft')) === 'posted';
+            if ($wantPosted) {
+                $this->assertCustomerCreditLimit(
+                    (int) ($data['customer_id'] ?? $invoice->customer_id),
+                    round(max(0, $total - $intendedPaid) * (float) $fx['exchange_rate'], 2)
+                );
+            }
+
+            $warehouseId = $this->resolveWarehouseId(
+                array_key_exists('warehouse_id', $data)
+                    ? (isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
+                    : ($invoice->warehouse_id ? (int) $invoice->warehouse_id : null)
+            );
+            $customerId = (int) ($data['customer_id'] ?? $invoice->customer_id);
+            $customerBranchId = Customer::query()->whereKey($customerId)->value('branch_id');
+            $branchId = $this->resolveSalesBranchId(
+                array_key_exists('branch_id', $data)
+                    ? (isset($data['branch_id']) ? (int) $data['branch_id'] : null)
+                    : ($invoice->branch_id ? (int) $invoice->branch_id : null),
+                $warehouseId,
+                $customerBranchId ? (int) $customerBranchId : null,
+            );
+
+            $invoice->update([
+                'invoice_date' => $data['invoice_date'] ?? $invoice->invoice_date,
+                'customer_id' => $customerId,
+                'warehouse_id' => $warehouseId,
+                'cash_box_id' => $cashBoxId,
+                'branch_id' => $branchId,
+                'payment_type' => $paymentType,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'discount_amount' => $discount,
+                'tax_amount' => $tax,
+                'total' => $total,
+                'paid_amount' => in_array($paymentType, ['cash', 'partial'], true) ? $intendedPaid : 0,
+                'notes' => array_key_exists('notes', $data) ? $data['notes'] : $invoice->notes,
+                'status' => 'draft',
+                'journal_entry_id' => null,
+                'posted_at' => null,
+            ]);
+
+            $invoice->lines()->delete();
+            foreach ($normalized as $line) {
+                $invoice->lines()->create($line);
+            }
+
+            if ($wantPosted) {
+                return $this->postInvoice($invoice->fresh(['lines.product.unit', 'customer']), $user, $intendedPaid);
+            }
+
+            $this->audit->log($user, 'sales_invoice.updated', $invoice);
+
+            return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'branch', 'cashBox', 'attachments']);
+        });
+    }
+
+    /**
+     * Reverse posting side effects so the invoice can be edited safely.
+     */
+    protected function unpostInvoice(SalesInvoice $invoice, User $user): void
+    {
+        if ($invoice->status !== 'posted') {
+            return;
+        }
+
+        $linkedReturns = SalesReturn::query()
+            ->where('sales_invoice_id', $invoice->id)
+            ->whereIn('status', ['draft', 'posted'])
+            ->count();
+        if ($linkedReturns > 0) {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن تعديل فاتورة مرتبطة بمرتجع. احذف/ألغِ المرتجع أولاً أو أنشئ فاتورة جديدة.'],
+            ]);
+        }
+
+        $invoice->load(['receipts', 'lines']);
+
+        foreach ($invoice->receipts()->where('status', 'posted')->lockForUpdate()->get() as $receipt) {
+            if ($receipt->journal_entry_id) {
+                $entry = JournalEntry::query()->find($receipt->journal_entry_id);
+                if ($entry && $entry->status === 'posted') {
+                    $this->journals->void($entry);
+                }
+            }
+            $receipt->update(['status' => 'void', 'journal_entry_id' => null]);
+        }
+
+        $movements = StockMovement::query()
+            ->where('reference_type', $invoice::class)
+            ->where('reference_id', $invoice->id)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($movements as $movement) {
+            $qty = (float) $movement->quantity;
+            if (abs($qty) < 0.0001) {
+                continue;
+            }
+            // Original sales post stores negative qty (out); reverse restores stock (in).
+            $this->inventory->adjustStock(
+                (int) $movement->warehouse_id,
+                (int) $movement->product_id,
+                -$qty,
+                $qty < 0 ? 'in' : 'out',
+                $user,
+                [
+                    'movement_date' => now()->toDateString(),
+                    'unit_cost' => $movement->unit_cost,
+                    'batch_no' => $movement->batch_no,
+                    'serial_no' => $movement->serial_no,
+                    'reference_type' => $invoice::class,
+                    'reference_id' => $invoice->id,
+                    'notes' => 'عكس ترحيل فاتورة مبيعات '.$invoice->invoice_number,
+                ]
+            );
+        }
+
+        if ($invoice->journal_entry_id) {
+            $entry = JournalEntry::query()->find($invoice->journal_entry_id);
+            if ($entry && $entry->status === 'posted') {
+                $this->journals->void($entry);
+            }
+        }
+
+        $invoice->update([
+            'status' => 'draft',
+            'journal_entry_id' => null,
+            'posted_at' => null,
+            'paid_amount' => 0,
+        ]);
+
+        $this->audit->log($user, 'sales_invoice.unposted', $invoice);
     }
 
     /**

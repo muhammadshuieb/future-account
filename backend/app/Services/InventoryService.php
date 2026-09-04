@@ -87,6 +87,31 @@ class InventoryService
         return round(($existingValue + $incomingValue) / ($existingQty + $incomingQty), 2);
     }
 
+    /**
+     * Reverse the effect of a prior inbound MAC update (e.g. unposting a purchase).
+     * $existingQty must be the on-hand qty BEFORE removing the inbound qty.
+     */
+    public function reverseMovingAverageCost(
+        Product $product,
+        float $existingQty,
+        float $removingQty,
+        float $removingUnitCost
+    ): float {
+        if ($removingQty <= 0) {
+            return round((float) $product->cost_price, 2);
+        }
+
+        $remainingQty = round($existingQty - $removingQty, 3);
+        if ($remainingQty <= 0.0001) {
+            return round($removingUnitCost, 2);
+        }
+
+        $existingValue = $existingQty * (float) $product->cost_price;
+        $removingValue = $removingQty * $removingUnitCost;
+
+        return round(($existingValue - $removingValue) / $remainingQty, 2);
+    }
+
     public function adjustStock(
         int $warehouseId,
         int $productId,

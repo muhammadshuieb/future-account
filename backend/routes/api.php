@@ -177,6 +177,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('sales-invoices', [SalesInvoiceController::class, 'index']);
     Route::post('sales-invoices', [SalesInvoiceController::class, 'store']);
     Route::get('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'show']);
+    Route::put('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'update']);
     Route::post('sales-invoices/{salesInvoice}/post', [SalesInvoiceController::class, 'post']);
     Route::post('sales-invoices/{salesInvoice}/collect', [SalesInvoiceController::class, 'collect']);
     Route::delete('sales-invoices/{salesInvoice}', [SalesInvoiceController::class, 'destroy']);
@@ -207,6 +208,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('purchase-invoices', [PurchaseInvoiceController::class, 'index']);
     Route::post('purchase-invoices', [PurchaseInvoiceController::class, 'store']);
     Route::get('purchase-invoices/{purchaseInvoice}', [PurchaseInvoiceController::class, 'show']);
+    Route::put('purchase-invoices/{purchaseInvoice}', [PurchaseInvoiceController::class, 'update']);
     Route::post('purchase-invoices/{purchaseInvoice}/post', [PurchaseInvoiceController::class, 'post']);
     Route::post('purchase-invoices/{purchaseInvoice}/pay-remaining', [PurchaseInvoiceController::class, 'payRemaining']);
     Route::delete('purchase-invoices/{purchaseInvoice}', [PurchaseInvoiceController::class, 'destroy']);

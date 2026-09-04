@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\JournalEntry;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseReturn;
 use App\Models\Setting;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Models\User;
@@ -248,6 +250,179 @@ class PurchaseService
 
             return $invoice->fresh(['lines.product.unit', 'supplier', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
+    }
+
+    /**
+     * Safely update a purchase invoice (draft rewrite, or posted reverse → rewrite → re-post).
+     */
+    public function updateInvoice(PurchaseInvoice $invoice, array $data, array $lines, User $user): PurchaseInvoice
+    {
+        return DB::transaction(function () use ($invoice, $data, $lines, $user) {
+            $wasPosted = $invoice->status === 'posted';
+            if (! in_array($invoice->status, ['draft', 'posted'], true)) {
+                throw ValidationException::withMessages([
+                    'status' => ['لا يمكن تعديل هذه الفاتورة بحالتها الحالية.'],
+                ]);
+            }
+
+            if ($wasPosted) {
+                $this->unpostInvoice($invoice, $user);
+                $invoice->refresh();
+            }
+
+            [$subtotal, $tax, $linesTotal, $normalized] = $this->normalizeLines($lines);
+            $extras = $this->normalizeExtras($data);
+            $extrasSum = round(
+                $extras['customs_amount'] + $extras['transport_fees'] + $extras['fines_amount'] + $extras['other_fees'],
+                2
+            );
+            $total = round($linesTotal + $extrasSum, 2);
+
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? $invoice->currency,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : (float) $invoice->exchange_rate,
+                $data['invoice_date'] ?? $invoice->invoice_date?->toDateString(),
+            );
+
+            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total, $fx['currency']);
+            $wantPosted = ($data['status'] ?? ($wasPosted ? 'posted' : 'draft')) === 'posted';
+
+            $warehouseId = $this->resolveWarehouseId(
+                array_key_exists('warehouse_id', $data)
+                    ? (isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
+                    : ($invoice->warehouse_id ? (int) $invoice->warehouse_id : null)
+            );
+
+            $invoice->update([
+                'invoice_date' => $data['invoice_date'] ?? $invoice->invoice_date,
+                'supplier_id' => $data['supplier_id'] ?? $invoice->supplier_id,
+                'warehouse_id' => $warehouseId,
+                'cash_box_id' => $cashBoxId,
+                'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $invoice->branch_id,
+                'payment_type' => $paymentType,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'customs_amount' => $extras['customs_amount'],
+                'transport_fees' => $extras['transport_fees'],
+                'fines_amount' => $extras['fines_amount'],
+                'other_fees' => $extras['other_fees'],
+                'total' => $total,
+                'paid_amount' => in_array($paymentType, ['cash', 'partial'], true) ? $intendedPaid : 0,
+                'notes' => array_key_exists('notes', $data) ? $data['notes'] : $invoice->notes,
+                'status' => 'draft',
+                'journal_entry_id' => null,
+                'posted_at' => null,
+            ]);
+
+            $invoice->lines()->delete();
+            foreach ($normalized as $line) {
+                $invoice->lines()->create($line);
+            }
+
+            if ($wantPosted) {
+                return $this->postInvoice($invoice->fresh(['lines.product.unit', 'supplier']), $user, $intendedPaid);
+            }
+
+            $this->audit->log($user, 'purchase_invoice.updated', $invoice);
+
+            return $invoice->fresh(['lines.product.unit', 'supplier', 'warehouse', 'cashBox', 'attachments']);
+        });
+    }
+
+    protected function unpostInvoice(PurchaseInvoice $invoice, User $user): void
+    {
+        if ($invoice->status !== 'posted') {
+            return;
+        }
+
+        $linkedReturns = PurchaseReturn::query()
+            ->where('purchase_invoice_id', $invoice->id)
+            ->whereIn('status', ['draft', 'posted'])
+            ->count();
+        if ($linkedReturns > 0) {
+            throw ValidationException::withMessages([
+                'status' => ['لا يمكن تعديل فاتورة مرتبطة بمرتجع. احذف/ألغِ المرتجع أولاً أو أنشئ فاتورة جديدة.'],
+            ]);
+        }
+
+        $invoice->load(['payments', 'lines.product']);
+
+        foreach ($invoice->payments()->where('status', 'posted')->lockForUpdate()->get() as $payment) {
+            if ($payment->journal_entry_id) {
+                $entry = JournalEntry::query()->find($payment->journal_entry_id);
+                if ($entry && $entry->status === 'posted') {
+                    $this->journals->void($entry);
+                }
+            }
+            $payment->update(['status' => 'void', 'journal_entry_id' => null]);
+        }
+
+        $movements = StockMovement::query()
+            ->where('reference_type', $invoice::class)
+            ->where('reference_id', $invoice->id)
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($movements as $movement) {
+            $qty = (float) $movement->quantity;
+            if (abs($qty) < 0.0001) {
+                continue;
+            }
+
+            $product = Product::query()->find($movement->product_id);
+            if ($product && $qty > 0) {
+                $existingQty = round((float) \App\Models\StockLevel::query()
+                    ->where('product_id', $product->id)
+                    ->where('quantity', '>', 0)
+                    ->sum('quantity'), 3);
+                $product->update([
+                    'cost_price' => $this->inventory->reverseMovingAverageCost(
+                        $product,
+                        $existingQty,
+                        $qty,
+                        (float) $movement->unit_cost
+                    ),
+                ]);
+            }
+
+            // Original purchase stores positive qty (in); reverse deducts stock (out).
+            $this->inventory->adjustStock(
+                (int) $movement->warehouse_id,
+                (int) $movement->product_id,
+                -$qty,
+                $qty > 0 ? 'out' : 'in',
+                $user,
+                [
+                    'movement_date' => now()->toDateString(),
+                    'unit_cost' => $movement->unit_cost,
+                    'batch_no' => $movement->batch_no,
+                    'serial_no' => $movement->serial_no,
+                    'reference_type' => $invoice::class,
+                    'reference_id' => $invoice->id,
+                    'notes' => 'عكس ترحيل فاتورة مشتريات '.$invoice->invoice_number,
+                ]
+            );
+        }
+
+        if ($invoice->journal_entry_id) {
+            $entry = JournalEntry::query()->find($invoice->journal_entry_id);
+            if ($entry && $entry->status === 'posted') {
+                $this->journals->void($entry);
+            }
+        }
+
+        $invoice->update([
+            'status' => 'draft',
+            'journal_entry_id' => null,
+            'posted_at' => null,
+            'paid_amount' => 0,
+        ]);
+
+        $this->audit->log($user, 'purchase_invoice.unposted', $invoice);
     }
 
     /**
