@@ -25,6 +25,8 @@ type Props = {
   disabled?: boolean
   onChange: (line: PrintInvoiceLineDraft) => void
   lineIndex?: number
+  /** i18n namespace for hints — defaults to printInvoices */
+  hintNs?: 'printInvoices' | 'quotes'
 }
 
 const clean = (value?: string | null) => value?.trim() || ''
@@ -46,11 +48,18 @@ function matchProduct(products: PrintInvoiceLineProduct[], line: PrintInvoiceLin
 }
 
 /** Free-text name/brand/model for print invoices, with optional catalog suggestions. */
-export default function PrintInvoiceLineFields({ products, line, disabled = false, onChange, lineIndex = 0 }: Props) {
+export default function PrintInvoiceLineFields({
+  products,
+  line,
+  disabled = false,
+  onChange,
+  lineIndex = 0,
+  hintNs = 'printInvoices',
+}: Props) {
   const { t } = useTranslation()
-  const nameListId = `print-invoice-product-names-${lineIndex}`
-  const brandListId = `print-invoice-brands-${lineIndex}`
-  const modelListId = `print-invoice-models-${lineIndex}`
+  const nameListId = `free-text-product-names-${hintNs}-${lineIndex}`
+  const brandListId = `free-text-brands-${hintNs}-${lineIndex}`
+  const modelListId = `free-text-models-${hintNs}-${lineIndex}`
 
   const names = useMemo(
     () => [...new Set(products.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
@@ -97,7 +106,7 @@ export default function PrintInvoiceLineFields({ products, line, disabled = fals
 
   return (
     <div className="form-grid-3">
-      <Field label={t('common.product')} hint={t('printInvoices.customLineHint')}>
+      <Field label={t('common.product')} hint={t(`${hintNs}.customLineHint`)}>
         <input
           type="text"
           className={inputClass}
@@ -105,7 +114,7 @@ export default function PrintInvoiceLineFields({ products, line, disabled = fals
           value={line.product_name}
           disabled={disabled}
           required
-          placeholder={t('printInvoices.productPlaceholder')}
+          placeholder={t(`${hintNs}.productPlaceholder`)}
           onChange={(e) => applyPatch({ product_name: e.target.value })}
         />
         <datalist id={nameListId}>
@@ -122,7 +131,7 @@ export default function PrintInvoiceLineFields({ products, line, disabled = fals
           list={brandListId}
           value={line.brand}
           disabled={disabled}
-          placeholder={t('printInvoices.optionalField')}
+          placeholder={t(`${hintNs}.optionalField`)}
           onChange={(e) => applyPatch({ brand: e.target.value })}
         />
         <datalist id={brandListId}>
@@ -139,7 +148,7 @@ export default function PrintInvoiceLineFields({ products, line, disabled = fals
           list={modelListId}
           value={line.model}
           disabled={disabled}
-          placeholder={t('printInvoices.optionalField')}
+          placeholder={t(`${hintNs}.optionalField`)}
           onChange={(e) => applyPatch({ model: e.target.value })}
         />
         <datalist id={modelListId}>

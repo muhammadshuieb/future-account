@@ -314,11 +314,23 @@ export type SalesQuotePrintData = {
   branch?: { name?: string; code?: string } | null
   warehouse?: { name?: string } | null
   items?: {
+    product_name?: string | null
+    brand?: string | null
+    model?: string | null
     product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
     quantity: number
     unit_price: number
     line_total: number
   }[]
+}
+
+function quoteLineProduct(item: NonNullable<SalesQuotePrintData['items']>[number]) {
+  return {
+    name: item.product_name?.trim() || item.product?.name,
+    brand: item.brand?.trim() || item.product?.brand,
+    model: item.model?.trim() || item.product?.model,
+    unit: item.product?.unit,
+  }
 }
 
 export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
@@ -387,15 +399,18 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
+          {lines.map((l, i) => {
+            const product = quoteLineProduct(l)
+            return (
             <tr key={i}>
-              <ProductIdentityCells product={l.product} />
-              <td>{unitFromProduct(l.product)}</td>
+              <ProductIdentityCells product={product} />
+              <td>{unitFromProduct(product)}</td>
               <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
               <td className="tabular-nums">{l.unit_price}</td>
               <td className="tabular-nums">{l.line_total}</td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
 

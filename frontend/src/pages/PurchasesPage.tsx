@@ -550,9 +550,10 @@ export default function PurchasesPage() {
               value={line.product_id}
               onChange={(productId) => {
                 const selected = (products.data || []).find((p) => String(p.id) === productId)
+                const productChanged = productId !== line.product_id
                 updateInvLine(index, {
                   product_id: productId,
-                  unit_cost: selected ? String(selected.cost_price) : line.unit_cost,
+                  unit_cost: productChanged && selected ? String(selected.cost_price) : line.unit_cost,
                   serial_no: selected?.track_serial ? line.serial_no : '',
                   batch_no: selected?.track_batch ? line.batch_no : '',
                 })

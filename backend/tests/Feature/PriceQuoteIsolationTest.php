@@ -158,6 +158,53 @@ class PriceQuoteIsolationTest extends TestCase
         $this->assertEquals(5, (float) $excess[0]['available_qty']);
     }
 
+    public function test_quote_allows_custom_free_text_line(): void
+    {
+        $res = $this->postJson('/api/sales-quotes', [
+            'quote_date' => now()->toDateString(),
+            'currency' => 'USD',
+            'lines' => [
+                [
+                    'product_name' => 'خدمة استشارة',
+                    'brand' => 'ماركة خاصة',
+                    'model' => 'موديل Y',
+                    'quantity' => 2,
+                    'unit_price' => 175,
+                    'tax_rate' => 0,
+                ],
+            ],
+        ])->assertCreated();
+
+        $this->assertNull($res->json('data.items.0.product_id'));
+        $this->assertSame('خدمة استشارة', $res->json('data.items.0.product_name'));
+        $this->assertSame('ماركة خاصة', $res->json('data.items.0.brand'));
+        $this->assertSame('موديل Y', $res->json('data.items.0.model'));
+        $this->assertEquals(350, (float) $res->json('data.total'));
+        $this->assertSame(0, StockMovement::query()->count());
+        $this->assertSame(0, JournalEntry::query()->count());
+    }
+
+    public function test_cannot_convert_quote_with_free_text_lines(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $quote = $this->postJson('/api/sales-quotes', [
+            'quote_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'currency' => 'USD',
+            'lines' => [
+                [
+                    'product_name' => 'بند يدوي',
+                    'quantity' => 1,
+                    'unit_price' => 50,
+                    'tax_rate' => 0,
+                ],
+            ],
+        ])->assertCreated()->json('data');
+
+        $this->postJson("/api/sales-quotes/{$quote['id']}/convert-to-order")
+            ->assertStatus(422);
+    }
+
     public function test_quotes_permissions_assigned_to_sales_role(): void
     {
         $sales = \Spatie\Permission\Models\Role::findByName('sales', 'web');

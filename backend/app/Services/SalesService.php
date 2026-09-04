@@ -987,7 +987,7 @@ class SalesService
     public function createQuote(array $data, array $lines, User $user): SalesQuote
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            [$subtotal, $tax, $total, $normalized] = $this->normalizePrintInvoiceLines($lines);
             $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['quote_date'] ?? null);
 
             // Quotes are commercial offers only: no stock, cash, or GL side effects.
@@ -1025,7 +1025,8 @@ class SalesService
 
         return DB::transaction(function () use ($quote, $data, $lines) {
             // Quotes remain non-posting documents: update header/lines only.
-            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            // Free-text name/brand/model allowed (same as print invoices).
+            [$subtotal, $tax, $total, $normalized] = $this->normalizePrintInvoiceLines($lines);
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
                 $data['currency'] ?? $quote->currency,
@@ -1064,6 +1065,21 @@ class SalesService
 
         return DB::transaction(function () use ($quote, $user, $overrides) {
             $quote->load('items');
+
+            if (! $quote->customer_id) {
+                throw ValidationException::withMessages([
+                    'customer_id' => ['يجب تحديد عميل قبل تحويل عرض السعر إلى أمر بيع.'],
+                ]);
+            }
+
+            foreach ($quote->items as $index => $item) {
+                if (! $item->product_id) {
+                    throw ValidationException::withMessages([
+                        "items.{$index}" => ['لا يمكن تحويل بنود مكتوبة يدوياً إلى أمر بيع. اربط كل بند بصنف من المخزون أولاً.'],
+                    ]);
+                }
+            }
+
             $order = SalesOrder::query()->create([
                 'order_number' => $this->nextNumber('SO'),
                 'order_date' => $overrides['order_date'] ?? now()->toDateString(),

@@ -15,6 +15,7 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
+import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
 import { Button, EmptyState, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -43,8 +44,14 @@ type InvoiceLineDraft = {
   serial_no: string
 }
 
+type QuoteLineDraft = PrintInvoiceLineDraft
+
 function emptyInvoiceLine(): InvoiceLineDraft {
   return { product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '' }
+}
+
+function emptyQuoteLine(): QuoteLineDraft {
+  return { product_id: '', product_name: '', brand: '', model: '', quantity: '1', unit_price: '' }
 }
 
 function linePayload(productId: string, qty: string, price: string, _batch: string, serial: string, taxRate: number) {
@@ -54,6 +61,18 @@ function linePayload(productId: string, qty: string, price: string, _batch: stri
     unit_price: price ? Number(price) : undefined,
     tax_rate: taxRate,
     serial_no: serial || undefined,
+  }
+}
+
+function quoteLinePayload(line: QuoteLineDraft, taxRate: number) {
+  return {
+    product_id: line.product_id ? Number(line.product_id) : undefined,
+    product_name: line.product_name.trim(),
+    brand: line.brand.trim() || undefined,
+    model: line.model.trim() || undefined,
+    quantity: Number(line.quantity),
+    unit_price: line.unit_price !== '' ? Number(line.unit_price) : undefined,
+    tax_rate: taxRate,
   }
 }
 
@@ -149,7 +168,7 @@ export default function SalesPage() {
     warehouse_id: '',
     currency: 'USD',
     exchange_rate: '1',
-    lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
+    lines: [emptyQuoteLine()] as QuoteLineDraft[],
   })
   const [order, setOrder] = useState({ order_date: todayYmd(), ...emptyLine })
   const [inv, setInv] = useState({
@@ -251,14 +270,14 @@ export default function SalesPage() {
     }))
   }
 
-  const updateQuoteLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+  const updateQuoteLine = (index: number, patch: Partial<QuoteLineDraft>) => {
     setQuote((prev) => ({
       ...prev,
       lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
     }))
   }
 
-  const addQuoteLine = () => setQuote((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  const addQuoteLine = () => setQuote((prev) => ({ ...prev, lines: [...prev.lines, emptyQuoteLine()] }))
 
   const removeQuoteLine = (index: number) => {
     setQuote((prev) => ({
@@ -288,6 +307,13 @@ export default function SalesPage() {
         return
       }
       const patch = { product_id: String(found.id), unit_price: String(found.sale_price) }
+      const quotePatch: Partial<QuoteLineDraft> = {
+        product_id: String(found.id),
+        product_name: found.name || '',
+        brand: found.brand || '',
+        model: found.model || '',
+        unit_price: String(found.sale_price),
+      }
       if (target === 'inv') {
         setInv((prev) => {
           const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
@@ -305,10 +331,10 @@ export default function SalesPage() {
         if (order.warehouse_id) void applyStockToForm(setOrder, String(found.id), order.warehouse_id)
       } else {
         setQuote((prev) => {
-          const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
+          const emptyIdx = prev.lines.findIndex((l) => !l.product_id && !l.product_name.trim())
           const lines = emptyIdx >= 0
-            ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...patch } : line))
-            : [...prev.lines, { ...emptyInvoiceLine(), ...patch }]
+            ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...quotePatch } : line))
+            : [...prev.lines, { ...emptyQuoteLine(), ...quotePatch }]
           const targetIdx = emptyIdx >= 0 ? emptyIdx : lines.length - 1
           if (prev.warehouse_id && !skipStockAutofill.current) {
             void applyStockToQuoteLine(targetIdx, String(found.id), prev.warehouse_id)
@@ -431,7 +457,7 @@ export default function SalesPage() {
       customer_id: '',
       currency: baseCurrency || 'USD',
       exchange_rate: '1',
-      lines: [emptyInvoiceLine()],
+      lines: [emptyQuoteLine()],
     }))
     setModal('create')
   }
@@ -444,7 +470,7 @@ export default function SalesPage() {
 
   const saveQuote = useMutation({
     mutationFn: () => {
-      const filledLines = quote.lines.filter((l) => l.product_id)
+      const filledLines = quote.lines.filter((l) => l.product_name.trim())
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
       }
@@ -455,7 +481,7 @@ export default function SalesPage() {
         warehouse_id: Number(quote.warehouse_id) || undefined,
         currency: quote.currency,
         exchange_rate: quote.exchange_rate ? Number(quote.exchange_rate) : undefined,
-        lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
+        lines: filledLines.map((l) => quoteLinePayload(l, defaultTaxRate)),
       })
     },
     onSuccess: () => { msg.setMessage(t('sales.quoteSaved')); invalidateSales(); closeModal() },
@@ -553,7 +579,7 @@ export default function SalesPage() {
 
   const updateQuote = useMutation({
     mutationFn: (id: number) => {
-      const filledLines = quote.lines.filter((l) => l.product_id)
+      const filledLines = quote.lines.filter((l) => l.product_name.trim())
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
       }
@@ -564,7 +590,7 @@ export default function SalesPage() {
         warehouse_id: Number(quote.warehouse_id) || undefined,
         currency: quote.currency,
         exchange_rate: quote.exchange_rate ? Number(quote.exchange_rate) : undefined,
-        lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
+        lines: filledLines.map((l) => quoteLinePayload(l, defaultTaxRate)),
       })
     },
     onSuccess: () => { msg.setMessage(t('sales.quoteUpdated')); invalidateSales(); closeModal() },
@@ -647,12 +673,13 @@ export default function SalesPage() {
     const d = detail.data
     if (tab === 'quotes') {
       const items = (d.items || d.lines || []) as {
-        product_id?: number
-        product?: { id?: number }
+        product_id?: number | null
+        product_name?: string | null
+        brand?: string | null
+        model?: string | null
+        product?: { id?: number; name?: string; brand?: string; model?: string }
         quantity?: number
         unit_price?: number
-        batch_no?: string
-        serial_no?: string
       }[]
       setQuote({
         quote_date: String(d.quote_date || '').slice(0, 10),
@@ -663,13 +690,14 @@ export default function SalesPage() {
         exchange_rate: String(d.exchange_rate || ''),
         lines: items.length
           ? items.map((line) => ({
-              product_id: String(line.product_id || line.product?.id || ''),
+              product_id: line.product_id ? String(line.product_id) : '',
+              product_name: line.product_name || line.product?.name || '',
+              brand: line.brand || line.product?.brand || '',
+              model: line.model || line.product?.model || '',
               quantity: String(line.quantity || 1),
               unit_price: String(line.unit_price || ''),
-              batch_no: line.batch_no || '',
-              serial_no: line.serial_no || '',
             }))
-          : [emptyInvoiceLine()],
+          : [emptyQuoteLine()],
       })
       setStockInfo(null)
       return
@@ -718,11 +746,12 @@ export default function SalesPage() {
       currency: d.currency || 'USD',
       exchange_rate: String(d.exchange_rate || ''),
       lines: [{
-        product_id: String(line.product_id || line.product?.id || ''),
+        product_id: line.product_id ? String(line.product_id) : '',
+        product_name: line.product_name || line.product?.name || '',
+        brand: line.brand || line.product?.brand || '',
+        model: line.model || line.product?.model || '',
         quantity: String(line.quantity || 1),
         unit_price: String(line.unit_price || ''),
-        batch_no: line.batch_no || '',
-        serial_no: line.serial_no || '',
       }],
     })
     setStockInfo(null)
@@ -823,13 +852,16 @@ export default function SalesPage() {
               value={line.product_id}
               onChange={(productId) => {
                 const selected = (products.data || []).find((p) => String(p.id) === productId)
+                const productChanged = productId !== line.product_id
                 updateInvLine(index, {
                   product_id: productId,
-                  unit_price: selected ? String(selected.sale_price) : line.unit_price,
+                  // Keep custom price when only re-selecting; update price when product changes.
+                  unit_price: productChanged && selected ? String(selected.sale_price) : line.unit_price,
                   serial_no: selected?.track_serial ? line.serial_no : '',
                   batch_no: selected?.track_batch ? line.batch_no : '',
                 })
-                if (productId && inv.warehouse_id && !skipStockAutofill.current) {
+                // Never auto-overwrite quantity while editing an existing invoice.
+                if (productId && inv.warehouse_id && !skipStockAutofill.current && modal !== 'edit') {
                   void applyStockToInvoiceLine(index, productId, inv.warehouse_id)
                 }
               }}
@@ -887,18 +919,12 @@ export default function SalesPage() {
                 </button>
               )}
             </div>
-            <ProductVariantSelect
+            <PrintInvoiceLineFields
               products={products.data || []}
-              value={line.product_id}
-              onChange={(productId) => {
-                const selected = (products.data || []).find((p) => String(p.id) === productId)
-                updateQuoteLine(index, {
-                  product_id: productId,
-                  unit_price: selected ? String(selected.sale_price) : line.unit_price,
-                  serial_no: '',
-                  batch_no: '',
-                })
-              }}
+              line={line}
+              lineIndex={index}
+              hintNs="quotes"
+              onChange={(next) => updateQuoteLine(index, next)}
             />
             <div className="form-grid-3">
               {line.product_id && (
@@ -914,7 +940,7 @@ export default function SalesPage() {
                   </div>
                 )}
               </Field>
-              <Field label={t('common.price')}>
+              <Field label={t('common.price')} hint={t('quotes.priceHint')}>
                 <NumericInput value={line.unit_price} onChange={(v) => updateQuoteLine(index, { unit_price: v })} />
               </Field>
             </div>
