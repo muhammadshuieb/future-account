@@ -22,6 +22,7 @@ import { useListSearch } from '@/lib/useListSearch'
 import { useAuth } from '@/context/AuthContext'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
+import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 
 const SALES_TABS = ['quotes', 'orders', 'invoices', 'returns', 'receipts'] as const
 
@@ -228,6 +229,8 @@ export default function SalesPage() {
   }, [cashBoxes.data, rc.cash_box_id, rc.currency, baseCurrency])
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
+  const invLinesScroll = useScrollToLastLine(inv.lines.length)
+  const quoteLinesScroll = useScrollToLastLine(quote.lines.length)
 
   const invHasSerialProduct = inv.lines.some((line) =>
     (products.data || []).find((p) => String(p.id) === line.product_id)?.track_serial,
@@ -264,7 +267,10 @@ export default function SalesPage() {
     }))
   }
 
-  const addInvLine = () => setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  const addInvLine = () => {
+    invLinesScroll.markPending()
+    setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  }
 
   const removeInvLine = (index: number) => {
     setInv((prev) => ({
@@ -280,7 +286,10 @@ export default function SalesPage() {
     }))
   }
 
-  const addQuoteLine = () => setQuote((prev) => ({ ...prev, lines: [...prev.lines, emptyQuoteLine()] }))
+  const addQuoteLine = () => {
+    quoteLinesScroll.markPending()
+    setQuote((prev) => ({ ...prev, lines: [...prev.lines, emptyQuoteLine()] }))
+  }
 
   const removeQuoteLine = (index: number) => {
     setQuote((prev) => ({
@@ -320,6 +329,7 @@ export default function SalesPage() {
       if (target === 'inv') {
         setInv((prev) => {
           const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
+          if (emptyIdx < 0) invLinesScroll.markPending()
           const lines = emptyIdx >= 0
             ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...patch } : line))
             : [...prev.lines, { ...emptyInvoiceLine(), ...patch }]
@@ -335,6 +345,7 @@ export default function SalesPage() {
       } else {
         setQuote((prev) => {
           const emptyIdx = prev.lines.findIndex((l) => !l.product_id && !l.product_name.trim())
+          if (emptyIdx < 0) quoteLinesScroll.markPending()
           const lines = emptyIdx >= 0
             ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...quotePatch } : line))
             : [...prev.lines, { ...emptyQuoteLine(), ...quotePatch }]
@@ -835,14 +846,15 @@ export default function SalesPage() {
         onScan={(code) => void handleBarcodeScan(code, 'inv')}
         compact
       />
-      <div className="flex justify-end">
-        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
-      </div>
       {inv.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
         const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
         return (
-          <div key={index} className="form-line-card">
+          <div
+            key={index}
+            className="form-line-card"
+            ref={index === inv.lines.length - 1 ? invLinesScroll.setLastLineRef : undefined}
+          >
             <div className="form-line-card-header">
               <span>{t('common.lineN', { n: index + 1 })}</span>
               {inv.lines.length > 1 && (
@@ -899,6 +911,9 @@ export default function SalesPage() {
           </div>
         )
       })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
+      </div>
       <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
         <p>
           <span className="text-black/55">{t('common.subtotal')}: </span>
@@ -931,14 +946,15 @@ export default function SalesPage() {
         onScan={(code) => void handleBarcodeScan(code, 'quote')}
         compact
       />
-      <div className="flex justify-end">
-        <Button type="button" variant="secondary" onClick={addQuoteLine}>{t('common.addLine')}</Button>
-      </div>
       {quote.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
         const lineTotal = Math.round(((Number(line.quantity) || 0) * (Number(line.unit_price) || 0)) * 100) / 100
         return (
-          <div key={index} className="form-line-card">
+          <div
+            key={index}
+            className="form-line-card"
+            ref={index === quote.lines.length - 1 ? quoteLinesScroll.setLastLineRef : undefined}
+          >
             <div className="form-line-card-header">
               <span>{t('common.lineN', { n: index + 1 })}</span>
               {quote.lines.length > 1 && (
@@ -978,6 +994,9 @@ export default function SalesPage() {
           </div>
         )
       })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addQuoteLine}>{t('common.addLine')}</Button>
+      </div>
     </FormSection>
   )
 

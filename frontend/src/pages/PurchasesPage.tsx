@@ -16,6 +16,7 @@ import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
 import { Button, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 import { useAuth } from '@/context/AuthContext'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
@@ -132,6 +133,7 @@ export default function PurchasesPage() {
     exchange_rate: '1',
     lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
   })
+  const invLinesScroll = useScrollToLastLine(inv.lines.length)
   const [ret, setRet] = useState({
     return_date: todayYmd(),
     supplier_id: '',
@@ -248,7 +250,10 @@ export default function PurchasesPage() {
     }))
   }
 
-  const addInvLine = () => setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  const addInvLine = () => {
+    invLinesScroll.markPending()
+    setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  }
 
   const removeInvLine = (index: number) => {
     setInv((prev) => ({
@@ -538,14 +543,15 @@ export default function PurchasesPage() {
 
   const invoiceLinesEditor = (
     <FormSection title={t('common.lines')}>
-      <div className="flex justify-end">
-        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
-      </div>
       {inv.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
         const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))
         return (
-          <div key={index} className="form-line-card">
+          <div
+            key={index}
+            className="form-line-card"
+            ref={index === inv.lines.length - 1 ? invLinesScroll.setLastLineRef : undefined}
+          >
             <div className="form-line-card-header">
               <span>{t('common.lineN', { n: index + 1 })}</span>
               {inv.lines.length > 1 && (
@@ -597,6 +603,9 @@ export default function PurchasesPage() {
           </div>
         )
       })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addInvLine}>{t('common.addLine')}</Button>
+      </div>
       <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
         <p>
           <span className="text-black/55">{t('common.subtotal')}: </span>

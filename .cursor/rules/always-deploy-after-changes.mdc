@@ -1,0 +1,37 @@
+---
+description: Always commit, push, and deploy Future Account to production after finishing code changes
+alwaysApply: true
+---
+
+# Always deploy after finishing changes
+
+When you finish a feature, fix, or meaningful app change for **Future Account**, do **not** wait for the user to say «انشر» / "deploy". Automatically complete the release path.
+
+## Required finish sequence
+
+1. **Commit** — If there are changes worth committing, create a git commit (follow the repo commit protocol: status/diff/log, stage only relevant files, HEREDOC message). Skip empty commits. Never commit secrets or `scripts/_tmp-*` junk.
+2. **Push** — `git push` to `origin` (usually `main`).
+3. **Deploy to production** via SSH:
+   - Host: `root@187.124.31.86`
+   - Key: `~/.ssh/future_account_deploy`
+   - App path: `/opt/future-account`
+   - Command: `DEPLOY_ENV=prod ./scripts/deploy.sh`
+   - Example:
+     ```bash
+     ssh -i ~/.ssh/future_account_deploy -o StrictHostKeyChecking=accept-new root@187.124.31.86 \
+       'cd /opt/future-account && DEPLOY_ENV=prod ./scripts/deploy.sh'
+     ```
+4. **Migrations / seeders** — `deploy.sh` already runs `php artisan migrate --force`. If the change adds or updates permissions/roles, also run `RolesAndPermissionsSeeder` on prod when needed (via compose exec on the backend container). Do not re-seed destructive data.
+5. **Confirm** — Check health (script output and/or https://synaacc.cloud). Report commit hash + deploy success to the user.
+
+## Exceptions (skip deploy only when)
+
+- User explicitly says **not** to deploy (e.g. «لا تنشر», "don't deploy", "no deploy").
+- Changes are **docs-only**, local experiments, or throwaway probes the user marked as no-deploy.
+- There is nothing app-related to ship (no commit / push needed).
+
+## Do not
+
+- Ask the user to type «انشر» again for routine completed work.
+- Deploy uncommitted WIP, or push `_tmp` / audit junk scripts.
+- Force-push or run destructive git/DB commands unless the user explicitly requests them.

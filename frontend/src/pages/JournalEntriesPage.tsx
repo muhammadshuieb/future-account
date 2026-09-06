@@ -7,6 +7,7 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, inputClass } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 
 type LineDraft = {
   account_id: string
@@ -23,6 +24,7 @@ export default function JournalEntriesPage() {
   const [entryDate, setEntryDate] = useState(todayYmd())
   const [reference, setReference] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([emptyLine(), emptyLine()])
+  const linesScroll = useScrollToLastLine(lines.length)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -283,7 +285,11 @@ export default function JournalEntriesPage() {
                 </thead>
                 <tbody>
                   {lines.map((line, index) => (
-                    <tr key={index} className="border-t border-black/5">
+                    <tr
+                      key={index}
+                      className="border-t border-black/5"
+                      ref={index === lines.length - 1 ? linesScroll.setLastLineRef : undefined}
+                    >
                       <td className="px-2 py-2">
                         <select
                           value={line.account_id}
@@ -345,7 +351,10 @@ export default function JournalEntriesPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setLines((prev) => [...prev, emptyLine()])}
+                  onClick={() => {
+                    linesScroll.markPending()
+                    setLines((prev) => [...prev, emptyLine()])
+                  }}
                   className="rounded-lg border border-black/10 px-3 py-2 text-sm"
                 >
                   + سطر

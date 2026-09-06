@@ -8,6 +8,7 @@ import { openPrintPopup } from '@/lib/printPopup'
 import { documentStatusLabel } from '@/lib/statusLabels'
 import { formatProductUnit } from '@/lib/productUnit'
 import { useListSearch } from '@/lib/useListSearch'
+import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 import { useAuth } from '@/context/AuthContext'
 import { DocumentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
 import PdfExportButton from '@/components/PdfExportButton'
@@ -114,6 +115,7 @@ export default function PrintInvoicesPage() {
     notes: '',
     lines: [emptyLine()] as LineDraft[],
   })
+  const linesScroll = useScrollToLastLine(form.lines.length)
   const [stockWarnings, setStockWarnings] = useState<StockWarning[]>([])
 
   const invoices = useQuery({
@@ -335,7 +337,10 @@ export default function PrintInvoicesPage() {
     }))
   }
 
-  const addLine = () => setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyLine()] }))
+  const addLine = () => {
+    linesScroll.markPending()
+    setForm((prev) => ({ ...prev, lines: [...prev.lines, emptyLine()] }))
+  }
   const removeLine = (index: number) => {
     setForm((prev) => ({
       ...prev,
@@ -595,16 +600,15 @@ export default function PrintInvoicesPage() {
           </Field>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium text-black/55">{t('common.lines')}</p>
-              {!readOnly && (
-                <Button type="button" variant="secondary" onClick={addLine}>{t('common.addLine')}</Button>
-              )}
-            </div>
+            <p className="text-xs font-medium text-black/55">{t('common.lines')}</p>
             {form.lines.map((line, index) => {
               const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
               return (
-                <div key={index} className="form-line-card">
+                <div
+                  key={index}
+                  className="form-line-card"
+                  ref={index === form.lines.length - 1 ? linesScroll.setLastLineRef : undefined}
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-medium text-black/50">{t('common.lineN', { n: index + 1 })}</span>
                     {!readOnly && form.lines.length > 1 && (
@@ -653,6 +657,11 @@ export default function PrintInvoicesPage() {
                 </div>
               )
             })}
+            {!readOnly && (
+              <div className="flex justify-end">
+                <Button type="button" variant="secondary" onClick={addLine}>{t('common.addLine')}</Button>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
