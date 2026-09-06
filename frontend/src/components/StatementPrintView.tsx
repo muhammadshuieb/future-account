@@ -6,8 +6,10 @@ export type StatementRow = {
   date: string
   type: string
   number: string
+  document_id?: number
   currency?: string
   document_amount?: number
+  notes?: string | null
   debit: number
   credit: number
   balance: number
@@ -21,6 +23,8 @@ export type PartnerStatementData = {
   currency?: string
   opening_balance?: number
   closing_balance?: number
+  total_debit?: number
+  total_credit?: number
   balance?: number
   rows?: StatementRow[]
 }
@@ -67,6 +71,12 @@ export function StatementPrintView({
   const opening = Number(data.opening_balance ?? 0)
   const closing = Number(data.closing_balance ?? data.balance ?? 0)
   const rows = data.rows || []
+  const totalDebit = Number(
+    data.total_debit ?? rows.reduce((s, r) => s + (Number(r.debit) || 0), 0),
+  )
+  const totalCredit = Number(
+    data.total_credit ?? rows.reduce((s, r) => s + (Number(r.credit) || 0), 0),
+  )
   const partnerLabel = kind === 'customer' ? 'العميل' : 'المورد'
   const period =
     data.from || data.to
@@ -111,10 +121,18 @@ export function StatementPrintView({
         </p>
       </div>
 
-      <div className="grid gap-1 rounded border border-black/10 bg-mist/40 p-2 sm:grid-cols-2">
+      <div className="grid gap-1 rounded border border-black/10 bg-mist/40 p-2 sm:grid-cols-2 lg:grid-cols-4">
         <p>
           الرصيد الافتتاحي:{' '}
           <strong className="tabular-nums">{formatMoney(opening, currency)}</strong>
+        </p>
+        <p>
+          إجمالي عليه:{' '}
+          <strong className="tabular-nums">{formatMoney(totalDebit, currency)}</strong>
+        </p>
+        <p>
+          إجمالي له:{' '}
+          <strong className="tabular-nums">{formatMoney(totalCredit, currency)}</strong>
         </p>
         <p>
           الرصيد الختامي:{' '}
@@ -128,8 +146,8 @@ export function StatementPrintView({
             <th>التاريخ</th>
             <th>النوع</th>
             <th>الرقم</th>
-            <th>مدين</th>
-            <th>دائن</th>
+            <th>عليه</th>
+            <th>له</th>
             <th>الرصيد</th>
           </tr>
         </thead>
@@ -153,6 +171,16 @@ export function StatementPrintView({
             ))
           )}
         </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr className="font-semibold">
+              <td colSpan={3}>الإجمالي</td>
+              <td className="tabular-nums">{formatMoney(totalDebit, currency)}</td>
+              <td className="tabular-nums">{formatMoney(totalCredit, currency)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        )}
       </table>
 
       <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">

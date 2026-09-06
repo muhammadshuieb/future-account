@@ -5,6 +5,7 @@ import type { Account } from '@/types'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import { Button, ListSearchInput, Modal, Msg, PageHeader, Panel, inputClass } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useAuth } from '@/context/AuthContext'
 
 const typeLabels: Record<Account['type'], string> = {
   asset: 'أصول',
@@ -28,12 +29,22 @@ const emptyForm = {
 
 export default function AccountsPage() {
   const queryClient = useQueryClient()
+  const { hasPermission } = useAuth()
+  const canCapital = hasPermission('reports.capital.view')
   const search = useListSearch()
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  const visibleTypeLabels = useMemo(
+    () =>
+      (Object.entries(typeLabels) as [Account['type'], string][]).filter(
+        ([type]) => canCapital || type !== 'equity',
+      ),
+    [canCapital],
+  )
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', search.debouncedQ],
@@ -228,7 +239,7 @@ export default function AccountsPage() {
               onChange={(e) => setForm({ ...form, type: e.target.value as Account['type'] })}
               className={inputClass}
             >
-              {Object.entries(typeLabels).map(([value, label]) => (
+              {visibleTypeLabels.map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>

@@ -157,4 +157,107 @@ class PurchaseInvoiceExtrasTest extends TestCase
         $this->assertEqualsWithDelta(0, (float) $invoice->other_fees, 0.01);
         $this->assertEqualsWithDelta(40, (float) $invoice->total, 0.01);
     }
+
+    public function test_purchase_invoice_discount_reduces_total_and_inventory_cost(): void
+    {
+        Setting::setValue('tax_enabled', '0', 'finance', 'boolean', 'تفعيل الضريبة');
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $response = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'discount_amount' => 100,
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 100, 'tax_rate' => 0],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $invoice = PurchaseInvoice::query()->findOrFail($response->json('data.id'));
+
+        $this->assertEqualsWithDelta(1000, (float) $invoice->subtotal, 0.01);
+        $this->assertEqualsWithDelta(100, (float) $invoice->discount_amount, 0.01);
+        $this->assertEqualsWithDelta(900, (float) $invoice->total, 0.01);
+        $this->assertNotNull($invoice->journal_entry_id);
+        $this->assertTrue($invoice->journalEntry->isBalanced());
+
+        $inventory = Account::query()->where('code', '1104')->firstOrFail();
+        $ap = $supplier->account_id
+            ? Account::query()->findOrFail($supplier->account_id)
+            : Account::query()->where('code', '2101')->firstOrFail();
+
+        $invDebit = (float) JournalDetail::query()
+            ->where('journal_entry_id', $invoice->journal_entry_id)
+            ->where('account_id', $inventory->id)
+            ->sum('debit');
+        $apCredit = (float) JournalDetail::query()
+            ->where('journal_entry_id', $invoice->journal_entry_id)
+            ->where('account_id', $ap->id)
+            ->sum('credit');
+
+        $this->assertEqualsWithDelta(900, $invDebit, 0.01);
+        $this->assertEqualsWithDelta(900, $apCredit, 0.01);
+
+        // Unit cost after discount: (1000 - 100) / 10 = 90
+        $product->refresh();
+        $this->assertEqualsWithDelta(90, (float) $product->cost_price, 0.01);
+    }
+
+    public function test_purchase_invoice_rejects_discount_above_subtotal(): void
+    {
+        Setting::setValue('tax_enabled', '0', 'finance', 'boolean', 'تفعيل الضريبة');
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $response = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'discount_amount' => 500,
+            'status' => 'draft',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 1, 'unit_cost' => 100],
+            ],
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors(['discount_amount']);
+    }
+
+    public function test_purchasing_role_can_apply_purchase_discount(): void
+    {
+        Setting::setValue('tax_enabled', '0', 'finance', 'boolean', 'تفعيل الضريبة');
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('purchasing');
+        Sanctum::actingAs($user);
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $response = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'draft',
+            'discount_amount' => 25,
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_cost' => 50],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $invoice = PurchaseInvoice::query()->findOrFail($response->json('data.id'));
+        $this->assertEqualsWithDelta(25, (float) $invoice->discount_amount, 0.01);
+        $this->assertEqualsWithDelta(75, (float) $invoice->total, 0.01);
+    }
 }

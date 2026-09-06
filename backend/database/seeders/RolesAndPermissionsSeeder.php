@@ -24,12 +24,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'settings.manage',
             'sales.view',
             'sales.manage',
+            'sales.invoices.edit',
             'quotes.view',
             'quotes.manage',
             'print_invoices.view',
             'print_invoices.manage',
             'purchases.view',
             'purchases.manage',
+            'purchases.invoices.edit',
             'warehouse.view',
             'warehouse.manage',
             'warehouse.products.request',
@@ -48,6 +50,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'hr.view',
             'hr.manage',
             'reports.view',
+            // Sensitive financials — not implied by reports.view or elevated “admin-like” custom roles.
+            'reports.profits.view',
+            'reports.capital.view',
             'users.manage',
         ];
 
@@ -56,6 +61,7 @@ class RolesAndPermissionsSeeder extends Seeder
         }
 
         $admin = Role::findOrCreate('admin');
+        // True system admin keeps every permission (including capital + profits).
         $admin->syncPermissions(Permission::all());
 
         $accountant = Role::findOrCreate('accountant');
@@ -68,6 +74,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'journals.post',
             'settings.manage',
             'reports.view',
+            'reports.profits.view',
+            'reports.capital.view',
             'customers.view',
             'suppliers.view',
             'cash.view',

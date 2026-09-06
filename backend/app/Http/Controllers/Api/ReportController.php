@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Account;
 use App\Services\ReportService;
+use App\Support\SensitiveFinanceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,12 +26,15 @@ class ReportController extends ApiController
     {
         $this->authorizePermission('reports.view');
 
-        return $this->ok($this->reports->trialBalance($request->query('as_of'), $this->branchId($request)));
+        $data = $this->reports->trialBalance($request->query('as_of'), $this->branchId($request));
+
+        return $this->ok(SensitiveFinanceAccess::redactTrialBalance($data, $request->user()));
     }
 
     public function incomeStatement(Request $request): JsonResponse
     {
         $this->authorizePermission('reports.view');
+        $this->authorizePermission(SensitiveFinanceAccess::PROFITS);
 
         return $this->ok($this->reports->incomeStatement($request->query('from'), $request->query('to'), $this->branchId($request)));
     }
@@ -38,7 +43,9 @@ class ReportController extends ApiController
     {
         $this->authorizePermission('reports.view');
 
-        return $this->ok($this->reports->balanceSheet($request->query('as_of'), $this->branchId($request)));
+        $data = $this->reports->balanceSheet($request->query('as_of'), $this->branchId($request));
+
+        return $this->ok(SensitiveFinanceAccess::redactBalanceSheet($data, $request->user()));
     }
 
     public function cashFlow(Request $request): JsonResponse
@@ -80,6 +87,7 @@ class ReportController extends ApiController
     public function profit(Request $request): JsonResponse
     {
         $this->authorizePermission('reports.view');
+        $this->authorizePermission(SensitiveFinanceAccess::PROFITS);
 
         return $this->ok($this->reports->profitReport($request->query('from'), $request->query('to'), $this->branchId($request)));
     }
@@ -109,6 +117,9 @@ class ReportController extends ApiController
         $this->authorizePermission('reports.view');
         $request->validate(['account_id' => ['required', 'integer', 'exists:accounts,id']]);
 
+        $account = Account::query()->findOrFail((int) $request->query('account_id'));
+        SensitiveFinanceAccess::assertAccountVisible($request->user(), $account);
+
         return $this->ok($this->reports->generalLedger(
             (int) $request->query('account_id'),
             $request->query('from'),
@@ -122,10 +133,12 @@ class ReportController extends ApiController
         $this->authorizePermission('reports.view');
         $request->validate(['branch_id' => ['required', 'integer', 'exists:branches,id']]);
 
-        return $this->ok($this->reports->branchCompleteReport(
+        $data = $this->reports->branchCompleteReport(
             (int) $request->query('branch_id'),
             $request->query('from'),
             $request->query('to'),
-        ));
+        );
+
+        return $this->ok(SensitiveFinanceAccess::redactBranchComplete($data, $request->user()));
     }
 }

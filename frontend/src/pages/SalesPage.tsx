@@ -17,8 +17,9 @@ import PdfExportButton from '@/components/PdfExportButton'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useAuth } from '@/context/AuthContext'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
 
@@ -90,6 +91,8 @@ async function fetchStockInfo(productId: string, warehouseId: string, batchNo?: 
 
 export default function SalesPage() {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  const canEditInvoices = hasPermission('sales.invoices.edit')
   const [tab, setTab] = useQueryTab(SALES_TABS, 'invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
@@ -837,6 +840,7 @@ export default function SalesPage() {
       </div>
       {inv.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
         return (
           <div key={index} className="form-line-card">
             <div className="form-line-card-header">
@@ -866,7 +870,7 @@ export default function SalesPage() {
                 }
               }}
             />
-            <div className="form-grid-3">
+            <div className="form-grid-4">
               {line.product_id && (
                 <Field label={t('common.unit')}>
                   <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
@@ -883,6 +887,9 @@ export default function SalesPage() {
               <Field label={t('common.price')}>
                 <NumericInput value={line.unit_price} onChange={(v) => updateInvLine(index, { unit_price: v })} />
               </Field>
+              <Field label={t('common.total')}>
+                <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
+              </Field>
             </div>
             {product?.track_serial && (
               <Field label={t('common.serial')}>
@@ -892,6 +899,27 @@ export default function SalesPage() {
           </div>
         )
       })}
+      <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
+          <span className="tabular-nums">{formatMoney(invLineSub, inv.currency)}</span>
+        </p>
+        {invDiscount > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.discount')}: </span>
+            <span className="tabular-nums">{formatMoney(invDiscount, inv.currency)}</span>
+          </p>
+        )}
+        {invTax > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.tax')}: </span>
+            <span className="tabular-nums">{formatMoney(invTax, inv.currency)}</span>
+          </p>
+        )}
+        <p className="font-bold">
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(invEstimatedTotal, inv.currency)}</span>
+        </p>
+      </div>
     </FormSection>
   )
 
@@ -1028,7 +1056,10 @@ export default function SalesPage() {
           {data.exchange_rate != null && String(data.currency || baseCurrency) !== baseCurrency && (
             <p><b>{t('common.exchangeRate')}:</b> {String(data.exchange_rate)}</p>
           )}
-          <p><b>{t('common.total')}:</b> {String(data.total || data.amount || '—')} {String(data.currency || baseCurrency)}</p>
+          <p><b>{t('common.total')}:</b> {formatMoney(
+            (data.total ?? data.amount) as number | string | null | undefined,
+            String(data.currency || baseCurrency),
+          )}</p>
           {data.discount_amount != null && Number(data.discount_amount) > 0 && (
             <p><b>{t('common.discount')}:</b> {String(data.discount_amount)}</p>
           )}
@@ -1223,13 +1254,15 @@ export default function SalesPage() {
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'USD'}</td>
-                    <td className="tabular-nums">{Number(i.discount_amount || 0) > 0 ? i.discount_amount : '—'}</td>
-                    <td className="tabular-nums">{i.total}</td>
-                    <td className="tabular-nums">{i.paid_amount ?? 0}</td>
+                    <td className="tabular-nums">{Number(i.discount_amount || 0) > 0 ? formatMoney(i.discount_amount, i.currency || 'USD') : '—'}</td>
+                    <td className="tabular-nums font-medium">{formatMoney(i.total, i.currency || 'USD')}</td>
+                    <td className="tabular-nums">{formatMoney(i.paid_amount ?? 0, i.currency || 'USD')}</td>
                     <td>{documentStatusLabel(i.status)}</td>
                     <td>
                       <TableActions>
-                      <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
+                      {canEditInvoices && (
+                        <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
+                      )}
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       <span className="print-hide">
                         <PdfExportButton
@@ -1344,9 +1377,11 @@ export default function SalesPage() {
             <>
               {tab === 'invoices' && selectedId && (
                 <>
-                  <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
-                    {t('common.edit')}
-                  </Button>
+                  {canEditInvoices && (
+                    <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
+                      {t('common.edit')}
+                    </Button>
+                  )}
                   {canCollectInvoice({
                     status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
                     total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),

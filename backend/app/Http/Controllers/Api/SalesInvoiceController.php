@@ -62,7 +62,7 @@ class SalesInvoiceController extends ApiController
 
     public function update(Request $request, SalesInvoice $salesInvoice): JsonResponse
     {
-        $this->authorizePermission('sales.manage');
+        $this->authorizePermission('sales.invoices.edit');
         $data = $request->validate([
             'invoice_date' => ['required', 'date'],
             'customer_id' => ['required', 'exists:customers,id'],

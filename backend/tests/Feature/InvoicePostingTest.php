@@ -254,6 +254,36 @@ class InvoicePostingTest extends TestCase
         $this->assertSame(0, SalesInvoice::query()->count());
     }
 
+    public function test_sales_role_can_apply_sales_discount(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('sales');
+        Sanctum::actingAs($user);
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+
+        // Stock via admin seed data / prior purchases may be empty for this SKU in isolation —
+        // save as draft so we only assert discount permission + totals, not posting stock.
+        $response = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'discount_amount' => 40,
+            'status' => 'draft',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 200, 'tax_rate' => 0],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $invoice = SalesInvoice::query()->findOrFail($response->json('data.id'));
+        $this->assertEqualsWithDelta(40, (float) $invoice->discount_amount, 0.01);
+        $this->assertEqualsWithDelta(160, (float) $invoice->total, 0.01);
+    }
+
     public function test_posts_multi_line_purchase_and_sales_invoices(): void
     {
         $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();

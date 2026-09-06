@@ -19,6 +19,7 @@ use App\Models\Supplier;
 use App\Models\SupplierPayment;
 use App\Services\CashService;
 use App\Services\CurrencyService;
+use App\Support\SensitiveFinanceAccess;
 use App\Support\WarehouseAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -236,6 +237,22 @@ class DashboardController extends Controller
         $baseTotals['bank'] = $currencyFilter === null ? $liquidity['bank'] : null;
         $baseTotals['liquidity'] = $currencyFilter === null ? $liquidity['liquidity'] : null;
 
+        $canProfits = SensitiveFinanceAccess::canViewProfits($request->user());
+        if (! $canProfits) {
+            $baseTotals['revenue'] = null;
+            $baseTotals['expense'] = null;
+            $baseTotals['net_income'] = null;
+            if (is_array($byCurrency)) {
+                $byCurrency = array_map(function (array $row) {
+                    $row['revenue'] = null;
+                    $row['expense'] = null;
+                    $row['net_income'] = null;
+
+                    return $row;
+                }, $byCurrency);
+            }
+        }
+
         return response()->json([
             'data' => [
                 'company_name' => Setting::getValue('company_name', 'Syna Co'),
@@ -243,9 +260,10 @@ class DashboardController extends Controller
                 'journal_entries_count' => JournalEntry::query()->count(),
                 'posted_entries_count' => JournalEntry::query()->where('status', 'posted')->count(),
                 'draft_entries_count' => $draftCount,
-                'revenue' => $baseTotals['revenue'],
-                'expense' => $baseTotals['expense'],
-                'net_income' => $baseTotals['net_income'],
+                'revenue' => $canProfits ? $baseTotals['revenue'] : null,
+                'expense' => $canProfits ? $baseTotals['expense'] : null,
+                'net_income' => $canProfits ? $baseTotals['net_income'] : null,
+                'profits_redacted' => ! $canProfits,
                 'currency' => $displayCurrency,
                 'base_currency' => $baseCurrency,
                 'filter_branch_id' => $branchId,

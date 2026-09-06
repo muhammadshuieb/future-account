@@ -179,4 +179,227 @@ class InvoiceSafeEditTest extends TestCase
             'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 150, 'tax_rate' => 0]],
         ])->assertStatus(422);
     }
+
+    public function test_sales_role_cannot_edit_invoice_without_edit_permission(): void
+    {
+        $salesUser = User::factory()->create(['is_active' => true]);
+        $salesUser->assignRole('sales');
+        Sanctum::actingAs($salesUser);
+
+        $this->assertTrue($salesUser->hasPermissionTo('sales.manage'));
+        $this->assertFalse($salesUser->hasPermissionTo('sales.invoices.edit'));
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+
+        // Seed stock as admin-capable create still requires manage; purchase needs purchasing/admin.
+        $admin = User::factory()->create(['is_active' => true]);
+        $admin->assignRole('admin');
+        Sanctum::actingAs($admin);
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 100, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        Sanctum::actingAs($salesUser);
+
+        $sales = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 150, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $invoiceId = $sales->json('data.id');
+
+        $this->putJson("/api/sales-invoices/{$invoiceId}", [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 150, 'tax_rate' => 0]],
+        ])->assertForbidden();
+    }
+
+    public function test_purchasing_role_cannot_edit_invoice_without_edit_permission(): void
+    {
+        $purchasingUser = User::factory()->create(['is_active' => true]);
+        $purchasingUser->assignRole('purchasing');
+        Sanctum::actingAs($purchasingUser);
+
+        $this->assertTrue($purchasingUser->hasPermissionTo('purchases.manage'));
+        $this->assertFalse($purchasingUser->hasPermissionTo('purchases.invoices.edit'));
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $purchase = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 4, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $purchase->json('data.id');
+
+        $this->putJson("/api/purchase-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 5, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertForbidden();
+    }
+
+    public function test_edit_purchase_after_stock_sold_allows_price_change_without_restocking(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $purchase = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $purchase->json('data.id');
+
+        // Sell the entire purchased qty so unpost cannot reverse stock.
+        $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 80, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $stockBefore = (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity');
+
+        $updated = $this->putJson("/api/purchase-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'discount_amount' => 15,
+            'notes' => 'price fix after sale',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 55, 'tax_rate' => 0]],
+        ])->assertOk();
+
+        $this->assertEquals(150, (float) $updated->json('data.total')); // 3*55 - 15
+        $this->assertSame('posted', $updated->json('data.status'));
+        $this->assertSame('price fix after sale', $updated->json('data.notes'));
+
+        $stockAfter = (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity');
+        $this->assertEqualsWithDelta($stockBefore, $stockAfter, 0.001);
+    }
+
+    public function test_edit_purchase_after_stock_sold_blocks_quantity_change(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $purchase = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $purchase->json('data.id');
+
+        $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 80, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $this->putJson("/api/purchase-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 5, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertStatus(422);
+    }
+
+    public function test_edit_posted_purchase_twice_keeps_stock_consistent(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $stockBefore = (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity');
+
+        $purchase = $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 4, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $purchase->json('data.id');
+
+        $this->putJson("/api/purchase-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 6, 'unit_cost' => 50, 'tax_rate' => 0]],
+        ])->assertOk();
+
+        $this->putJson("/api/purchase-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_cost' => 60, 'tax_rate' => 0]],
+        ])->assertOk();
+
+        $stockAfter = (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity');
+
+        $this->assertEqualsWithDelta($stockBefore + 2, $stockAfter, 0.001);
+        $this->assertEquals(120, (float) $this->getJson("/api/purchase-invoices/{$id}")->json('data.total'));
+    }
 }

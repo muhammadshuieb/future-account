@@ -7,11 +7,16 @@ use Illuminate\Http\JsonResponse;
 
 abstract class ApiController extends Controller
 {
-    protected function authorizePermission(string $permission): void
+    protected function userCan(string $permission): bool
     {
         $user = auth()->user();
 
-        if (! $user || (! $user->can($permission) && ! $user->hasRole('admin'))) {
+        return (bool) ($user && $user->can($permission));
+    }
+
+    protected function authorizePermission(string $permission): void
+    {
+        if (! $this->userCan($permission)) {
             abort(403, 'ليس لديك صلاحية.');
         }
     }
@@ -21,18 +26,8 @@ abstract class ApiController extends Controller
      */
     protected function authorizeAnyPermission(array $permissions): void
     {
-        $user = auth()->user();
-
-        if (! $user || $user->hasRole('admin')) {
-            if (! $user) {
-                abort(403, 'ليس لديك صلاحية.');
-            }
-
-            return;
-        }
-
         foreach ($permissions as $permission) {
-            if ($user->can($permission)) {
+            if ($this->userCan($permission)) {
                 return;
             }
         }

@@ -30,24 +30,30 @@ type Props = {
 }
 
 const clean = (value?: string | null) => value?.trim() || ''
+const norm = (value?: string | null) => clean(value).toLocaleLowerCase()
 
+/**
+ * Unique catalog match from any filled identity fields (name / brand / model).
+ * Empty fields are wildcards; all filled fields must agree. Returns null when
+ * zero or multiple products match (keeps free-text custom lines working).
+ */
 function matchProduct(products: PrintInvoiceLineProduct[], line: PrintInvoiceLineDraft) {
-  const name = clean(line.product_name)
-  if (!name) return null
+  const name = norm(line.product_name)
+  const brand = norm(line.brand)
+  const model = norm(line.model)
+  if (!name && !brand && !model) return null
 
-  const brand = clean(line.brand)
-  const model = clean(line.model)
   const matches = products.filter((product) => {
-    if (product.name.trim() !== name) return false
-    if (brand && clean(product.brand) !== brand) return false
-    if (model && clean(product.model) !== model) return false
+    if (name && norm(product.name) !== name) return false
+    if (brand && norm(product.brand) !== brand) return false
+    if (model && norm(product.model) !== model) return false
     return true
   })
 
   return matches.length === 1 ? matches[0] : null
 }
 
-/** Free-text name/brand/model for print invoices, with optional catalog suggestions. */
+/** Free-text name/brand/model for print invoices & quotes, with catalog auto-fill. */
 export default function PrintInvoiceLineFields({
   products,
   line,
@@ -61,23 +67,34 @@ export default function PrintInvoiceLineFields({
   const brandListId = `free-text-brands-${hintNs}-${lineIndex}`
   const modelListId = `free-text-models-${hintNs}-${lineIndex}`
 
-  const names = useMemo(
-    () => [...new Set(products.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [products],
-  )
-  const brands = useMemo(() => {
-    const name = clean(line.product_name)
-    const pool = name
-      ? products.filter((p) => p.name.trim() === name)
-      : products
-    return [...new Set(pool.map((p) => clean(p.brand)).filter(Boolean))].sort((a, b) => a.localeCompare(b))
-  }, [products, line.product_name])
-  const models = useMemo(() => {
-    const name = clean(line.product_name)
-    const brand = clean(line.brand)
+  const names = useMemo(() => {
+    const brand = norm(line.brand)
+    const model = norm(line.model)
     const pool = products.filter((p) => {
-      if (name && p.name.trim() !== name) return false
-      if (brand && clean(p.brand) !== brand) return false
+      if (brand && norm(p.brand) !== brand) return false
+      if (model && norm(p.model) !== model) return false
+      return true
+    })
+    return [...new Set(pool.map((p) => p.name.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  }, [products, line.brand, line.model])
+
+  const brands = useMemo(() => {
+    const name = norm(line.product_name)
+    const model = norm(line.model)
+    const pool = products.filter((p) => {
+      if (name && norm(p.name) !== name) return false
+      if (model && norm(p.model) !== model) return false
+      return true
+    })
+    return [...new Set(pool.map((p) => clean(p.brand)).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  }, [products, line.product_name, line.model])
+
+  const models = useMemo(() => {
+    const name = norm(line.product_name)
+    const brand = norm(line.brand)
+    const pool = products.filter((p) => {
+      if (name && norm(p.name) !== name) return false
+      if (brand && norm(p.brand) !== brand) return false
       return true
     })
     return [...new Set(pool.map((p) => clean(p.model)).filter(Boolean))].sort((a, b) => a.localeCompare(b))
@@ -87,13 +104,16 @@ export default function PrintInvoiceLineFields({
     const next = { ...line, ...patch }
     const matched = matchProduct(products, next)
     if (matched) {
+      const nextProductId = String(matched.id)
+      const productChanged = nextProductId !== line.product_id
       onChange({
         ...next,
-        product_id: String(matched.id),
+        product_id: nextProductId,
         product_name: matched.name.trim(),
         brand: clean(matched.brand),
         model: clean(matched.model),
-        unit_price: next.unit_price || String(matched.sale_price ?? ''),
+        // Only replace price when the catalog product identity changes (same as sales).
+        unit_price: productChanged ? String(matched.sale_price ?? '') : next.unit_price,
       })
       return
     }

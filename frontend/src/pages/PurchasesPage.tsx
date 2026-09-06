@@ -14,8 +14,9 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
-import { Button, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
+import { useAuth } from '@/context/AuthContext'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 
@@ -46,6 +47,8 @@ function purchaseLine(productId: string, qty: string, cost: string, batch: strin
 
 export default function PurchasesPage() {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  const canEditInvoices = hasPermission('purchases.invoices.edit')
   const [tab, setTab] = useState('invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
@@ -118,6 +121,7 @@ export default function PurchasesPage() {
     paid_amount: '',
     cash_box_id: '',
     notes: '',
+    discount_amount: '',
     customs_amount: '',
     transport_fees: '',
     fines_amount: '',
@@ -233,7 +237,9 @@ export default function PurchasesPage() {
   const invoiceLineSub = round2(
     inv.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0), 0),
   )
-  const invoiceEstTotal = round2(invoiceLineSub * (1 + effectiveTaxRate / 100) + invoiceExtrasSum)
+  const invoiceDiscount = Math.max(0, Number(inv.discount_amount) || 0)
+  const invoiceTaxAmt = round2(invoiceLineSub * effectiveTaxRate / 100)
+  const invoiceEstTotal = round2(invoiceLineSub - invoiceDiscount + invoiceTaxAmt + invoiceExtrasSum)
 
   const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
     setInv((prev) => ({
@@ -289,6 +295,7 @@ export default function PurchasesPage() {
       paid_amount: '',
       cash_box_id: '',
       notes: '',
+      discount_amount: '',
       customs_amount: '',
       transport_fees: '',
       fines_amount: '',
@@ -352,6 +359,7 @@ export default function PurchasesPage() {
         paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
         status: inv.status,
         notes: inv.notes || null,
+        discount_amount: inv.discount_amount ? Number(inv.discount_amount) : 0,
         customs_amount: inv.customs_amount ? Number(inv.customs_amount) : 0,
         transport_fees: inv.transport_fees ? Number(inv.transport_fees) : 0,
         fines_amount: inv.fines_amount ? Number(inv.fines_amount) : 0,
@@ -535,6 +543,7 @@ export default function PurchasesPage() {
       </div>
       {inv.lines.map((line, index) => {
         const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))
         return (
           <div key={index} className="form-line-card">
             <div className="form-line-card-header">
@@ -559,7 +568,7 @@ export default function PurchasesPage() {
                 })
               }}
             />
-            <div className="form-grid-3">
+            <div className="form-grid-4">
               {line.product_id && (
                 <Field label={t('common.unit')}>
                   <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
@@ -570,6 +579,9 @@ export default function PurchasesPage() {
               </Field>
               <Field label={t('common.cost')}>
                 <NumericInput value={line.unit_cost} onChange={(v) => updateInvLine(index, { unit_cost: v })} />
+              </Field>
+              <Field label={t('common.total')}>
+                <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
               </Field>
             </div>
             {product?.track_batch && (
@@ -585,6 +597,33 @@ export default function PurchasesPage() {
           </div>
         )
       })}
+      <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
+          <span className="tabular-nums">{formatMoney(invoiceLineSub, inv.currency)}</span>
+        </p>
+        {invoiceDiscount > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.discount')}: </span>
+            <span className="tabular-nums">-{formatMoney(invoiceDiscount, inv.currency)}</span>
+          </p>
+        )}
+        {invoiceExtrasSum > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.extrasTotal')}: </span>
+            <span className="tabular-nums">{formatMoney(invoiceExtrasSum, inv.currency)}</span>
+          </p>
+        )}
+        {invoiceTaxAmt > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.tax')}: </span>
+            <span className="tabular-nums">{formatMoney(invoiceTaxAmt, inv.currency)}</span>
+          </p>
+        )}
+        <p className="font-bold">
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(invoiceEstTotal, inv.currency)}</span>
+        </p>
+      </div>
     </FormSection>
   )
 
@@ -615,6 +654,7 @@ export default function PurchasesPage() {
         paid_amount: data.payment_type === 'partial' ? String(data.paid_amount ?? '') : '',
         cash_box_id: data.cash_box_id ? String(data.cash_box_id) : '',
         notes: String(data.notes || ''),
+        discount_amount: data.discount_amount != null && Number(data.discount_amount) > 0 ? String(data.discount_amount) : '',
         customs_amount: data.customs_amount != null && Number(data.customs_amount) > 0 ? String(data.customs_amount) : '',
         transport_fees: data.transport_fees != null && Number(data.transport_fees) > 0 ? String(data.transport_fees) : '',
         fines_amount: data.fines_amount != null && Number(data.fines_amount) > 0 ? String(data.fines_amount) : '',
@@ -662,6 +702,9 @@ export default function PurchasesPage() {
             {data.paid_amount != null && (
               <p><b>{t('common.paidAmount')}:</b> {String(data.paid_amount)} / {String(data.total)} — {t('common.remainingAmount')}: {String(Number(data.total || 0) - Number(data.paid_amount || 0))}</p>
             )}
+            {data.discount_amount != null && Number(data.discount_amount) > 0 && (
+              <p><b>{t('common.discount')}:</b> {String(data.discount_amount)}</p>
+            )}
             {data.tax_amount != null && Number(data.tax_amount) > 0 && (
               <p><b>{t('common.tax')}:</b> {String(data.tax_amount)}</p>
             )}
@@ -695,7 +738,7 @@ export default function PurchasesPage() {
           {data.exchange_rate != null && (data.currency || baseCurrency) !== baseCurrency && (
             <p><b>{t('common.exchangeRate')}:</b> {data.exchange_rate}</p>
           )}
-          <p><b>{t('common.total')}:</b> {data.total || data.amount || '—'} {data.currency || baseCurrency}</p>
+          <p><b>{t('common.total')}:</b> {formatMoney(data.total || data.amount, data.currency || baseCurrency)}</p>
         </div>
         {tab === 'payments' && selectedId && (
           <AttachmentPanel attachableType="supplier_payment" attachableId={selectedId} />
@@ -832,9 +875,9 @@ export default function PurchasesPage() {
       {tab === 'invoices' && (
         <Panel>
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.dateTime')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.dateTime')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(invoices.data || []).map((i: { id: number; invoice_number: string; invoice_date?: string; created_at?: string; total: number; tax_amount?: number; paid_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
+                {(invoices.data || []).map((i: { id: number; invoice_number: string; invoice_date?: string; created_at?: string; total: number; tax_amount?: number; paid_amount?: number; discount_amount?: number; payment_type?: string; status: string; currency?: string; notes?: string | null; attachments_count?: number; supplier?: { name: string; phone?: string } }) => (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openRow(i)}>
                     <td className="font-mono text-xs">
                       <span className="inline-flex items-center gap-1">
@@ -847,13 +890,16 @@ export default function PurchasesPage() {
                     <td className="max-w-[10rem] truncate text-black/70" title={i.notes || undefined}>{i.notes || '—'}</td>
                     <td>{paymentTypeLabel(i.payment_type, t)}</td>
                     <td>{i.currency || 'USD'}</td>
-                    <td>{i.total}</td>
-                    {taxEnabled && <td>{i.tax_amount ?? 0}</td>}
-                    <td>{i.paid_amount ?? 0}</td>
+                    <td className="tabular-nums">{Number(i.discount_amount || 0) > 0 ? formatMoney(i.discount_amount, i.currency || 'USD') : '—'}</td>
+                    <td className="tabular-nums font-medium">{formatMoney(i.total, i.currency || 'USD')}</td>
+                    {taxEnabled && <td className="tabular-nums">{formatMoney(i.tax_amount ?? 0, i.currency || 'USD')}</td>}
+                    <td className="tabular-nums">{formatMoney(i.paid_amount ?? 0, i.currency || 'USD')}</td>
                     <td>{documentStatusLabel(i.status)}</td>
                     <td>
                       <TableActions>
-                      <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
+                      {canEditInvoices && (
+                        <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(i, true) }}>{t('common.edit')}</button>
+                      )}
                       <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printInvoice(i.id) }}>{t('common.print')}</button>
                       <span className="print-hide">
                         <PdfExportButton
@@ -963,9 +1009,11 @@ export default function PurchasesPage() {
             <>
               {tab === 'invoices' && selectedId && (
                 <>
-                  <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
-                    {t('common.edit')}
-                  </Button>
+                  {canEditInvoices && (
+                    <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
+                      {t('common.edit')}
+                    </Button>
+                  )}
                   {canPayInvoice({
                     status: String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || ''),
                     total: Number((detail.data as { total?: number } | undefined)?.total ?? selectedRow?.total ?? 0),
@@ -1118,13 +1166,16 @@ export default function PurchasesPage() {
                     <Field label={t('purchases.otherFees')}><NumericInput value={inv.other_fees} onChange={(v) => setInv((prev) => ({ ...prev, other_fees: v }))} /></Field>
                   </div>
                   {invoiceExtrasSum > 0 && (
-                    <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{invoiceExtrasSum}</span></p>
+                    <p className="text-xs text-black/55">{t('purchases.extrasTotal')}: <span className="tabular-nums font-medium text-black/80">{formatMoney(invoiceExtrasSum, inv.currency)}</span></p>
                   )}
                 </FormSection>
                 <div className="form-grid-2">
-                  <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" />
+                  <Field label={t('common.discount')}>
+                    <NumericInput value={inv.discount_amount} onChange={(v) => setInv((prev) => ({ ...prev, discount_amount: v }))} />
+                  </Field>
                   <Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field>
                 </div>
+                <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invoiceEstTotal} showTaxToggle={taxEnabled} applyTax={applyPurchaseTax} onApplyTaxChange={setApplyPurchaseTax} taxRate={purchaseTaxRate} onTaxRateChange={setPurchaseTaxRate} partner="supplier" />
                 <PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} />
               </FormStack>
             )}

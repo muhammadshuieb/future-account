@@ -14,7 +14,7 @@ class PurchaseInvoice extends Model
     protected $fillable = [
         'invoice_number', 'invoice_date', 'supplier_id', 'warehouse_id', 'cash_box_id', 'branch_id',
         'purchase_order_id', 'status', 'payment_type', 'currency', 'exchange_rate', 'base_amount',
-        'subtotal', 'tax_amount', 'customs_amount', 'transport_fees', 'fines_amount', 'other_fees',
+        'subtotal', 'discount_amount', 'tax_amount', 'customs_amount', 'transport_fees', 'fines_amount', 'other_fees',
         'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
@@ -26,6 +26,7 @@ class PurchaseInvoice extends Model
             'invoice_date' => 'date:Y-m-d',
             'posted_at' => 'datetime',
             'subtotal' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
             'customs_amount' => 'decimal:2',
             'transport_fees' => 'decimal:2',

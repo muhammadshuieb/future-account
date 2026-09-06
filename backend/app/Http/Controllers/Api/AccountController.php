@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
 use App\Models\Account;
-use App\Support\ListSearch;
+use App\Support\SensitiveFinanceAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
-class AccountController extends Controller
+class AccountController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Account::query()->with('parent:id,code,name')->orderBy('code');
+        $this->authorizePermission('accounts.view');
+
+        $canCapital = SensitiveFinanceAccess::canViewCapital($request->user());
 
         if ($request->boolean('tree')) {
             $accounts = Account::query()
@@ -22,11 +23,25 @@ class AccountController extends Controller
                 ->orderBy('code')
                 ->get();
 
-            return response()->json(['data' => $this->buildTree($accounts)]);
+            if (! $canCapital) {
+                $accounts = $accounts->reject(fn (Account $a) => $a->type === 'equity')->values();
+            }
+
+            return $this->ok($this->buildTree($accounts, $canCapital));
+        }
+
+        $query = Account::query()->with('parent:id,code,name')->orderBy('code');
+
+        if (! $canCapital) {
+            $query->where('type', '!=', 'equity');
         }
 
         if ($request->filled('type')) {
-            $query->where('type', $request->string('type'));
+            $type = (string) $request->string('type');
+            if ($type === 'equity' && ! $canCapital) {
+                abort(403, 'ليس لديك صلاحية.');
+            }
+            $query->where('type', $type);
         }
 
         if ($request->boolean('postable_only')) {
@@ -35,14 +50,16 @@ class AccountController extends Controller
 
         \App\Support\ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'description']);
 
-        return response()->json([
-            'data' => $query->get(),
-        ]);
+        return $this->ok($query->get());
     }
 
     public function store(Request $request): JsonResponse
     {
+        $this->authorizePermission('accounts.manage');
         $data = $this->validated($request);
+        if (($data['type'] ?? null) === 'equity') {
+            $this->authorizePermission(SensitiveFinanceAccess::CAPITAL);
+        }
         $data = $this->applyHierarchy($data);
 
         $account = Account::query()->create($data);
@@ -50,16 +67,23 @@ class AccountController extends Controller
         return response()->json(['data' => $account->load('parent')], 201);
     }
 
-    public function show(Account $account): JsonResponse
+    public function show(Request $request, Account $account): JsonResponse
     {
-        return response()->json([
-            'data' => $account->load(['parent', 'children']),
-        ]);
+        $this->authorizePermission('accounts.view');
+        SensitiveFinanceAccess::assertAccountVisible($request->user(), $account);
+
+        return $this->ok($account->load(['parent', 'children']));
     }
 
     public function update(Request $request, Account $account): JsonResponse
     {
+        $this->authorizePermission('accounts.manage');
+        SensitiveFinanceAccess::assertAccountVisible($request->user(), $account);
+
         $data = $this->validated($request, $account->id);
+        if (($data['type'] ?? null) === 'equity' || $account->type === 'equity') {
+            $this->authorizePermission(SensitiveFinanceAccess::CAPITAL);
+        }
 
         if (isset($data['parent_id']) && (int) $data['parent_id'] === $account->id) {
             return response()->json(['message' => 'لا يمكن أن يكون الحساب أباً لنفسه.'], 422);
@@ -68,11 +92,14 @@ class AccountController extends Controller
         $data = $this->applyHierarchy($data);
         $account->update($data);
 
-        return response()->json(['data' => $account->fresh(['parent', 'children'])]);
+        return $this->ok($account->fresh(['parent', 'children']));
     }
 
-    public function destroy(Account $account): JsonResponse
+    public function destroy(Request $request, Account $account): JsonResponse
     {
+        $this->authorizePermission('accounts.manage');
+        SensitiveFinanceAccess::assertAccountVisible($request->user(), $account);
+
         if ($account->children()->exists()) {
             return response()->json(['message' => 'لا يمكن حذف حساب له حسابات فرعية.'], 422);
         }
@@ -117,9 +144,14 @@ class AccountController extends Controller
         return $data;
     }
 
-    protected function buildTree($accounts): array
+    protected function buildTree($accounts, bool $canCapital = true): array
     {
-        return $accounts->map(function (Account $account) {
+        return $accounts->map(function (Account $account) use ($canCapital) {
+            $children = $account->children()->with('children')->orderBy('code')->get();
+            if (! $canCapital) {
+                $children = $children->reject(fn (Account $c) => $c->type === 'equity')->values();
+            }
+
             return [
                 'id' => $account->id,
                 'code' => $account->code,
@@ -130,9 +162,7 @@ class AccountController extends Controller
                 'level' => $account->level,
                 'is_group' => $account->is_group,
                 'is_active' => $account->is_active,
-                'children' => $this->buildTree(
-                    $account->children()->with('children')->orderBy('code')->get()
-                ),
+                'children' => $this->buildTree($children, $canCapital),
             ];
         })->values()->all();
     }

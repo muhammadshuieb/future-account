@@ -1,16 +1,18 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
 import { useQueryTab } from '@/lib/useQueryTab'
-import { statementTypeLabel } from '@/components/StatementPrintView'
+import PartnerStatementPanel, { partnerBalanceLabel } from '@/components/PartnerStatementPanel'
+import type { PartnerStatementData } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPartnersTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, TableActions, Tabs, formatMoney, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, TableActions, Tabs, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 
 type PartnerRow = { id: number; code: string; name: string; phone?: string; credit_limit?: number; is_active?: boolean; balance?: number }
@@ -19,6 +21,7 @@ const PARTNER_TABS = ['customers', 'suppliers'] as const
 const emptyForm = { code: '', name: '', phone: '', credit_limit: '0' }
 
 export default function PartnersPage() {
+  const { t } = useTranslation()
   const [tab, setTab] = useQueryTab(PARTNER_TABS, 'customers')
   const [statementId, setStatementId] = useState<number | null>(null)
   const [from, setFrom] = useState(yearStartYmd)
@@ -29,6 +32,8 @@ export default function PartnersPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
+  const kind = tab === 'customers' ? 'customer' : 'supplier'
+  const balanceLabels = { owedByThem: t('common.owedByThem'), owedToThem: t('common.owedToThem') }
 
   const customers = useQuery({
     queryKey: ['customers', search.debouncedQ],
@@ -47,7 +52,7 @@ export default function PartnersPage() {
   const statement = useQuery({
     queryKey: ['statement', tab, statementId, from, to],
     queryFn: async () =>
-      (await api.get(`/${tab}/${statementId}/statement`, { params: { from, to } })).data.data,
+      (await api.get(`/${tab}/${statementId}/statement`, { params: { from, to } })).data.data as PartnerStatementData,
     enabled: !!statementId,
   })
 
@@ -55,18 +60,7 @@ export default function PartnersPage() {
   const totalBalance = (rows || []).reduce((sum, r) => sum + (Number(r.balance) || 0), 0)
 
   function balanceLabel(balance: number) {
-    const abs = Math.abs(balance)
-    if (tab === 'customers') {
-      // positive = customer owes us (عليه)
-      if (balance > 0.009) return `${formatMoney(abs, base)} — عليه`
-      if (balance < -0.009) return `${formatMoney(abs, base)} — له`
-      return formatMoney(0, base)
-    }
-    // suppliers: positive = we owe them (له علينا / عليه لنا depending on convention)
-    // statement: invoices increase credit balance (we owe), payments reduce
-    if (balance > 0.009) return `${formatMoney(abs, base)} — له`
-    if (balance < -0.009) return `${formatMoney(abs, base)} — عليه`
-    return formatMoney(0, base)
+    return partnerBalanceLabel(balance, kind, base, balanceLabels)
   }
 
   function openCreate() {
@@ -143,7 +137,7 @@ export default function PartnersPage() {
 
       <Panel>
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/5 px-4 py-3 text-sm">
-          <span className="text-black/60">إجمالي الأرصدة</span>
+          <span className="text-black/60">{t('common.totalBalances')}</span>
           <strong className="tabular-nums">{balanceLabel(totalBalance)}</strong>
         </div>
         <table className="w-full text-sm">
@@ -260,36 +254,7 @@ export default function PartnersPage() {
           {statement.isLoading && <p className="p-4 text-sm text-black/55">جاري التحميل...</p>}
           {statement.error && <p className="p-4 text-sm text-danger">تعذر تحميل كشف الحساب</p>}
           {statement.data && (
-            <>
-              <div className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-2">
-                <p>الرصيد الافتتاحي: <strong className="tabular-nums">{formatMoney(Number(statement.data.opening_balance) || 0, base)}</strong></p>
-                <p>الرصيد الختامي: <strong className="tabular-nums">{formatMoney(Number(statement.data.closing_balance ?? statement.data.balance) || 0, base)}</strong></p>
-              </div>
-              <table className="w-full text-sm">
-                <thead className="bg-mist text-right text-black/60">
-                  <tr>
-                    <th className="px-4 py-3">تاريخ</th>
-                    <th className="px-4 py-3">نوع</th>
-                    <th className="px-4 py-3">رقم</th>
-                    <th className="px-4 py-3">مدين</th>
-                    <th className="px-4 py-3">دائن</th>
-                    <th className="px-4 py-3">رصيد</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(statement.data.rows || []).map((r: { date: string; type: string; number: string; debit: number; credit: number; balance: number }, idx: number) => (
-                    <tr key={idx} className="border-t border-black/5">
-                      <td className="px-4 py-3">{r.date}</td>
-                      <td className="px-4 py-3">{statementTypeLabel(r.type)}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{r.number}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.debit) || 0, base)}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.credit) || 0, base)}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatMoney(Number(r.balance) || 0, base)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
+            <PartnerStatementPanel data={statement.data} kind={kind} currency={base} />
           )}
         </Panel>
       )}

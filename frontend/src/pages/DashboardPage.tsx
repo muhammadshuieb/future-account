@@ -7,6 +7,7 @@ import api from '@/lib/api'
 import { resolveAlertHref } from '@/lib/alertLinks'
 import type { DashboardCurrencyStats, DashboardSummary } from '@/types'
 import { EmptyState, Field, LoadingBlock, Panel, StatTile, formatMoney, inputClass } from '@/components/ui'
+import { useAuth } from '@/context/AuthContext'
 
 type BranchOption = { id: number; name: string; is_active?: boolean }
 type CurrencyOption = { code: string; name: string; is_active?: boolean }
@@ -85,7 +86,7 @@ function formatNativeLiquidity(
   return parts.length ? parts.join(' · ') : formatMoney(0, rows[0]?.currency || 'USD')
 }
 
-function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
+function CurrencyBreakdownTable({ rows, showProfits }: { rows: DashboardCurrencyStats[]; showProfits: boolean }) {
   const { t } = useTranslation()
 
   if (!rows.length) {
@@ -112,9 +113,13 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
           <thead>
             <tr className="border-b border-[var(--color-line)] bg-mist/60 text-right text-xs text-black/55">
               <th className="px-4 py-2.5 font-medium">العملة</th>
-              <th className="px-4 py-2.5 font-medium">إيرادات</th>
-              <th className="px-4 py-2.5 font-medium">مصروفات</th>
-              <th className="px-4 py-2.5 font-medium">صافي</th>
+              {showProfits && (
+                <>
+                  <th className="px-4 py-2.5 font-medium">إيرادات</th>
+                  <th className="px-4 py-2.5 font-medium">مصروفات</th>
+                  <th className="px-4 py-2.5 font-medium">صافي</th>
+                </>
+              )}
               <th className="px-4 py-2.5 font-medium">{t('dashboard.receivables')}</th>
               <th className="px-4 py-2.5 font-medium">{t('dashboard.payables')}</th>
               <th className="px-4 py-2.5 font-medium">صناديق</th>
@@ -128,9 +133,13 @@ function CurrencyBreakdownTable({ rows }: { rows: DashboardCurrencyStats[] }) {
             {rows.map((row) => (
               <tr key={row.currency} className="hover:bg-mist/40">
                 <td className="px-4 py-3 font-semibold tabular-nums">{row.currency}</td>
-                <td className="px-4 py-3 tabular-nums">{formatMoney(row.revenue, row.currency)}</td>
-                <td className="px-4 py-3 tabular-nums">{formatMoney(row.expense, row.currency)}</td>
-                <td className="px-4 py-3 tabular-nums">{formatMoney(row.net_income, row.currency)}</td>
+                {showProfits && (
+                  <>
+                    <td className="px-4 py-3 tabular-nums">{formatMoney(row.revenue ?? 0, row.currency)}</td>
+                    <td className="px-4 py-3 tabular-nums">{formatMoney(row.expense ?? 0, row.currency)}</td>
+                    <td className="px-4 py-3 tabular-nums">{formatMoney(row.net_income ?? 0, row.currency)}</td>
+                  </>
+                )}
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.receivables, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.payables, row.currency)}</td>
                 <td className="px-4 py-3 tabular-nums">{formatMoney(row.cash ?? 0, row.currency)}</td>
@@ -292,6 +301,8 @@ function CashBanksSection({
 
 export default function DashboardPage() {
   const { t } = useTranslation()
+  const { hasPermission } = useAuth()
+  const canProfits = hasPermission('reports.profits.view')
   const [days, setDays] = useState<7 | 30>(7)
   const [branchId, setBranchId] = useState('')
   const [currencyFilter, setCurrencyFilter] = useState('')
@@ -357,11 +368,13 @@ export default function DashboardPage() {
     liquidity: data.liquidity ?? 0,
   }
 
-  const primary = [
-    { label: 'إيرادات الفترة', value: formatMoney(data.revenue, currency), tone: 'success' as const },
-    { label: 'مصروفات الفترة', value: formatMoney(data.expense, currency), tone: 'amber' as const },
-    { label: 'صافي الربح', value: formatMoney(data.net_income, currency), tone: 'teal' as const },
-  ]
+  const primary = canProfits
+    ? [
+        { label: 'إيرادات الفترة', value: formatMoney(data.revenue ?? 0, currency), tone: 'success' as const },
+        { label: 'مصروفات الفترة', value: formatMoney(data.expense ?? 0, currency), tone: 'amber' as const },
+        { label: 'صافي الربح', value: formatMoney(data.net_income ?? 0, currency), tone: 'teal' as const },
+      ]
+    : []
 
   const secondary = [
     { label: t('dashboard.receivables'), value: formatMoney(data.receivables ?? 0, currency) },
@@ -370,11 +383,13 @@ export default function DashboardPage() {
     { label: 'مشتريات الشهر', value: formatMoney(data.month_purchases ?? 0, currency) },
   ]
 
-  const basePrimary = [
-    { label: 'إيرادات الفترة', value: formatMoney(base.revenue, baseCurrency), tone: 'success' as const },
-    { label: 'مصروفات الفترة', value: formatMoney(base.expense, baseCurrency), tone: 'amber' as const },
-    { label: 'صافي الربح', value: formatMoney(base.net_income, baseCurrency), tone: 'teal' as const },
-  ]
+  const basePrimary = canProfits
+    ? [
+        { label: 'إيرادات الفترة', value: formatMoney(base.revenue ?? 0, baseCurrency), tone: 'success' as const },
+        { label: 'مصروفات الفترة', value: formatMoney(base.expense ?? 0, baseCurrency), tone: 'amber' as const },
+        { label: 'صافي الربح', value: formatMoney(base.net_income ?? 0, baseCurrency), tone: 'teal' as const },
+      ]
+    : []
 
   const baseSecondary = [
     { label: t('dashboard.receivables'), value: formatMoney(base.receivables, baseCurrency) },
@@ -482,20 +497,24 @@ export default function DashboardPage() {
 
       {showAllCurrencies ? (
         <>
-          <CurrencyBreakdownTable rows={byCurrency} />
+          <CurrencyBreakdownTable rows={byCurrency} showProfits={canProfits} />
 
           <section className="form-stack">
-            <div>
-              <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات ({baseCurrency})</h2>
-              <p className="text-xs text-black/45">
-                من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {basePrimary.map((c) => (
-                <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
-              ))}
-            </div>
+            {canProfits && (
+              <>
+                <div>
+                  <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات ({baseCurrency})</h2>
+                  <p className="text-xs text-black/45">
+                    من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {basePrimary.map((c) => (
+                    <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+                  ))}
+                </div>
+              </>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {baseSecondary.map((c) => (
                 <StatTile key={c.label} label={c.label} value={c.value} />
@@ -506,15 +525,19 @@ export default function DashboardPage() {
       ) : (
         <>
           <section className="form-stack">
-            <div>
-              <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات</h2>
-              <p className="text-xs text-black/45">من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك</p>
-            </div>
-            <section className="grid gap-3 sm:grid-cols-3">
-              {primary.map((c) => (
-                <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
-              ))}
-            </section>
+            {canProfits && (
+              <>
+                <div>
+                  <h2 className="text-sm font-semibold text-black/70">الإيرادات والمصروفات</h2>
+                  <p className="text-xs text-black/45">من فواتير المبيعات/المشتريات فقط — ليست أرصدة صناديق أو بنوك</p>
+                </div>
+                <section className="grid gap-3 sm:grid-cols-3">
+                  {primary.map((c) => (
+                    <StatTile key={c.label} label={c.label} value={c.value} tone={c.tone} />
+                  ))}
+                </section>
+              </>
+            )}
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {secondary.map((c) => (
                 <StatTile key={c.label} label={c.label} value={c.value} />

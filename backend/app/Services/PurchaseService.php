@@ -39,8 +39,9 @@ class PurchaseService
                 $extras['customs_amount'] + $extras['transport_fees'] + $extras['fines_amount'] + $extras['other_fees'],
                 2
             );
-            // Landed cost: line subtotal + tax (if enabled) + optional extras.
-            $total = round($linesTotal + $extrasSum, 2);
+            $discount = $this->normalizeDiscountAmount($data['discount_amount'] ?? 0, $subtotal);
+            // Landed cost: line subtotal + tax (if enabled) + optional extras − invoice discount (حسم).
+            $total = round($linesTotal + $extrasSum - $discount, 2);
 
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
@@ -65,6 +66,7 @@ class PurchaseService
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
+                'discount_amount' => $discount,
                 'tax_amount' => $tax,
                 'customs_amount' => $extras['customs_amount'],
                 'transport_fees' => $extras['transport_fees'],
@@ -88,13 +90,17 @@ class PurchaseService
         });
     }
 
-    public function postInvoice(PurchaseInvoice $invoice, User $user, ?float $intendedPaidOverride = null): PurchaseInvoice
-    {
+    public function postInvoice(
+        PurchaseInvoice $invoice,
+        User $user,
+        ?float $intendedPaidOverride = null,
+        bool $applyStock = true,
+    ): PurchaseInvoice {
         if ($invoice->status === 'posted') {
             throw ValidationException::withMessages(['status' => ['فاتورة المشتريات مرحّلة مسبقاً.']]);
         }
 
-        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
+        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride, $applyStock) {
             $invoice->load(['lines.product.unit', 'supplier']);
 
             if (! $invoice->warehouse_id) {
@@ -151,6 +157,9 @@ class PurchaseService
             ], $glLines, $user);
 
             $extrasDoc = $invoice->extrasTotal();
+            $discountDoc = round((float) ($invoice->discount_amount ?? 0), 2);
+            // Net adjustment capitalized into unit cost: extras increase cost, discount reduces it.
+            $netAdjDoc = round($extrasDoc - $discountDoc, 2);
             $lineWeights = [];
             $weightSum = 0.0;
             foreach ($invoice->lines as $line) {
@@ -159,7 +168,7 @@ class PurchaseService
                 $weightSum += $lineSub;
             }
 
-            $allocatedExtras = 0.0;
+            $allocatedAdj = 0.0;
             $lineIds = $invoice->lines->pluck('id')->all();
             $lastLineId = $lineIds === [] ? null : $lineIds[array_key_last($lineIds)];
 
@@ -168,23 +177,29 @@ class PurchaseService
                 $qty = (float) $line->quantity;
                 $lineSub = $lineWeights[$line->id] ?? 0.0;
 
-                if ($extrasDoc > 0 && $qty > 0) {
+                if (abs($netAdjDoc) > 0.00001 && $qty > 0) {
                     if ($line->id === $lastLineId) {
-                        $lineExtra = round($extrasDoc - $allocatedExtras, 2);
+                        $lineAdj = round($netAdjDoc - $allocatedAdj, 2);
                     } elseif ($weightSum > 0) {
-                        $lineExtra = round($extrasDoc * ($lineSub / $weightSum), 2);
-                        $allocatedExtras += $lineExtra;
+                        $lineAdj = round($netAdjDoc * ($lineSub / $weightSum), 2);
+                        $allocatedAdj += $lineAdj;
                     } else {
-                        $lineExtra = 0.0;
+                        $lineAdj = 0.0;
                     }
-                    // Document currency unit cost including proportional landed-cost share.
-                    $docUnitCost = round(($lineSub + $lineExtra) / $qty, 4);
+                    // Document currency unit cost including proportional landed-cost / discount share.
+                    $docUnitCost = round(($lineSub + $lineAdj) / $qty, 4);
                 } else {
                     $docUnitCost = (float) $line->unit_cost;
                 }
 
                 // Line costs are in the invoice currency; product cost and stock cost are kept in base currency.
                 $baseUnitCost = round($docUnitCost * $rate, 4);
+
+                // Financial-only re-post (stock already consumed) updates GL only.
+                if (! $applyStock) {
+                    continue;
+                }
+
                 $product->update([
                     'cost_price' => $this->inventory->movingAverageCost($product, $qty, $baseUnitCost),
                 ]);
@@ -254,6 +269,10 @@ class PurchaseService
 
     /**
      * Safely update a purchase invoice (draft rewrite, or posted reverse → rewrite → re-post).
+     *
+     * When purchased qty was already sold/moved, stock cannot be reversed. In that case:
+     * - Same products/qty/warehouse/batch/serial → financial-only rewrite (GL + payments; stock untouched).
+     * - Identity change (qty/product/warehouse/…) → clear Arabic validation error.
      */
     public function updateInvoice(PurchaseInvoice $invoice, array $data, array $lines, User $user): PurchaseInvoice
     {
@@ -265,8 +284,27 @@ class PurchaseService
                 ]);
             }
 
+            $applyStock = true;
             if ($wasPosted) {
-                $this->unpostInvoice($invoice, $user);
+                $invoice->loadMissing(['lines']);
+                $warehouseId = $this->resolveWarehouseId(
+                    array_key_exists('warehouse_id', $data)
+                        ? (isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
+                        : ($invoice->warehouse_id ? (int) $invoice->warehouse_id : null)
+                );
+                $identityChanged = $this->purchaseStockIdentityChanged($invoice, $warehouseId, $lines);
+                $canReverseStock = $this->canReversePurchaseStock($invoice);
+
+                if (! $canReverseStock) {
+                    if ($identityChanged) {
+                        throw ValidationException::withMessages([
+                            'quantity' => ['لا يمكن تعديل أصناف/كميات هذه الفاتورة لأن جزءاً من الكمية تم بيعه أو صرفه من المخزن. عدّل السعر أو الحسم أو الملاحظات فقط، أو أعد الكمية للمخزن أولاً.'],
+                        ]);
+                    }
+                    $applyStock = false;
+                }
+
+                $this->unpostInvoice($invoice, $user, reverseStock: $applyStock);
                 $invoice->refresh();
             }
 
@@ -276,7 +314,8 @@ class PurchaseService
                 $extras['customs_amount'] + $extras['transport_fees'] + $extras['fines_amount'] + $extras['other_fees'],
                 2
             );
-            $total = round($linesTotal + $extrasSum, 2);
+            $discount = $this->normalizeDiscountAmount($data['discount_amount'] ?? 0, $subtotal);
+            $total = round($linesTotal + $extrasSum - $discount, 2);
 
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
@@ -305,6 +344,7 @@ class PurchaseService
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'subtotal' => $subtotal,
+                'discount_amount' => $discount,
                 'tax_amount' => $tax,
                 'customs_amount' => $extras['customs_amount'],
                 'transport_fees' => $extras['transport_fees'],
@@ -324,7 +364,12 @@ class PurchaseService
             }
 
             if ($wantPosted) {
-                return $this->postInvoice($invoice->fresh(['lines.product.unit', 'supplier']), $user, $intendedPaid);
+                return $this->postInvoice(
+                    $invoice->fresh(['lines.product.unit', 'supplier']),
+                    $user,
+                    $intendedPaid,
+                    applyStock: $applyStock,
+                );
             }
 
             $this->audit->log($user, 'purchase_invoice.updated', $invoice);
@@ -333,7 +378,90 @@ class PurchaseService
         });
     }
 
-    protected function unpostInvoice(PurchaseInvoice $invoice, User $user): void
+    /**
+     * True when warehouse or line identity (product/qty/batch/serial) differs from the posted invoice.
+     *
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    protected function purchaseStockIdentityChanged(PurchaseInvoice $invoice, int $warehouseId, array $lines): bool
+    {
+        if ((int) $invoice->warehouse_id !== $warehouseId) {
+            return true;
+        }
+
+        $normalize = static function (array $rows): array {
+            $out = [];
+            foreach ($rows as $row) {
+                $out[] = sprintf(
+                    '%d|%s|%s|%s',
+                    (int) ($row['product_id'] ?? 0),
+                    rtrim(rtrim(number_format((float) ($row['quantity'] ?? 0), 3, '.', ''), '0'), '.') ?: '0',
+                    (string) ($row['batch_no'] ?? ''),
+                    (string) ($row['serial_no'] ?? ''),
+                );
+            }
+            sort($out);
+
+            return $out;
+        };
+
+        $existing = $invoice->lines->map(fn ($line) => [
+            'product_id' => $line->product_id,
+            'quantity' => $line->quantity,
+            'batch_no' => $line->batch_no,
+            'serial_no' => $line->serial_no,
+        ])->all();
+
+        return $normalize($existing) !== $normalize($lines);
+    }
+
+    /** Whether current posted stock movements can still be reversed from on-hand qty. */
+    protected function canReversePurchaseStock(PurchaseInvoice $invoice): bool
+    {
+        $movements = $this->activePurchaseStockMovements($invoice);
+        foreach ($movements as $movement) {
+            $qty = (float) $movement->quantity;
+            if ($qty <= 0.0001) {
+                continue;
+            }
+            $product = Product::query()->find($movement->product_id);
+            if (! $product) {
+                return false;
+            }
+            $available = $this->inventory->availableQty(
+                (int) $movement->warehouse_id,
+                (int) $movement->product_id,
+                $product->track_batch ? ($movement->batch_no ?: null) : null,
+                $product,
+            );
+            if ($available + 0.0001 < $qty) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** Stock movements belonging to the current posting (excludes prior edit reverse rows). */
+    protected function activePurchaseStockMovements(PurchaseInvoice $invoice)
+    {
+        $query = StockMovement::query()
+            ->where('reference_type', $invoice::class)
+            ->where('reference_id', $invoice->id);
+
+        if ($invoice->journal_entry_id) {
+            $query->where('journal_entry_id', $invoice->journal_entry_id);
+        } else {
+            // Legacy rows without JE link: ignore explicit reverse movements from earlier edits.
+            $query->where(function ($q) {
+                $q->whereNull('notes')->orWhere('notes', 'not like', 'عكس ترحيل%');
+            });
+        }
+
+        return $query->orderByDesc('id')->get();
+    }
+
+    protected function unpostInvoice(PurchaseInvoice $invoice, User $user, bool $reverseStock = true): void
     {
         if ($invoice->status !== 'posted') {
             return;
@@ -361,51 +489,49 @@ class PurchaseService
             $payment->update(['status' => 'void', 'journal_entry_id' => null]);
         }
 
-        $movements = StockMovement::query()
-            ->where('reference_type', $invoice::class)
-            ->where('reference_id', $invoice->id)
-            ->orderByDesc('id')
-            ->get();
+        if ($reverseStock) {
+            $movements = $this->activePurchaseStockMovements($invoice);
 
-        foreach ($movements as $movement) {
-            $qty = (float) $movement->quantity;
-            if (abs($qty) < 0.0001) {
-                continue;
+            foreach ($movements as $movement) {
+                $qty = (float) $movement->quantity;
+                if (abs($qty) < 0.0001) {
+                    continue;
+                }
+
+                $product = Product::query()->find($movement->product_id);
+                if ($product && $qty > 0) {
+                    $existingQty = round((float) \App\Models\StockLevel::query()
+                        ->where('product_id', $product->id)
+                        ->where('quantity', '>', 0)
+                        ->sum('quantity'), 3);
+                    $product->update([
+                        'cost_price' => $this->inventory->reverseMovingAverageCost(
+                            $product,
+                            $existingQty,
+                            $qty,
+                            (float) $movement->unit_cost
+                        ),
+                    ]);
+                }
+
+                // Original purchase stores positive qty (in); reverse deducts stock (out).
+                $this->inventory->adjustStock(
+                    (int) $movement->warehouse_id,
+                    (int) $movement->product_id,
+                    -$qty,
+                    $qty > 0 ? 'out' : 'in',
+                    $user,
+                    [
+                        'movement_date' => now()->toDateString(),
+                        'unit_cost' => $movement->unit_cost,
+                        'batch_no' => $movement->batch_no,
+                        'serial_no' => $movement->serial_no,
+                        'reference_type' => $invoice::class,
+                        'reference_id' => $invoice->id,
+                        'notes' => 'عكس ترحيل فاتورة مشتريات '.$invoice->invoice_number,
+                    ]
+                );
             }
-
-            $product = Product::query()->find($movement->product_id);
-            if ($product && $qty > 0) {
-                $existingQty = round((float) \App\Models\StockLevel::query()
-                    ->where('product_id', $product->id)
-                    ->where('quantity', '>', 0)
-                    ->sum('quantity'), 3);
-                $product->update([
-                    'cost_price' => $this->inventory->reverseMovingAverageCost(
-                        $product,
-                        $existingQty,
-                        $qty,
-                        (float) $movement->unit_cost
-                    ),
-                ]);
-            }
-
-            // Original purchase stores positive qty (in); reverse deducts stock (out).
-            $this->inventory->adjustStock(
-                (int) $movement->warehouse_id,
-                (int) $movement->product_id,
-                -$qty,
-                $qty > 0 ? 'out' : 'in',
-                $user,
-                [
-                    'movement_date' => now()->toDateString(),
-                    'unit_cost' => $movement->unit_cost,
-                    'batch_no' => $movement->batch_no,
-                    'serial_no' => $movement->serial_no,
-                    'reference_type' => $invoice::class,
-                    'reference_id' => $invoice->id,
-                    'notes' => 'عكس ترحيل فاتورة مشتريات '.$invoice->invoice_number,
-                ]
-            );
         }
 
         if ($invoice->journal_entry_id) {
@@ -815,6 +941,20 @@ class PurchaseService
         return $out;
     }
 
+    /** Optional invoice-level discount (حسم); must be >= 0 and <= subtotal. */
+    protected function normalizeDiscountAmount(mixed $raw, float $subtotal): float
+    {
+        $discount = round(max(0, (float) $raw), 2);
+
+        if ($discount > round($subtotal, 2) + 0.00001) {
+            throw ValidationException::withMessages([
+                'discount_amount' => ['الحسم لا يجوز أن يتجاوز مجموع البنود.'],
+            ]);
+        }
+
+        return $discount;
+    }
+
     /**
      * @param  bool  $requireInboundTracking  When true (invoices/returns), batch/serial are required for tracked products.
      *                                         Planning docs (requests/orders) may omit batch until goods are received.
@@ -1182,8 +1322,10 @@ class PurchaseService
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
+                'document_id' => (int) $inv->id,
                 'currency' => $inv->currency,
                 'document_amount' => (float) $inv->total,
+                'notes' => $inv->notes,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
             ];
@@ -1194,8 +1336,10 @@ class PurchaseService
                 'date' => $pay->payment_date->toDateString(),
                 'type' => 'payment',
                 'number' => $pay->payment_number,
+                'document_id' => (int) $pay->id,
                 'currency' => $pay->currency,
                 'document_amount' => (float) $pay->amount,
+                'notes' => $pay->notes,
                 'debit' => $this->baseValue($pay->base_amount, $pay->amount, $pay->exchange_rate),
                 'credit' => 0.0,
             ];
@@ -1206,8 +1350,10 @@ class PurchaseService
                 'date' => $ret->return_date->toDateString(),
                 'type' => 'return',
                 'number' => $ret->return_number,
+                'document_id' => (int) $ret->id,
                 'currency' => $ret->currency,
                 'document_amount' => (float) $ret->total,
+                'notes' => null,
                 'debit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
                 'credit' => 0.0,
             ];
@@ -1241,8 +1387,10 @@ class PurchaseService
                 'date' => $event['date'],
                 'type' => $event['type'],
                 'number' => $event['number'],
+                'document_id' => $event['document_id'],
                 'currency' => $event['currency'],
                 'document_amount' => $event['document_amount'],
+                'notes' => $event['notes'],
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
@@ -1254,6 +1402,8 @@ class PurchaseService
         }
 
         $closingBalance = $rows === [] ? $openingBalance : (float) $rows[array_key_last($rows)]['balance'];
+        $totalDebit = round(collect($rows)->sum('debit'), 2);
+        $totalCredit = round(collect($rows)->sum('credit'), 2);
 
         return [
             'supplier' => $supplier,
@@ -1262,6 +1412,8 @@ class PurchaseService
             'currency' => $this->currencies->baseCurrency(),
             'opening_balance' => round($openingBalance, 2),
             'closing_balance' => round($closingBalance, 2),
+            'total_debit' => $totalDebit,
+            'total_credit' => $totalCredit,
             'rows' => $rows,
             'balance' => round($closingBalance, 2),
         ];

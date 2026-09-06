@@ -37,6 +37,7 @@ class PurchaseInvoiceController extends ApiController
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'payment_type' => ['nullable', 'in:cash,credit,partial'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'customs_amount' => ['nullable', 'numeric', 'min:0'],
             'transport_fees' => ['nullable', 'numeric', 'min:0'],
             'fines_amount' => ['nullable', 'numeric', 'min:0'],
@@ -64,7 +65,7 @@ class PurchaseInvoiceController extends ApiController
 
     public function update(Request $request, PurchaseInvoice $purchaseInvoice): JsonResponse
     {
-        $this->authorizePermission('purchases.manage');
+        $this->authorizePermission('purchases.invoices.edit');
         $data = $request->validate([
             'invoice_date' => ['required', 'date'],
             'supplier_id' => ['required', 'exists:suppliers,id'],
@@ -75,6 +76,7 @@ class PurchaseInvoiceController extends ApiController
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'payment_type' => ['nullable', 'in:cash,credit,partial'],
             'paid_amount' => ['nullable', 'numeric', 'min:0'],
+            'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'customs_amount' => ['nullable', 'numeric', 'min:0'],
             'transport_fees' => ['nullable', 'numeric', 'min:0'],
             'fines_amount' => ['nullable', 'numeric', 'min:0'],

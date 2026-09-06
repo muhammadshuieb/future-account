@@ -40,6 +40,7 @@ export type PurchaseInvoicePrintData = {
   total: number
   tax_amount?: number
   subtotal?: number
+  discount_amount?: number
   customs_amount?: number
   transport_fees?: number
   fines_amount?: number
@@ -650,6 +651,12 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
           <p>
             <span className="text-black/55">{t('common.subtotal')}: </span>
             <span className="tabular-nums">{invoice.subtotal}</span>
+          </p>
+        )}
+        {Number(invoice.discount_amount) > 0 && (
+          <p>
+            <span className="text-black/55">{t('common.discount')}: </span>
+            <span className="tabular-nums">-{invoice.discount_amount}</span>
           </p>
         )}
         {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (

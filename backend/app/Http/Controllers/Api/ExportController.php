@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Account;
 use App\Services\ExcelExportService;
+use App\Support\SensitiveFinanceAccess;
 use Illuminate\Http\Request;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -29,6 +31,17 @@ class ExportController extends ApiController
     public function report(Request $request, string $type): StreamedResponse
     {
         $this->authorizePermission('reports.view');
+
+        if (in_array($type, SensitiveFinanceAccess::reportTypesRequiringProfits(), true)) {
+            $this->authorizePermission(SensitiveFinanceAccess::PROFITS);
+        }
+
+        if ($type === 'general-ledger' && $request->filled('account_id')) {
+            $account = Account::query()->find((int) $request->query('account_id'));
+            if ($account) {
+                SensitiveFinanceAccess::assertAccountVisible($request->user(), $account);
+            }
+        }
 
         try {
             return $this->exports->downloadReport($type, $request);

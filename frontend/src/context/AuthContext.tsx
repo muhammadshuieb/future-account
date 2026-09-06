@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPermission = useCallback(
     (permission: string) => {
       if (!user) return false
-      if (user.roles.includes('admin')) return true
+      // Permissions are authoritative — even elevated roles must hold capital/profits grants.
       return user.permissions.includes(permission)
     },
     [user],

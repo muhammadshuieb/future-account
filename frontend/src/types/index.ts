@@ -49,9 +49,9 @@ export type JournalEntry = {
 
 export type DashboardCurrencyStats = {
   currency: string
-  revenue: number
-  expense: number
-  net_income: number
+  revenue?: number | null
+  expense?: number | null
+  net_income?: number | null
   receivables: number
   payables: number
   month_sales: number
@@ -67,9 +67,10 @@ export type DashboardSummary = {
   journal_entries_count: number
   posted_entries_count: number
   draft_entries_count: number
-  revenue: number
-  expense: number
-  net_income: number
+  revenue?: number | null
+  expense?: number | null
+  net_income?: number | null
+  profits_redacted?: boolean
   currency: string
   base_currency?: string
   filter_branch_id?: number | null

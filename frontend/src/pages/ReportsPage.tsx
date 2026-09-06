@@ -6,12 +6,14 @@ import api from '@/lib/api'
 import { formatDateLocal, todayYmd, yearStartYmd } from '@/lib/dates'
 import { LOGO } from '@/lib/brand'
 import { openPrintPopup } from '@/lib/printPopup'
-import { statementTypeLabel } from '@/components/StatementPrintView'
+import PartnerStatementPanel from '@/components/PartnerStatementPanel'
+import type { PartnerStatementData } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, StatTile, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 import { productLabel } from '@/lib/productLabel'
+import { useAuth } from '@/context/AuthContext'
 
 type ReportKey =
   | 'branch-complete'
@@ -46,9 +48,23 @@ const reportTitleFallback: Record<ReportKey, string> = {
   'product-movement': 'حركة صنف',
 }
 
+const profitsReportKeys: ReportKey[] = ['income-statement', 'profit']
+
 export default function ReportsPage() {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<ReportKey>('trial-balance')
+  const { hasPermission } = useAuth()
+  const canProfits = hasPermission('reports.profits.view')
+  const canCapital = hasPermission('reports.capital.view')
+  const visibleReportKeys = useMemo(
+    () =>
+      (Object.keys(reportTitleFallback) as ReportKey[]).filter((key) => {
+        if (profitsReportKeys.includes(key) && !canProfits) return false
+        return true
+      }),
+    [canProfits],
+  )
+  const [selectedTab, setTab] = useState<ReportKey>('trial-balance')
+  const tab = visibleReportKeys.includes(selectedTab) ? selectedTab : (visibleReportKeys[0] || 'trial-balance')
   const [from, setFrom] = useState(yearStartYmd)
   const [to, setTo] = useState(todayYmd)
   const [branchId, setBranchId] = useState('')
@@ -66,7 +82,7 @@ export default function ReportsPage() {
     enabled: tab === 'inventory' || tab === 'product-movement',
   })
   const accounts = useQuery({
-    queryKey: ['accounts'],
+    queryKey: ['accounts', canCapital],
     queryFn: async () => (await api.get('/accounts')).data.data as { id: number; code: string; name: string; is_group: boolean }[],
     enabled: tab === 'general-ledger',
   })
@@ -232,9 +248,9 @@ export default function ReportsPage() {
       />
 
       <Tabs
-        tabs={Object.entries(reportTitleFallback).map(([id, label]) => ({
+        tabs={visibleReportKeys.map((id) => ({
           id,
-          label: id === 'general-ledger' ? t('reports.generalLedger') : label,
+          label: id === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[id],
         }))}
         active={tab}
         onChange={(id) => setTab(id as ReportKey)}
@@ -342,7 +358,9 @@ export default function ReportsPage() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   <StatTile label="المبيعات" value={formatMoney(report.data.sales?.total || 0, base)} hint={`${report.data.sales?.count || 0} فاتورة`} tone="teal" />
                   <StatTile label="المشتريات" value={formatMoney(report.data.purchases?.total || 0, base)} hint={`${report.data.purchases?.count || 0} فاتورة`} />
-                  <StatTile label="مجمل الربح" value={formatMoney(report.data.profit?.gross_profit || 0, base)} tone="success" />
+                  {canProfits && report.data.profit && (
+                    <StatTile label="مجمل الربح" value={formatMoney(report.data.profit?.gross_profit || 0, base)} tone="success" />
+                  )}
                   <StatTile label={t('dashboard.receivables')} value={formatMoney(report.data.receivables || 0, base)} tone="amber" />
                   <StatTile label={t('dashboard.payables')} value={formatMoney(report.data.payables || 0, base)} />
                   <StatTile label="قيمة المخزون" value={formatMoney(report.data.stock_value || 0, base)} />
@@ -460,10 +478,10 @@ export default function ReportsPage() {
             {tab === 'balance-sheet' && (
               <div className="grid gap-6 md:grid-cols-3">
                 {[
-                  { title: 'الأصول', total: report.data.total_assets, rows: report.data.assets },
-                  { title: 'الخصوم', total: report.data.total_liabilities, rows: report.data.liabilities },
-                  { title: 'حقوق الملكية', total: report.data.total_equity, rows: report.data.equity },
-                ].map((col) => (
+                  { title: 'الأصول', total: report.data.total_assets, rows: report.data.assets, show: true },
+                  { title: 'الخصوم', total: report.data.total_liabilities, rows: report.data.liabilities, show: true },
+                  { title: 'حقوق الملكية', total: report.data.total_equity, rows: report.data.equity, show: canCapital && !report.data.capital_redacted },
+                ].filter((col) => col.show).map((col) => (
                   <div key={col.title}>
                     <h3 className="mb-2 font-semibold">{col.title}</h3>
                     <ul className="space-y-1 text-xs">
@@ -477,7 +495,9 @@ export default function ReportsPage() {
                     <p className="mt-2 font-bold">{formatMoney(col.total || 0, base)}</p>
                   </div>
                 ))}
-                <p className="md:col-span-3 text-sm text-black/55">يشمل صافي دخل الفترة ضمن الملكية: {formatMoney(report.data.net_income || 0, base)}</p>
+                {canProfits && report.data.net_income != null && (
+                  <p className="md:col-span-3 text-sm text-black/55">يشمل صافي دخل الفترة ضمن الملكية: {formatMoney(report.data.net_income || 0, base)}</p>
+                )}
               </div>
             )}
 
@@ -569,32 +589,12 @@ export default function ReportsPage() {
                 <p className="mb-2 font-semibold">
                   {report.data.customer?.name || report.data.supplier?.name}
                 </p>
-                <div className="mb-3 grid gap-2 sm:grid-cols-2">
-                  <p>الرصيد الافتتاحي: <strong>{formatMoney(report.data.opening_balance || 0, base)}</strong></p>
-                  <p>الرصيد الختامي: <strong>{formatMoney((report.data.closing_balance ?? report.data.balance) || 0, base)}</strong></p>
-                </div>
-                <table className="data-table">
-                  <thead><tr><th>تاريخ</th><th>نوع</th><th>رقم</th><th>مدين</th><th>دائن</th><th>رصيد</th></tr></thead>
-                  <tbody>
-                    {(report.data.rows || []).map((r: {
-                      date: string
-                      type: string
-                      number: string
-                      debit: number
-                      credit: number
-                      balance: number
-                    }, i: number) => (
-                      <tr key={i}>
-                        <td>{r.date}</td>
-                        <td>{statementTypeLabel(r.type)}</td>
-                        <td className="font-mono">{r.number}</td>
-                        <td className="tabular-nums">{formatMoney(r.debit || 0, base)}</td>
-                        <td className="tabular-nums">{formatMoney(r.credit || 0, base)}</td>
-                        <td className="tabular-nums">{formatMoney(r.balance || 0, base)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <PartnerStatementPanel
+                  data={report.data as PartnerStatementData}
+                  kind={tab === 'customer-statement' ? 'customer' : 'supplier'}
+                  currency={base}
+                  dense
+                />
               </div>
             )}
 

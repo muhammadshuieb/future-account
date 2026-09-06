@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Support\SensitiveFinanceAccess;
 use App\Models\Attendance;
 use App\Models\AuditLog;
 use App\Models\Bank;
@@ -221,10 +222,10 @@ class ExcelExportService
         ])->all());
 
         $book->addSheet('فواتير المشتريات', [
-            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع',
+            'المعرف', 'الرقم', 'التاريخ', 'المورد', 'الحالة', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الحسم', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع',
         ], PurchaseInvoice::query()->with('supplier')->orderBy('id')->get()->map(fn (PurchaseInvoice $i) => [
             $i->id, $i->invoice_number, optional($i->invoice_date)?->format('Y-m-d'), $i->supplier?->name,
-            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->tax_amount,
+            $i->status, $i->payment_type, $i->currency, $i->exchange_rate, $i->subtotal, $i->discount_amount, $i->tax_amount,
             $i->customs_amount, $i->transport_fees, $i->fines_amount, $i->other_fees,
             $i->total, $i->paid_amount,
         ])->all());
@@ -491,10 +492,10 @@ class ExcelExportService
             $q->where('currency', $request->query('currency'));
         }
         $book->addSheet('فواتير المشتريات', [
-            'الرقم', 'التاريخ', 'المورد', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع', 'الحالة',
+            'الرقم', 'التاريخ', 'المورد', 'نوع الدفع', 'العملة', 'سعر الصرف', 'المجموع', 'الحسم', 'الضريبة', 'جمارك', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'المدفوع', 'الحالة',
         ], $q->get()->map(fn ($r) => [
             $r->invoice_number, optional($r->invoice_date)?->format('Y-m-d'), $r->supplier?->name,
-            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->tax_amount,
+            $r->payment_type, $r->currency, $r->exchange_rate, $r->subtotal, $r->discount_amount, $r->tax_amount,
             $r->customs_amount, $r->transport_fees, $r->fines_amount, $r->other_fees,
             $r->total, $r->paid_amount, $r->status,
         ])->all());
@@ -717,7 +718,10 @@ class ExcelExportService
 
     protected function sheetTrialBalance(ExcelWorkbook $book, ?string $asOf, mixed $branchId = null): void
     {
-        $data = $this->reports->trialBalance($asOf, $branchId ? (int) $branchId : null);
+        $data = SensitiveFinanceAccess::redactTrialBalance(
+            $this->reports->trialBalance($asOf, $branchId ? (int) $branchId : null),
+            auth()->user(),
+        );
         $book->addSheet('ميزان المراجعة', ['الرمز', 'الحساب', 'النوع', 'مدين', 'دائن', 'الرصيد'],
             collect($data['rows'])->map(fn ($r) => [
                 $r['code'], $r['name'], $r['type'], $r['debit'], $r['credit'], $r['balance'],
@@ -740,14 +744,19 @@ class ExcelExportService
 
     protected function sheetBalanceSheet(ExcelWorkbook $book, ?string $asOf, mixed $branchId = null): void
     {
-        $data = $this->reports->balanceSheet($asOf, $branchId ? (int) $branchId : null);
+        $data = SensitiveFinanceAccess::redactBalanceSheet(
+            $this->reports->balanceSheet($asOf, $branchId ? (int) $branchId : null),
+            auth()->user(),
+        );
         $rows = [];
         foreach (['assets' => 'أصول', 'liabilities' => 'خصوم', 'equity' => 'حقوق ملكية'] as $key => $label) {
             foreach ($data[$key] ?? [] as $r) {
                 $rows[] = [$label, $r['code'], $r['name'], $r['balance']];
             }
         }
-        $rows[] = ['صافي الدخل', '', '', $data['net_income'] ?? 0];
+        if ($data['net_income'] !== null) {
+            $rows[] = ['صافي الدخل', '', '', $data['net_income']];
+        }
         $book->addSheet('الميزانية', ['القسم', 'الرمز', 'الحساب', 'الرصيد'], $rows);
     }
 
@@ -836,8 +845,11 @@ class ExcelExportService
         if ($branchId <= 0) {
             throw new \InvalidArgumentException('branch_id مطلوب.');
         }
-        $data = $this->reports->branchCompleteReport($branchId, $request->query('from'), $request->query('to'));
-        $book->addSheet('تقرير الفرع الشامل', ['البند', 'القيمة'], [
+        $data = SensitiveFinanceAccess::redactBranchComplete(
+            $this->reports->branchCompleteReport($branchId, $request->query('from'), $request->query('to')),
+            $request->user(),
+        );
+        $rows = [
             ['الفرع', ($data['branch']['code'] ?? '').' — '.($data['branch']['name'] ?? '')],
             ['من', $data['from'] ?? ''],
             ['إلى', $data['to'] ?? ''],
@@ -845,7 +857,11 @@ class ExcelExportService
             ['إجمالي المبيعات', $data['sales']['total'] ?? 0],
             ['عدد فواتير المشتريات', $data['purchases']['count'] ?? 0],
             ['إجمالي المشتريات', $data['purchases']['total'] ?? 0],
-            ['مجمل الربح', $data['profit']['gross_profit'] ?? 0],
+        ];
+        if (is_array($data['profit'] ?? null)) {
+            $rows[] = ['مجمل الربح', $data['profit']['gross_profit'] ?? 0];
+        }
+        $rows = array_merge($rows, [
             ['الذمم المدينة (عليه)', $data['receivables'] ?? 0],
             ['الذمم الدائنة (علينا)', $data['payables'] ?? 0],
             ['قيمة المخزون', $data['stock_value'] ?? 0],
@@ -853,6 +869,7 @@ class ExcelExportService
             ['ضريبة المدخلات', $data['tax']['input_vat'] ?? 0],
             ['صافي الضريبة', $data['tax']['net_vat'] ?? 0],
         ]);
+        $book->addSheet('تقرير الفرع الشامل', ['البند', 'القيمة'], $rows);
     }
 
     protected function sheetPartnerStatement(ExcelWorkbook $book, string $kind, int $id, ?string $from, ?string $to): void

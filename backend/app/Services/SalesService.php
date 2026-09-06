@@ -1227,8 +1227,10 @@ class SalesService
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
                 'number' => $inv->invoice_number,
+                'document_id' => (int) $inv->id,
                 'currency' => $inv->currency,
                 'document_amount' => (float) $inv->total,
+                'notes' => $inv->notes,
                 'debit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
                 'credit' => 0.0,
             ];
@@ -1239,8 +1241,10 @@ class SalesService
                 'date' => $rc->receipt_date->toDateString(),
                 'type' => 'receipt',
                 'number' => $rc->receipt_number,
+                'document_id' => (int) $rc->id,
                 'currency' => $rc->currency,
                 'document_amount' => (float) $rc->amount,
+                'notes' => $rc->notes,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($rc->base_amount, $rc->amount, $rc->exchange_rate),
             ];
@@ -1251,8 +1255,10 @@ class SalesService
                 'date' => $ret->return_date->toDateString(),
                 'type' => 'return',
                 'number' => $ret->return_number,
+                'document_id' => (int) $ret->id,
                 'currency' => $ret->currency,
                 'document_amount' => (float) $ret->total,
+                'notes' => null,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
             ];
@@ -1285,8 +1291,10 @@ class SalesService
                 'date' => $event['date'],
                 'type' => $event['type'],
                 'number' => $event['number'],
+                'document_id' => $event['document_id'],
                 'currency' => $event['currency'],
                 'document_amount' => $event['document_amount'],
+                'notes' => $event['notes'],
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
@@ -1298,6 +1306,8 @@ class SalesService
         }
 
         $closingBalance = $rows === [] ? $openingBalance : (float) $rows[array_key_last($rows)]['balance'];
+        $totalDebit = round(collect($rows)->sum('debit'), 2);
+        $totalCredit = round(collect($rows)->sum('credit'), 2);
 
         return [
             'customer' => $customer,
@@ -1306,6 +1316,8 @@ class SalesService
             'currency' => $this->currencies->baseCurrency(),
             'opening_balance' => round($openingBalance, 2),
             'closing_balance' => round($closingBalance, 2),
+            'total_debit' => $totalDebit,
+            'total_credit' => $totalCredit,
             'rows' => $rows,
             'balance' => round($closingBalance, 2),
         ];
