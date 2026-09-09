@@ -354,7 +354,20 @@
     "fines": "Cezalar",
     "otherFees": "Diğer ücretler",
     "costExtrasHint": "Fatura toplamına eklenen isteğe bağlı maliyetler; stok maliyetine kapitalize edilir",
-    "extrasTotal": "Ek maliyetler toplamı"
+    "extrasTotal": "Ek maliyetler toplamı",
+    "downloadImportTemplate": "Şablonu indir",
+    "importFromExcel": "Excel'den içe aktar",
+    "importing": "İçe aktarılıyor...",
+    "importEmpty": "Dosyada içe aktarılacak veri satırı yok",
+    "importFailed": "Excel dosyası içe aktarılamadı. İzinleri ve biçimi kontrol edip tekrar deneyin.",
+    "importTemplateFailed": "İçe aktarma şablonu indirilemedi.",
+    "importSummary": "{{imported}} kalem forma yüklendi — gözden geçirip Kaydet'e basın. Fatura henüz kaydedilmedi.",
+    "importUnmatchedCount": "{{count}} kalem katalogda eşleşmedi — ürünü elle seçin.",
+    "importUnmatchedLine": "Bu satır katalogda eşleşmedi: {{label}} — kaydetmeden önce ürünü seçin.",
+    "importUnknownProduct": "Bilinmeyen ürün",
+    "importRowError": "Satır {{row}}: {{message}}",
+    "importLineNotes": "Kalem notu: {{notes}}",
+    "importBlockedUnmatched": "İçe aktarılan bazı kalemlerde eşleşen ürün yok — her kalemde ürünü seçip kaydedin."
   },
   "warehouse": {
     "title": "Depo ve Stok",

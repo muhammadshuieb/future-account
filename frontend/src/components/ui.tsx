@@ -60,10 +60,15 @@ export function FormStack({ children, className = '' }: { children: ReactNode; c
   return <div className={`form-stack ${className}`.trim()}>{children}</div>
 }
 
-export function FormSection({ title, children, className = '' }: { title?: string; children: ReactNode; className?: string }) {
+export function FormSection({ title, children, className = '', actions }: { title?: string; children: ReactNode; className?: string; actions?: ReactNode }) {
   return (
     <section className={`form-section ${className}`.trim()}>
-      {title ? <h3 className="form-section-title">{title}</h3> : null}
+      {(title || actions) ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {title ? <h3 className="form-section-title">{title}</h3> : <span />}
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        </div>
+      ) : null}
       {children}
     </section>
   )

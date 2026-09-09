@@ -1,4 +1,4 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
@@ -20,6 +20,7 @@ import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 import { useAuth } from '@/context/AuthContext'
 import { formatProductUnit, unitFromProduct } from '@/lib/productUnit'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
+import PurchaseInvoiceExcelImportButtons, { type PurchaseInvoiceLinesPreview } from '@/components/PurchaseInvoiceExcelImportButtons'
 
 type ProductRow = { id: number; name: string; brand?: string; model?: string; cost_price: number; track_batch?: boolean; track_serial?: boolean; unit?: { name?: string; symbol?: string } }
 
@@ -29,10 +30,23 @@ type InvoiceLineDraft = {
   unit_cost: string
   batch_no: string
   serial_no: string
+  unmatched_label?: string
+  import_notes?: string
 }
 
 function emptyInvoiceLine(): InvoiceLineDraft {
   return { product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '' }
+}
+
+function isBlankInvoiceLine(line: InvoiceLineDraft): boolean {
+  const defaultQty = emptyInvoiceLine().quantity
+  return !line.product_id
+    && !line.unit_cost
+    && !line.unmatched_label
+    && !line.import_notes
+    && !line.batch_no
+    && !line.serial_no
+    && (line.quantity === defaultQty || line.quantity === '' || line.quantity === '1')
 }
 
 function purchaseLine(productId: string, qty: string, cost: string, batch: string, serial: string, taxRate: number) {
@@ -99,6 +113,16 @@ export default function PurchasesPage() {
   const [applyPurchaseTax, setApplyPurchaseTax] = useState(false)
   const [purchaseTaxRate, setPurchaseTaxRate] = useState('')
   const [pendingAttachment, setPendingAttachment] = useState<File | null>(null)
+  const [catalogExtra, setCatalogExtra] = useState<ProductRow[]>([])
+  const [importNotice, setImportNotice] = useState<{ imported: number; unmatched: number; errors: { row: number; message: string }[] } | null>(null)
+  const productCatalog = useMemo(() => {
+    const map = new Map<number, ProductRow>()
+    for (const p of products.data || []) map.set(p.id, p)
+    for (const p of catalogExtra) {
+      if (!map.has(p.id)) map.set(p.id, p)
+    }
+    return [...map.values()]
+  }, [products.data, catalogExtra])
   const cashBoxes = useQuery({
     queryKey: ['cash-boxes'],
     queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string; is_default?: boolean; code?: string }[],
@@ -171,6 +195,8 @@ export default function PurchasesPage() {
     setSelectedId(null)
     setSelectedRow(null)
     setPendingAttachment(null)
+    setCatalogExtra([])
+    setImportNotice(null)
     setPayForm({ amount: '', cash_box_id: '', payment_date: todayYmd() })
   }
 
@@ -255,6 +281,51 @@ export default function PurchasesPage() {
     setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
   }
 
+  const applyImportedLines = (result: PurchaseInvoiceLinesPreview) => {
+    const extras: ProductRow[] = []
+    const newLines: InvoiceLineDraft[] = result.lines.map((line) => {
+      if (line.product_id) {
+        extras.push({
+          id: line.product_id,
+          name: line.product_name || line.sku || '',
+          brand: line.brand || undefined,
+          model: line.model || undefined,
+          cost_price: Number(line.unit_cost) || 0,
+        })
+      }
+      const labelParts = [line.product_code, line.product_name, line.brand, line.model].filter(Boolean)
+      return {
+        product_id: line.product_id ? String(line.product_id) : '',
+        quantity: line.quantity != null ? String(line.quantity) : '1',
+        unit_cost: line.unit_cost != null ? String(line.unit_cost) : '',
+        batch_no: '',
+        serial_no: '',
+        unmatched_label: line.matched ? undefined : (labelParts.join(' / ') || t('purchases.importUnknownProduct')),
+        import_notes: line.notes || undefined,
+      }
+    })
+    if (extras.length) {
+      setCatalogExtra((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p]))
+        for (const p of extras) map.set(p.id, p)
+        return [...map.values()]
+      })
+    }
+    invLinesScroll.markPending()
+    setInv((prev) => {
+      const keep = prev.lines.filter((l) => !isBlankInvoiceLine(l))
+      return {
+        ...prev,
+        lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyInvoiceLine()]),
+      }
+    })
+    setImportNotice({
+      imported: result.lines.length,
+      unmatched: result.unmatched,
+      errors: result.errors || [],
+    })
+  }
+
   const removeInvLine = (index: number) => {
     setInv((prev) => ({
       ...prev,
@@ -293,6 +364,8 @@ export default function PurchasesPage() {
   const openCreate = () => {
     setSelectedId(null)
     setSelectedRow(null)
+    setImportNotice(null)
+    setCatalogExtra([])
     setInv({
       invoice_date: todayYmd(),
       status: 'posted',
@@ -317,7 +390,13 @@ export default function PurchasesPage() {
     }
     setModal('create')
   }
-  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => { setSelectedId(row.id); setSelectedRow(row); setModal(editable ? 'edit' : 'view') }
+  const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
+    setImportNotice(null)
+    setCatalogExtra([])
+    setSelectedId(row.id)
+    setSelectedRow(row)
+    setModal(editable ? 'edit' : 'view')
+  }
   const printInvoice = (id: number) => openPrintPopup(`/print/purchase-invoices/${id}`)
 
   const saveReq = useMutation({
@@ -349,6 +428,10 @@ export default function PurchasesPage() {
 
   const saveInv = useMutation({
     mutationFn: async () => {
+      const unmatched = inv.lines.filter((l) => !l.product_id && l.unmatched_label)
+      if (unmatched.length > 0) {
+        throw { response: { data: { message: t('purchases.importBlockedUnmatched') } } }
+      }
       const filledLines = inv.lines.filter((l) => l.product_id)
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
@@ -542,14 +625,37 @@ export default function PurchasesPage() {
   }
 
   const invoiceLinesEditor = (
-    <FormSection title={t('common.lines')}>
+    <FormSection
+      title={t('common.lines')}
+      actions={
+        <PurchaseInvoiceExcelImportButtons
+          onImported={(result) => {
+            msg.setError('')
+            applyImportedLines(result)
+          }}
+          onError={(message) => msg.setError(message)}
+        />
+      }
+    >
+      {importNotice && (
+        <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-2 text-xs text-teal">
+          <p>{t('purchases.importSummary', { imported: importNotice.imported })}</p>
+          {importNotice.unmatched > 0 && (
+            <p className="mt-1 text-amber-800">{t('purchases.importUnmatchedCount', { count: importNotice.unmatched })}</p>
+          )}
+          {importNotice.errors.map((err) => (
+            <p key={err.row} className="mt-1 text-rose-700">{t('purchases.importRowError', { row: err.row, message: err.message })}</p>
+          ))}
+        </div>
+      )}
       {inv.lines.map((line, index) => {
-        const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        const product = productCatalog.find((p) => String(p.id) === line.product_id)
         const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))
+        const unmatched = Boolean(line.unmatched_label && !line.product_id)
         return (
           <div
             key={index}
-            className="form-line-card"
+            className={`form-line-card${unmatched ? ' border-amber-400' : ''}`}
             ref={index === inv.lines.length - 1 ? invLinesScroll.setLastLineRef : undefined}
           >
             <div className="form-line-card-header">
@@ -560,15 +666,26 @@ export default function PurchasesPage() {
                 </button>
               )}
             </div>
+            {unmatched && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {t('purchases.importUnmatchedLine', { label: line.unmatched_label })}
+              </p>
+            )}
+            {line.import_notes && (
+              <p className="text-xs text-black/55">{t('purchases.importLineNotes', { notes: line.import_notes })}</p>
+            )}
             <ProductVariantSelect
-              products={products.data || []}
+              products={productCatalog}
               value={line.product_id}
               onChange={(productId) => {
-                const selected = (products.data || []).find((p) => String(p.id) === productId)
+                const selected = productCatalog.find((p) => String(p.id) === productId)
                 const productChanged = productId !== line.product_id
                 updateInvLine(index, {
                   product_id: productId,
-                  unit_cost: productChanged && selected ? String(selected.cost_price) : line.unit_cost,
+                  unmatched_label: productId ? undefined : line.unmatched_label,
+                  unit_cost: productChanged && selected
+                    ? (line.unmatched_label && line.unit_cost ? line.unit_cost : String(selected.cost_price))
+                    : line.unit_cost,
                   serial_no: selected?.track_serial ? line.serial_no : '',
                   batch_no: selected?.track_batch ? line.batch_no : '',
                 })

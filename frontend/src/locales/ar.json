@@ -356,7 +356,20 @@
     "fines": "مخالفات",
     "otherFees": "أجور أخرى",
     "costExtrasHint": "تكاليف إضافية اختيارية تُضاف لإجمالي الفاتورة وتُرسمل على تكلفة المخزون",
-    "extrasTotal": "مجموع الإضافات"
+    "extrasTotal": "مجموع الإضافات",
+    "downloadImportTemplate": "تحميل القالب",
+    "importFromExcel": "استيراد من Excel",
+    "importing": "جاري الاستيراد...",
+    "importEmpty": "الملف لا يحتوي على صفوف بيانات للاستيراد",
+    "importFailed": "تعذر استيراد ملف Excel. تحقق من الصلاحيات والصيغة وحاول مجدداً.",
+    "importTemplateFailed": "تعذر تحميل قالب الاستيراد.",
+    "importSummary": "تم تحميل {{imported}} بنداً إلى النموذج — راجع ثم اضغط حفظ. لم تُحفظ الفاتورة بعد.",
+    "importUnmatchedCount": "{{count}} بند بدون مطابقة في الدليل — اختر الصنف يدوياً.",
+    "importUnmatchedLine": "لم يُطابق هذا البند دليل الأصناف: {{label}} — اختر الصنف قبل الحفظ.",
+    "importUnknownProduct": "صنف غير معروف",
+    "importRowError": "صف {{row}}: {{message}}",
+    "importLineNotes": "ملاحظة البند: {{notes}}",
+    "importBlockedUnmatched": "هناك بنود مستوردة بدون صنف مطابق — اختر الصنف لكل بند ثم احفظ."
   },
   "warehouse": {
     "title": "المخازن والمخزون",

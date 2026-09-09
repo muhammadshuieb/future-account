@@ -356,7 +356,20 @@
     "fines": "Fines / violations",
     "otherFees": "Other fees",
     "costExtrasHint": "Optional costs added to the invoice total and capitalized into inventory cost",
-    "extrasTotal": "Extras total"
+    "extrasTotal": "Extras total",
+    "downloadImportTemplate": "Download template",
+    "importFromExcel": "Import from Excel",
+    "importing": "Importing...",
+    "importEmpty": "The file has no data rows to import",
+    "importFailed": "Could not import the Excel file. Check permissions and format, then try again.",
+    "importTemplateFailed": "Could not download the import template.",
+    "importSummary": "Loaded {{imported}} lines into the form — review them, then click Save. The invoice is not saved yet.",
+    "importUnmatchedCount": "{{count}} line(s) did not match the catalog — pick the product manually.",
+    "importUnmatchedLine": "This row did not match the product catalog: {{label}} — select a product before saving.",
+    "importUnknownProduct": "Unknown product",
+    "importRowError": "Row {{row}}: {{message}}",
+    "importLineNotes": "Line note: {{notes}}",
+    "importBlockedUnmatched": "Some imported lines have no matching product — select a product on each line, then save."
   },
   "warehouse": {
     "title": "Warehouse & Inventory",

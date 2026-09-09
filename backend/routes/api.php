@@ -24,9 +24,11 @@ use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PrintInvoiceController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductImportController;
 use App\Http\Controllers\Api\PurchaseInvoiceController;
+use App\Http\Controllers\Api\PurchaseInvoiceImportController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\PurchaseRequestController;
 use App\Http\Controllers\Api\PurchaseReturnController;
@@ -36,7 +38,6 @@ use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SalaryRecordController;
 use App\Http\Controllers\Api\SalesInvoiceController;
 use App\Http\Controllers\Api\SalesOrderController;
-use App\Http\Controllers\Api\PrintInvoiceController;
 use App\Http\Controllers\Api\SalesQuoteController;
 use App\Http\Controllers\Api\SalesReturnController;
 use App\Http\Controllers\Api\SettingController;
@@ -90,6 +91,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Excel product import (warehouse)
     Route::get('imports/products/template', [ProductImportController::class, 'template']);
     Route::post('imports/products', [ProductImportController::class, 'import']);
+
+    // Excel purchase invoice lines — preview only (does not save the invoice)
+    Route::get('imports/purchase-invoices/lines/template', [PurchaseInvoiceImportController::class, 'template']);
+    Route::post('imports/purchase-invoices/lines/preview', [PurchaseInvoiceImportController::class, 'preview']);
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);
