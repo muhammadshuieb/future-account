@@ -45,24 +45,27 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $book = IOFactory::load($tmp);
         $sheet = $book->getSheetByName('البنود');
         $this->assertNotNull($sheet);
-        $this->assertSame('رمز الصنف', $sheet->getCell('A1')->getValue());
+        $this->assertSame('الموديل', $sheet->getCell('A1')->getValue());
         $this->assertSame('اسم الصنف', $sheet->getCell('B1')->getValue());
         $this->assertSame('الماركة', $sheet->getCell('C1')->getValue());
-        $this->assertSame('الموديل', $sheet->getCell('D1')->getValue());
+        $this->assertSame('رمز الصنف', $sheet->getCell('D1')->getValue());
         $this->assertSame('الكمية', $sheet->getCell('E1')->getValue());
         $this->assertSame('التكلفة', $sheet->getCell('F1')->getValue());
         $this->assertSame('ملاحظات البند', $sheet->getCell('G1')->getValue());
-        $this->assertSame(PurchaseInvoiceLineImportService::EXAMPLE_CODE, $sheet->getCell('A2')->getValue());
-        $this->assertNotNull($book->getSheetByName('تعليمات'));
+        $this->assertSame('S24', $sheet->getCell('A2')->getValue());
+        $instructions = $book->getSheetByName('تعليمات');
+        $this->assertNotNull($instructions);
+        $this->assertStringContainsString('الموديل', (string) $instructions->getCell('A2')->getValue());
         unlink($tmp);
     }
 
-    public function test_preview_matches_by_sku_and_does_not_create_invoice(): void
+    public function test_preview_matches_unique_model_and_autofills_catalog_fields(): void
     {
-        $product = $this->makeProduct('PRD-IMP-01', 'شاشة', 'سامسونج', 'S24', 40);
+        $product = $this->makeProduct('PRD-MOD-01', 'شاشة جوال', 'سامسونج', 'Galaxy-S24', 40);
 
+        // model + qty only — name/brand/code/cost empty → filled from catalog
         $file = $this->makeImportXlsx([
-            ['PRD-IMP-01', '', '', '', '8', '55', ''],
+            ['Galaxy-S24', '', '', '', '8', '', ''],
         ]);
 
         $before = PurchaseInvoice::query()->count();
@@ -72,13 +75,55 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $res->assertOk();
         $this->assertSame(1, $res->json('data.imported'));
         $this->assertSame(1, $res->json('data.matched'));
-        $this->assertSame(0, $res->json('data.unmatched'));
+        $this->assertSame($product->id, $res->json('data.lines.0.product_id'));
+        $this->assertSame('model', $res->json('data.lines.0.match_reason'));
+        $this->assertSame('شاشة جوال', $res->json('data.lines.0.product_name'));
+        $this->assertSame('سامسونج', $res->json('data.lines.0.brand'));
+        $this->assertSame('Galaxy-S24', $res->json('data.lines.0.model'));
+        $this->assertSame('PRD-MOD-01', $res->json('data.lines.0.product_code'));
+        $this->assertEqualsWithDelta(8.0, (float) $res->json('data.lines.0.quantity'), 0.001);
+        $this->assertEqualsWithDelta(40.0, (float) $res->json('data.lines.0.unit_cost'), 0.01);
+        $this->assertSame($before, PurchaseInvoice::query()->count());
+    }
+
+    public function test_preview_disambiguates_duplicate_model_with_brand(): void
+    {
+        $p1 = $this->makeProduct('PRD-DM-1', 'هاتف', 'سامسونج', 'X100', 100);
+        $p2 = $this->makeProduct('PRD-DM-2', 'هاتف', 'شاومي', 'X100', 90);
+
+        $file = $this->makeImportXlsx([
+            ['X100', '', 'سامسونج', '', '2', '', ''],
+            ['X100', '', '', '', '1', '50', ''],
+        ]);
+
+        $res = $this->post('/api/imports/purchase-invoices/lines/preview', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
+        $this->assertSame(2, $res->json('data.imported'));
+        $this->assertSame($p1->id, $res->json('data.lines.0.product_id'));
+        $this->assertSame('model_disambiguated', $res->json('data.lines.0.match_reason'));
+        $this->assertNull($res->json('data.lines.1.product_id'));
+        $this->assertSame('ambiguous_model', $res->json('data.lines.1.match_reason'));
+        $this->assertStringContainsString('موديل', (string) $res->json('data.lines.1.warning'));
+        $this->assertSame($p2->id, Product::query()->where('sku', 'PRD-DM-2')->value('id'));
+    }
+
+    public function test_preview_matches_by_sku_when_model_empty(): void
+    {
+        $product = $this->makeProduct('PRD-IMP-01', 'شاشة', 'سامسونج', 'S24', 40);
+
+        $file = $this->makeImportXlsx([
+            ['', '', '', 'PRD-IMP-01', '8', '55', ''],
+        ]);
+
+        $res = $this->post('/api/imports/purchase-invoices/lines/preview', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
         $this->assertSame($product->id, $res->json('data.lines.0.product_id'));
         $this->assertSame('code', $res->json('data.lines.0.match_reason'));
-        $this->assertEqualsWithDelta(8.0, (float) $res->json('data.lines.0.quantity'), 0.001);
         $this->assertEqualsWithDelta(55.0, (float) $res->json('data.lines.0.unit_cost'), 0.01);
-        $this->assertTrue($res->json('data.lines.0.matched'));
-        $this->assertSame($before, PurchaseInvoice::query()->count());
     }
 
     public function test_preview_matches_barcode_and_fills_cost_from_product(): void
@@ -86,7 +131,7 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $product = $this->makeProduct('PRD-IMP-02', 'كابل', null, null, 12.5, 'BC-IMP-02');
 
         $file = $this->makeImportXlsx([
-            ['BC-IMP-02', 'كابل', '', '', '3', '', ''],
+            ['', 'كابل', '', 'BC-IMP-02', '3', '', ''],
         ]);
 
         $res = $this->post('/api/imports/purchase-invoices/lines/preview', ['file' => $file], [
@@ -97,14 +142,16 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $this->assertEqualsWithDelta(12.5, (float) $res->json('data.lines.0.unit_cost'), 0.01);
     }
 
-    public function test_preview_matches_name_brand_model_then_unique_name(): void
+    public function test_preview_matches_name_brand_model_then_unique_name_when_model_empty_in_file(): void
     {
         $p1 = $this->makeProduct('PRD-A', 'راوتر', 'تي بي لينك', 'C6', 20);
         $p2 = $this->makeProduct('PRD-B', 'راوتر', 'تيندا', 'AC8', 18);
         $unique = $this->makeProduct('PRD-C', 'ماوس', null, null, 5);
 
+        // First row has model → matches by unique model (C6 is unique)
+        // Second row has name only → unique name
         $file = $this->makeImportXlsx([
-            ['', 'راوتر', 'تي بي لينك', 'C6', '2', '21', ''],
+            ['C6', 'راوتر', 'تي بي لينك', '', '2', '21', ''],
             ['', 'ماوس', '', '', '4', '', ''],
         ]);
 
@@ -114,7 +161,7 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $res->assertOk();
         $this->assertSame(2, $res->json('data.imported'));
         $this->assertSame($p1->id, $res->json('data.lines.0.product_id'));
-        $this->assertSame('name_brand_model', $res->json('data.lines.0.match_reason'));
+        $this->assertSame('model', $res->json('data.lines.0.match_reason'));
         $this->assertSame($unique->id, $res->json('data.lines.1.product_id'));
         $this->assertSame('name', $res->json('data.lines.1.match_reason'));
         $this->assertSame($p2->id, Product::query()->where('sku', 'PRD-B')->value('id'));
@@ -153,9 +200,9 @@ class PurchaseInvoiceLineImportTest extends TestCase
 
         $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->fromArray(['product_code', 'product_name', 'brand', 'model', 'quantity', 'unit_cost', 'notes'], null, 'A1');
-        $sheet->fromArray(['EXAMPLE', 'شاشة', 'سامسونج', 'S24', '10', '50', 'مثال — احذف هذا الصف'], null, 'A2');
-        $sheet->fromArray(['PRD-EN', 'Keyboard', 'Logitech', 'MX', '6', '33', ''], null, 'A3');
+        $sheet->fromArray(['model', 'product_name', 'brand', 'product_code', 'quantity', 'unit_cost', 'notes'], null, 'A1');
+        $sheet->fromArray(['S24', '', '', '', '10', '', 'مثال — يكفي الموديل؛ احذف هذا الصف'], null, 'A2');
+        $sheet->fromArray(['MX', 'Keyboard', 'Logitech', 'PRD-EN', '6', '33', ''], null, 'A3');
         $path = tempnam(sys_get_temp_dir(), 'en-imp').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);
         $file = new UploadedFile($path, 'lines.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
@@ -167,6 +214,7 @@ class PurchaseInvoiceLineImportTest extends TestCase
         $this->assertSame(1, $res->json('data.imported'));
         $this->assertGreaterThanOrEqual(1, $res->json('data.skipped'));
         $this->assertSame($product->id, $res->json('data.lines.0.product_id'));
+        $this->assertSame('model', $res->json('data.lines.0.match_reason'));
         @unlink($path);
     }
 
@@ -188,13 +236,36 @@ class PurchaseInvoiceLineImportTest extends TestCase
         @unlink($path);
 
         $file2 = $this->makeImportXlsx([
-            ['PRD-X', 'اسم', '', '', '', '10', ''],
+            ['', 'اسم', '', 'PRD-X', '', '10', ''],
         ]);
         $res = $this->post('/api/imports/purchase-invoices/lines/preview', ['file' => $file2], [
             'Accept' => 'application/json',
         ]);
         $this->assertSame(0, $res->json('data.imported'));
         $this->assertNotEmpty($res->json('data.errors'));
+    }
+
+    public function test_legacy_column_order_still_works_via_header_names(): void
+    {
+        $product = $this->makeProduct('LEG-01', 'طابعة', 'إتش بي', 'LaserJet', 200);
+
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('البنود');
+        // Old template column order: code, name, brand, model, qty, cost, notes
+        $sheet->fromArray(['رمز الصنف', 'اسم الصنف', 'الماركة', 'الموديل', 'الكمية', 'التكلفة', 'ملاحظات البند'], null, 'A1');
+        $sheet->fromArray(['', '', '', 'LaserJet', '1', '', ''], null, 'A2');
+        $path = tempnam(sys_get_temp_dir(), 'leg-imp').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+        $file = new UploadedFile($path, 'legacy.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $res = $this->post('/api/imports/purchase-invoices/lines/preview', ['file' => $file], [
+            'Accept' => 'application/json',
+        ]);
+        $res->assertOk();
+        $this->assertSame($product->id, $res->json('data.lines.0.product_id'));
+        $this->assertSame('model', $res->json('data.lines.0.match_reason'));
+        @unlink($path);
     }
 
     public function test_guest_without_permission_cannot_preview(): void
@@ -226,6 +297,8 @@ class PurchaseInvoiceLineImportTest extends TestCase
     }
 
     /**
+     * Row order matches HEADERS: model, name, brand, code, qty, cost, notes
+     *
      * @param  list<list<string>>  $rows
      */
     protected function makeImportXlsx(array $rows): UploadedFile

@@ -100,25 +100,28 @@ export default function PurchaseInvoiceExcelImportButtons({ disabled, onImported
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={disabled || downloading}
-        onClick={() => void downloadTemplate()}
-      >
-        <FileDown size={16} />
-        {downloading ? t('common.exporting') : t('purchases.downloadImportTemplate')}
-      </Button>
-      <Button
-        type="button"
-        variant="secondary"
-        disabled={disabled || importing}
-        onClick={() => inputRef.current?.click()}
-      >
-        <Upload size={16} />
-        {importing ? t('purchases.importing') : t('purchases.importFromExcel')}
-      </Button>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={disabled || downloading}
+          onClick={() => void downloadTemplate()}
+        >
+          <FileDown size={16} />
+          {downloading ? t('common.exporting') : t('purchases.downloadImportTemplate')}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={disabled || importing}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload size={16} />
+          {importing ? t('purchases.importing') : t('purchases.importFromExcel')}
+        </Button>
+      </div>
+      <p className="max-w-md text-right text-xs text-black/55 dark:text-white/50">{t('purchases.importModelHint')}</p>
       <input
         ref={inputRef}
         type="file"
@@ -126,6 +129,6 @@ export default function PurchaseInvoiceExcelImportButtons({ disabled, onImported
         className="hidden"
         onChange={(e) => void onFileSelected(e.target.files?.[0])}
       />
-    </>
+    </div>
   )
 }

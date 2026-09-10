@@ -361,6 +361,7 @@
     "importEmpty": "Dosyada içe aktarılacak veri satırı yok",
     "importFailed": "Excel dosyası içe aktarılamadı. İzinleri ve biçimi kontrol edip tekrar deneyin.",
     "importTemplateFailed": "İçe aktarma şablonu indirilemedi.",
+    "importModelHint": "Önce modele göre eşleştirilir: model katalogda varsa ad, marka, kod ve maliyet otomatik dolar. Ad/marka/kod yinelenen modelleri ayırır; model boşsa yedek eşleştirme olarak kullanılır.",
     "importSummary": "{{imported}} kalem forma yüklendi — gözden geçirip Kaydet'e basın. Fatura henüz kaydedilmedi.",
     "importUnmatchedCount": "{{count}} kalem katalogda eşleşmedi — ürünü elle seçin.",
     "importUnmatchedLine": "Bu satır katalogda eşleşmedi: {{label}} — kaydetmeden önce ürünü seçin.",
