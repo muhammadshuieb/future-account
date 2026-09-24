@@ -107,6 +107,16 @@ class Setting extends Model
         return static::boolValue('tax_enabled', false);
     }
 
+    /**
+     * When enabled, sales may post even if warehouse qty is insufficient;
+     * on-hand stock levels are allowed to go negative and later purchases offset them.
+     * Transfers and other outbound warehouse ops still enforce availability.
+     */
+    public static function allowNegativeStock(): bool
+    {
+        return static::boolValue('allow_negative_stock', false);
+    }
+
     public static function defaultTaxRate(): float
     {
         if (! static::taxEnabled()) {

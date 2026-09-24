@@ -185,13 +185,16 @@ class SalesService
 
             $cogsTotal = 0.0;
             foreach ($invoice->lines as $line) {
-                $this->inventory->assertSufficientStock(
-                    (int) $invoice->warehouse_id,
-                    (int) $line->product_id,
-                    (float) $line->quantity,
-                    $line->batch_no,
-                    $line->product
-                );
+                // When allow_negative_stock is on, sales may oversell; transfers still enforce stock.
+                if (! Setting::allowNegativeStock()) {
+                    $this->inventory->assertSufficientStock(
+                        (int) $invoice->warehouse_id,
+                        (int) $line->product_id,
+                        (float) $line->quantity,
+                        $line->batch_no,
+                        $line->product
+                    );
+                }
 
                 $resolvedBatch = $this->inventory->resolveOutboundBatch(
                     (int) $invoice->warehouse_id,
@@ -200,6 +203,8 @@ class SalesService
                     $line->batch_no
                 );
 
+                // COGS uses line cost_price (from product.cost_price at invoice create).
+                // Unknown/zero cost → COGS GL lines are omitted; later purchase sets cost via MAC.
                 $cost = round((float) $line->quantity * (float) $line->cost_price, 2);
                 $cogsTotal += $cost;
 
@@ -217,6 +222,7 @@ class SalesService
                         'reference_type' => $invoice::class,
                         'reference_id' => $invoice->id,
                         'notes' => 'صرف مبيعات '.$invoice->invoice_number,
+                        'allow_negative' => Setting::allowNegativeStock(),
                     ]
                 );
 

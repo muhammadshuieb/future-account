@@ -41,6 +41,7 @@ type BackupRow = {
 const HIDDEN_GENERAL_KEYS = new Set([
   'tax_enabled',
   'tax_rate',
+  'allow_negative_stock',
   'default_locale',
   'locale',
   'backup_time_1',
@@ -225,6 +226,7 @@ export default function SettingsPage() {
     })
     if (!map.default_locale && map.locale) map.default_locale = map.locale
     if (map.tax_enabled === undefined) map.tax_enabled = '0'
+    if (map.allow_negative_stock === undefined) map.allow_negative_stock = '0'
     if (!map.backup_time_1) map.backup_time_1 = '02:00'
     if (!map.backup_time_2) map.backup_time_2 = '14:00'
     if (!map.backup_retention_days) map.backup_retention_days = '7'
@@ -238,6 +240,7 @@ export default function SettingsPage() {
   )
 
   const taxEnabled = isTruthy(values.tax_enabled)
+  const allowNegativeStock = isTruthy(values.allow_negative_stock)
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -245,6 +248,7 @@ export default function SettingsPage() {
       if (!payload.default_locale) payload.default_locale = 'ar'
       payload.locale = payload.default_locale
       payload.tax_enabled = isTruthy(payload.tax_enabled) ? '1' : '0'
+      payload.allow_negative_stock = isTruthy(payload.allow_negative_stock) ? '1' : '0'
       return api.put('/settings', {
         settings: Object.entries(payload).map(([key, value]) => ({ key, value })),
       })
@@ -554,6 +558,17 @@ export default function SettingsPage() {
                   />
                 </Field>
               )}
+              <Field label={t('settings.allowNegativeStock')}>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={allowNegativeStock}
+                    onChange={(e) => setValue('allow_negative_stock', e.target.checked ? '1' : '0')}
+                  />
+                  <span>{allowNegativeStock ? t('common.enabled') : t('common.disabled')}</span>
+                </label>
+                <p className="mt-1 text-xs text-black/45">{t('settings.allowNegativeStockHint')}</p>
+              </Field>
               <Field label={t('settings.defaultLocale')}>
                 <select
                   className={inputClass}

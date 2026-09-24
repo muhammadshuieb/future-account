@@ -232,6 +232,13 @@ class ErpDemoSeeder extends Seeder
         Setting::setValue('multi_language', '1', 'general', 'boolean', 'تفعيل تعدد اللغات');
         Setting::setValue('default_branch_id', (string) $branch->id, 'company', 'string', 'الفرع الافتراضي');
         Setting::setValue('default_warehouse_id', (string) $whMain->id, 'warehouse', 'string', 'المخزن الافتراضي');
+        Setting::setValue(
+            'allow_negative_stock',
+            '0',
+            'warehouse',
+            'boolean',
+            'السماح بالمخزون السالب (بيع بدون رصيد)'
+        );
         if ($mainCashId) {
             Setting::setValue('default_cash_box_id', (string) $mainCashId, 'cash', 'string', 'الصندوق الرئيسي الافتراضي');
         }

@@ -188,11 +188,13 @@ class ProductController extends ApiController
         if ($warehouseId !== null) {
             WarehouseAccess::assertWarehouse($request->user(), $warehouseId);
             $availableQty = $this->inventory->availableQty($warehouseId, $product->id, $batchNo, $product);
+            $onHandQty = $this->inventory->onHandQty($warehouseId, $product->id, $batchNo, $product);
             $breakdown = $this->inventory->stockBreakdown($product->id, $warehouseId);
             $warehouseName = $breakdown[0]['warehouse_name'] ?? \App\Models\Warehouse::query()->find($warehouseId)?->name;
         } else {
             $breakdown = $this->inventory->stockBreakdown($product->id, null);
             $availableQty = round(array_sum(array_column($breakdown, 'quantity')), 3);
+            $onHandQty = $availableQty;
             $warehouseName = null;
         }
 
@@ -202,6 +204,8 @@ class ProductController extends ApiController
             'warehouse_name' => $warehouseName,
             'batch_no' => $batchNo,
             'available_qty' => max(0, $availableQty),
+            'on_hand_qty' => $onHandQty,
+            'allow_negative_stock' => \App\Models\Setting::allowNegativeStock(),
             'breakdown' => $breakdown,
             'track_batch' => (bool) $product->track_batch,
         ]);

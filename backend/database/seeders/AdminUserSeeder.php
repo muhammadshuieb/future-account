@@ -46,6 +46,7 @@ class AdminUserSeeder extends Seeder
             ['key' => 'fiscal_year_start', 'value' => '01-01', 'group' => 'finance', 'label' => 'بداية السنة المالية'],
             ['key' => 'tax_enabled', 'value' => '0', 'group' => 'finance', 'type' => 'boolean', 'label' => 'تفعيل الضريبة'],
             ['key' => 'tax_rate', 'value' => '15', 'group' => 'finance', 'type' => 'number', 'label' => 'نسبة الضريبة %'],
+            ['key' => 'allow_negative_stock', 'value' => '0', 'group' => 'warehouse', 'type' => 'boolean', 'label' => 'السماح بالمخزون السالب (بيع بدون رصيد)'],
             ['key' => 'default_locale', 'value' => 'ar', 'group' => 'general', 'label' => 'اللغة الافتراضية'],
             ['key' => 'locale', 'value' => 'ar', 'group' => 'general', 'label' => 'اللغة'],
             ['key' => 'backup_time_1', 'value' => '02:00', 'group' => 'backup', 'type' => 'time', 'label' => 'وقت النسخة الأولى'],

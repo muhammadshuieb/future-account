@@ -15,6 +15,7 @@ class SettingController extends ApiController
                 'default_locale' => Setting::defaultLocale(),
                 'tax_enabled' => Setting::taxEnabled(),
                 'tax_rate' => Setting::defaultTaxRate(),
+                'allow_negative_stock' => Setting::allowNegativeStock(),
             ],
         ]);
     }
@@ -49,7 +50,7 @@ class SettingController extends ApiController
                 continue;
             }
 
-            if ($key === 'tax_enabled') {
+            if (in_array($key, ['tax_enabled', 'allow_negative_stock'], true)) {
                 $value = filter_var($value, FILTER_VALIDATE_BOOLEAN) || $value === '1' || $value === 1 || $value === true
                     ? '1'
                     : '0';
@@ -110,6 +111,7 @@ class SettingController extends ApiController
     {
         return match ($key) {
             'tax_enabled', 'tax_rate', 'currency', 'multi_currency', 'fiscal_year_start' => 'finance',
+            'allow_negative_stock' => 'warehouse',
             'backup_time_1', 'backup_time_2', 'backup_retention_days', 'backup_min_keep', 'backup_last_cleanup' => 'backup',
             'company_name', 'company_name_en' => 'company',
             default => 'general',
@@ -119,7 +121,7 @@ class SettingController extends ApiController
     protected function defaultType(string $key): string
     {
         return match ($key) {
-            'tax_enabled', 'multi_currency' => 'boolean',
+            'tax_enabled', 'multi_currency', 'allow_negative_stock' => 'boolean',
             'tax_rate', 'backup_retention_days', 'backup_min_keep' => 'number',
             'backup_time_1', 'backup_time_2' => 'time',
             'backup_last_cleanup' => 'json',
@@ -132,6 +134,7 @@ class SettingController extends ApiController
         return match ($key) {
             'tax_enabled' => 'تفعيل الضريبة',
             'tax_rate' => 'نسبة الضريبة %',
+            'allow_negative_stock' => 'السماح بالمخزون السالب (بيع بدون رصيد)',
             'default_locale' => 'اللغة الافتراضية',
             'backup_time_1' => 'وقت النسخة الأولى',
             'backup_time_2' => 'وقت النسخة الثانية',

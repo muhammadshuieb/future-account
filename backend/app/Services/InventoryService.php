@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Product;
+use App\Models\Setting;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\User;
@@ -32,6 +33,24 @@ class InventoryService
         }
 
         return round(max(0, (float) $query->sum('quantity')), 3);
+    }
+
+    /**
+     * Signed on-hand quantity (may be negative when allow_negative_stock is enabled).
+     */
+    public function onHandQty(int $warehouseId, int $productId, ?string $batchNo = null, ?Product $product = null): float
+    {
+        $product ??= Product::query()->findOrFail($productId);
+
+        $query = StockLevel::query()
+            ->where('warehouse_id', $warehouseId)
+            ->where('product_id', $productId);
+
+        if ($product->track_batch && $batchNo !== null && $batchNo !== '') {
+            $query->where('batch_no', $batchNo);
+        }
+
+        return round((float) $query->sum('quantity'), 3);
     }
 
     /**
@@ -342,17 +361,19 @@ class InventoryService
                             'batch_no' => ["الصنف {$product->name} يتطلب رقم دفعة."],
                         ]);
                     }
-                    $this->assertSufficientStock(
-                        $transfer->from_warehouse_id,
-                        $line->product_id,
-                        $qty,
-                        $batchNo,
-                        $product
-                    );
                     if ($batchNo !== $line->batch_no) {
                         $line->update(['batch_no' => $batchNo]);
                     }
                 }
+
+                // Transfers never oversell — even when allow_negative_stock is enabled for sales.
+                $this->assertSufficientStock(
+                    $transfer->from_warehouse_id,
+                    $line->product_id,
+                    $qty,
+                    $product->track_batch ? $batchNo : null,
+                    $product
+                );
 
                 $meta = [
                     'movement_date' => $transfer->transfer_date->toDateString(),
@@ -715,8 +736,9 @@ class InventoryService
         );
 
         $newQty = round((float) $level->quantity + $quantityDelta, 3);
+        $allowNegative = Setting::allowNegativeStock() && ! empty($meta['allow_negative']);
 
-        if ($newQty < -0.0001) {
+        if ($newQty < -0.0001 && ! $allowNegative) {
             throw $this->insufficientStockException(
                 $product,
                 $warehouseId,
@@ -726,7 +748,7 @@ class InventoryService
             );
         }
 
-        $level->update(['quantity' => max(0, $newQty)]);
+        $level->update(['quantity' => $newQty]);
 
         $movement = StockMovement::query()->create([
             'movement_number' => $this->nextMovementNumber(),
@@ -767,8 +789,9 @@ class InventoryService
             ->get();
 
         $available = round((float) $levels->sum('quantity'), 3);
+        $allowNegative = Setting::allowNegativeStock() && ! empty($meta['allow_negative']);
 
-        if ($requiredQty > $available + 0.0001) {
+        if ($requiredQty > $available + 0.0001 && ! $allowNegative) {
             throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available);
         }
 
@@ -791,6 +814,23 @@ class InventoryService
                 $type,
                 $user,
                 array_merge($meta, ['batch_no' => $level->batch_no ?: null])
+            );
+        }
+
+        if ($remaining > 0.0001) {
+            if (! $allowNegative) {
+                throw $this->insufficientStockException($product, $warehouseId, $requiredQty, $available);
+            }
+
+            $batch = $this->resolveBatchKey($product, $meta['batch_no'] ?? null);
+            $lastMovement = $this->adjustSingleBatchLevel(
+                $warehouseId,
+                $product,
+                $batch,
+                -$remaining,
+                $type,
+                $user,
+                array_merge($meta, ['batch_no' => $batch !== '' ? $batch : ($meta['batch_no'] ?? null)])
             );
         }
 

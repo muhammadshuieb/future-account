@@ -34,6 +34,8 @@ type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: s
 
 type StockInfo = {
   available_qty: number
+  on_hand_qty?: number
+  allow_negative_stock?: boolean
   warehouse_id: number
   warehouse_name?: string
   breakdown: StockLocation[]
@@ -152,6 +154,9 @@ export default function SalesPage() {
     || String(activeBranches.find((b) => b.is_main)?.id || activeBranches[0]?.id || '')
   const taxEnabled = !['0', 'false', 'no', 'off'].includes(String(settings.data?.find((s) => s.key === 'tax_enabled')?.value ?? '0').toLowerCase())
   const defaultTaxRate = taxEnabled ? Number(settings.data?.find((s) => s.key === 'tax_rate')?.value ?? 15) || 0 : 0
+  const allowNegativeStock = !['0', 'false', 'no', 'off'].includes(
+    String(settings.data?.find((s) => s.key === 'allow_negative_stock')?.value ?? '0').toLowerCase(),
+  )
   const cashBoxes = useQuery({
     queryKey: ['cash-boxes'],
     queryFn: async () => (await api.get('/cash-boxes')).data.data as { id: number; name: string; currency?: string; is_default?: boolean; code?: string }[],
@@ -250,17 +255,24 @@ export default function SalesPage() {
       return
     }
     setStockInfo(info)
+    const canOversell = allowNegativeStock || !!info.allow_negative_stock
+    // When oversell is allowed and there is no stock, keep the user's quantity (don't force 0).
+    if (canOversell && info.available_qty <= 0) {
+      return
+    }
     setState((prev) => ({ ...prev, quantity: String(info.available_qty) }))
-  }, [])
+  }, [allowNegativeStock])
 
   const applyStockToInvoiceLine = useCallback(async (index: number, productId: string, warehouseId: string) => {
     const info = await fetchStockInfo(productId, warehouseId)
     if (info === null) return
+    const canOversell = allowNegativeStock || !!info.allow_negative_stock
+    if (canOversell && info.available_qty <= 0) return
     setInv((prev) => ({
       ...prev,
       lines: prev.lines.map((line, i) => (i === index ? { ...line, quantity: String(info.available_qty) } : line)),
     }))
-  }, [])
+  }, [allowNegativeStock])
 
   const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
     setInv((prev) => ({
@@ -303,11 +315,13 @@ export default function SalesPage() {
   const applyStockToQuoteLine = useCallback(async (index: number, productId: string, warehouseId: string) => {
     const info = await fetchStockInfo(productId, warehouseId)
     if (info === null) return
+    const canOversell = allowNegativeStock || !!info.allow_negative_stock
+    if (canOversell && info.available_qty <= 0) return
     setQuote((prev) => ({
       ...prev,
       lines: prev.lines.map((line, i) => (i === index ? { ...line, quantity: String(info.available_qty) } : line)),
     }))
-  }, [])
+  }, [allowNegativeStock])
 
   async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
     try {
@@ -824,7 +838,11 @@ export default function SalesPage() {
           <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
             <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
             {autoFillStock && stockInfo !== null && state.product_id && state.warehouse_id && (
-              <StockAvailabilityHint stockInfo={stockInfo} />
+              <StockAvailabilityHint
+                stockInfo={stockInfo}
+                quantity={Number(state.quantity) || 0}
+                allowNegativeStock={allowNegativeStock}
+              />
             )}
           </Field>
           <Field label={t('common.price')}>
@@ -894,7 +912,12 @@ export default function SalesPage() {
                 <NumericInput value={line.quantity} onChange={(v) => updateInvLine(index, { quantity: v })} />
                 {line.product_id && inv.warehouse_id && (
                   <div className="mt-1 text-xs text-black/55">
-                    <LineStockHint productId={Number(line.product_id)} warehouseId={Number(inv.warehouse_id)} />
+                    <LineStockHint
+                      productId={Number(line.product_id)}
+                      warehouseId={Number(inv.warehouse_id)}
+                      quantity={Number(line.quantity) || 0}
+                      allowNegativeStock={allowNegativeStock}
+                    />
                   </div>
                 )}
               </Field>
@@ -982,7 +1005,12 @@ export default function SalesPage() {
                 <NumericInput value={line.quantity} onChange={(v) => updateQuoteLine(index, { quantity: v })} />
                 {line.product_id && quote.warehouse_id && (
                   <div className="mt-1 text-xs text-black/55">
-                    <LineStockHint productId={Number(line.product_id)} warehouseId={Number(quote.warehouse_id)} />
+                    <LineStockHint
+                      productId={Number(line.product_id)}
+                      warehouseId={Number(quote.warehouse_id)}
+                      quantity={Number(line.quantity) || 0}
+                      allowNegativeStock={allowNegativeStock}
+                    />
                   </div>
                 )}
               </Field>
@@ -1631,20 +1659,33 @@ export default function SalesPage() {
   )
 }
 
-function StockAvailabilityHint({ stockInfo }: { stockInfo: StockInfo }) {
+function StockAvailabilityHint({
+  stockInfo,
+  quantity,
+  allowNegativeStock,
+}: {
+  stockInfo: StockInfo
+  quantity: number
+  allowNegativeStock: boolean
+}) {
   const { t } = useTranslation()
+  const onHand = stockInfo.on_hand_qty ?? stockInfo.available_qty
+  const canOversell = allowNegativeStock || !!stockInfo.allow_negative_stock
+  const overselling = canOversell && quantity > stockInfo.available_qty + 0.0001
 
   return (
     <div className="mt-1 space-y-1 text-xs text-black/55">
       <p>
         {t('sales.stockRemainingIn', {
-          qty: formatQuantity(stockInfo.available_qty),
+          qty: formatQuantity(onHand),
           warehouse: stockInfo.warehouse_name || t('common.warehouse'),
         })}
       </p>
-      {stockInfo.breakdown.length === 0 && (
+      {overselling ? (
+        <p className="text-amber">{t('sales.oversellWarning', { available: formatQuantity(stockInfo.available_qty) })}</p>
+      ) : stockInfo.breakdown.length === 0 ? (
         <p className="text-amber">{t('sales.noStockInWarehouse')}</p>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -1652,9 +1693,13 @@ function StockAvailabilityHint({ stockInfo }: { stockInfo: StockInfo }) {
 function LineStockHint({
   productId,
   warehouseId,
+  quantity,
+  allowNegativeStock = false,
 }: {
   productId?: number
   warehouseId?: number
+  quantity?: number
+  allowNegativeStock?: boolean
 }) {
   const { t } = useTranslation()
   const [info, setInfo] = useState<StockInfo | null>(null)
@@ -1674,13 +1719,30 @@ function LineStockHint({
   if (!productId || !warehouseId) return <span className="text-black/40">—</span>
   if (!info) return <span className="text-black/40">{t('common.loading')}</span>
 
-  if (info.breakdown.length === 0) {
-    return <span className="text-danger">{t('sales.noStockInWarehouse')}</span>
+  const canOversell = allowNegativeStock || !!info.allow_negative_stock
+  const onHand = info.on_hand_qty ?? info.available_qty
+  const qty = quantity ?? 0
+  const overselling = canOversell && qty > info.available_qty + 0.0001
+
+  if (overselling) {
+    return (
+      <span className="text-amber">
+        {formatQuantity(onHand)} — {t('sales.oversellShort')}
+      </span>
+    )
+  }
+
+  if (info.breakdown.length === 0 && onHand <= 0) {
+    return (
+      <span className={canOversell ? 'text-amber' : 'text-danger'}>
+        {canOversell ? t('sales.oversellShort') : t('sales.noStockInWarehouse')}
+      </span>
+    )
   }
 
   return (
     <span className="text-xs text-black/60">
-      {formatQuantity(info.available_qty)}
+      {formatQuantity(onHand)}
     </span>
   )
 }
