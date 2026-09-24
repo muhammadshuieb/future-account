@@ -93,6 +93,11 @@ export function statementPaymentTypeLabel(type?: string | null): string {
   return PAYMENT_TYPE_LABELS[type] || type
 }
 
+/** Receipts (customers) and supplier payments stand out in the statement grid. */
+export function isStatementPaymentRow(type: string): boolean {
+  return type === 'receipt' || type === 'payment'
+}
+
 function InvoiceDetailBlock({
   invoice,
   fallbackCurrency,
@@ -233,25 +238,6 @@ export function StatementPrintView({
         </p>
       </section>
 
-      <section className="statement-print__summary">
-        <p>
-          الرصيد الافتتاحي:{' '}
-          <strong className="tabular-nums">{formatMoney(opening, currency)}</strong>
-        </p>
-        <p>
-          إجمالي عليه:{' '}
-          <strong className="tabular-nums">{formatMoney(totalDebit, currency)}</strong>
-        </p>
-        <p>
-          إجمالي له:{' '}
-          <strong className="tabular-nums">{formatMoney(totalCredit, currency)}</strong>
-        </p>
-        <p>
-          الرصيد الختامي:{' '}
-          <strong className="tabular-nums">{formatMoney(closing, currency)}</strong>
-        </p>
-      </section>
-
       <table className="data-table statement-print__movements">
         <thead>
           <tr>
@@ -273,7 +259,7 @@ export function StatementPrintView({
           ) : (
             rows.map((r, i) => (
               <Fragment key={`${r.number}-${i}`}>
-                <tr>
+                <tr className={isStatementPaymentRow(r.type) ? 'statement-row--payment' : undefined}>
                   <td>{r.date}</td>
                   <td>{statementTypeLabel(r.type)}</td>
                   <td className="font-mono text-xs">{r.number}</td>
@@ -304,12 +290,24 @@ export function StatementPrintView({
         )}
       </table>
 
-      <div className="print-avoid-break statement-print__closing">
+      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
         <p>
-          الرصيد الختامي ({currency}):{' '}
-          <span className="tabular-nums">{formatMoney(closing, currency)}</span>
+          الرصيد الافتتاحي:{' '}
+          <strong className="tabular-nums">{formatMoney(opening, currency)}</strong>
         </p>
-      </div>
+        <p>
+          إجمالي عليه:{' '}
+          <strong className="tabular-nums">{formatMoney(totalDebit, currency)}</strong>
+        </p>
+        <p>
+          إجمالي له:{' '}
+          <strong className="tabular-nums">{formatMoney(totalCredit, currency)}</strong>
+        </p>
+        <p className="statement-print__closing-line">
+          الرصيد الختامي:{' '}
+          <strong className="tabular-nums">{formatMoney(closing, currency)}</strong>
+        </p>
+      </section>
     </div>
   )
 }

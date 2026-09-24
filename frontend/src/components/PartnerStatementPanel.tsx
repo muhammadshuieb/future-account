@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
 import { paymentTypeLabel } from '@/components/PaymentTypeFields'
 import {
+  isStatementPaymentRow,
   statementTypeLabel,
   type PartnerStatementData,
   type StatementInvoiceDetail,
@@ -98,7 +99,7 @@ function InvoiceLinesTable({
 }) {
   const cell = dense ? 'px-2.5 py-1.5' : 'px-3 py-2.5'
   return (
-    <div className="overflow-x-auto rounded-md border border-[rgba(15,28,36,0.12)]">
+    <div className="overflow-x-auto">
       <table className="statement-invoice-lines w-full text-xs text-[#111111]">
         <thead className="bg-[rgba(13,115,119,0.12)] text-[#064e51]">
           <tr>
@@ -114,7 +115,7 @@ function InvoiceLinesTable({
             const qty = Number(line.quantity) || 0
             const lineTotal = Number(line.line_total ?? qty * unitPrice)
             return (
-              <tr key={i} className="border-t border-[rgba(15,28,36,0.1)] bg-white">
+              <tr key={i}>
                 <ProductIdentityCells
                   product={line.product}
                   className={`${cell} text-[#111111]`}
@@ -175,36 +176,8 @@ export default function PartnerStatementPanel({
 
   return (
     <>
-      <div
-        className={`statement-panel grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${
-          dense ? 'mb-5' : 'mb-1 border-b border-[var(--color-line)] px-4 py-5'
-        }`}
-      >
-        <StatTile
-          label={t('common.openingBalance')}
-          value={formatMoney(opening, currency)}
-        />
-        <StatTile
-          label={t('common.totalOwedByThem')}
-          value={formatMoney(totalDebit, currency)}
-          subtitle={t('common.owedByThem')}
-          tone="amber"
-        />
-        <StatTile
-          label={t('common.totalOwedToThem')}
-          value={formatMoney(totalCredit, currency)}
-          subtitle={t('common.owedToThem')}
-          tone="teal"
-        />
-        <StatTile
-          label={t('common.closingBalance')}
-          value={partnerBalanceLabel(closing, kind, currency, labels)}
-          tone="success"
-        />
-      </div>
-
       <div className={dense ? '' : 'px-1 pb-2'}>
-      <table className={`w-full text-sm ${dense ? 'data-table' : ''}`}>
+      <table className={`statement-panel__movements w-full text-sm ${dense ? 'data-table' : ''}`}>
         <thead className={dense ? undefined : 'bg-mist text-right text-black/60'}>
           <tr>
             <th className={`${theadPad} w-8`} aria-hidden />
@@ -230,11 +203,14 @@ export default function PartnerStatementPanel({
               const isOpen = !!expanded[key]
               const invoice = r.invoice
               const docCurrency = invoice?.currency || r.currency || currency
+              const isPayment = isStatementPaymentRow(r.type)
 
               return (
                 <Fragment key={key}>
                   <tr
-                    className={`border-t border-black/5 ${hasInvoiceDetail || r.notes ? 'row-clickable' : ''}`}
+                    className={`statement-row ${isPayment ? 'statement-row--payment' : ''} ${
+                      hasInvoiceDetail || r.notes ? 'row-clickable' : ''
+                    }`}
                     onClick={() => {
                       if (hasInvoiceDetail) toggleExpand(key)
                       else setSelected(r)
@@ -270,7 +246,7 @@ export default function PartnerStatementPanel({
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.balance) || 0, currency)}</td>
                   </tr>
                   {hasInvoiceDetail && isOpen && invoice ? (
-                    <tr className="border-t border-[var(--color-line)] bg-paper/80">
+                    <tr className="statement-panel__detail-row">
                       <td colSpan={colCount} className={dense ? 'px-3 py-3.5' : 'px-5 py-4'}>
                         <div className="space-y-3 rounded-md border border-teal/20 bg-white p-3.5 text-[#111111] shadow-[0_1px_0_rgba(12,26,34,0.04)]">
                           <p className="text-xs font-bold tracking-wide text-[#064e51]">
@@ -298,7 +274,7 @@ export default function PartnerStatementPanel({
         </tbody>
         {rows.length > 0 && (
           <tfoot>
-            <tr className="border-t border-black/10 font-semibold">
+            <tr className="font-semibold">
               <td className={pad} colSpan={4}>{t('common.total')}</td>
               <td className={`${pad} tabular-nums`}>{formatMoney(totalDebit, currency)}</td>
               <td className={`${pad} tabular-nums`}>{formatMoney(totalCredit, currency)}</td>
@@ -307,6 +283,34 @@ export default function PartnerStatementPanel({
           </tfoot>
         )}
       </table>
+      </div>
+
+      <div
+        className={`statement-panel__totals grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${
+          dense ? 'mt-5' : 'mt-1 border-t border-[var(--color-line)] px-4 py-5'
+        }`}
+      >
+        <StatTile
+          label={t('common.openingBalance')}
+          value={formatMoney(opening, currency)}
+        />
+        <StatTile
+          label={t('common.totalOwedByThem')}
+          value={formatMoney(totalDebit, currency)}
+          subtitle={t('common.owedByThem')}
+          tone="amber"
+        />
+        <StatTile
+          label={t('common.totalOwedToThem')}
+          value={formatMoney(totalCredit, currency)}
+          subtitle={t('common.owedToThem')}
+          tone="teal"
+        />
+        <StatTile
+          label={t('common.closingBalance')}
+          value={partnerBalanceLabel(closing, kind, currency, labels)}
+          tone="success"
+        />
       </div>
 
       <Modal

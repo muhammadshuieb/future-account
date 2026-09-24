@@ -317,6 +317,10 @@ body {
   background: linear-gradient(180deg, rgba(215, 236, 236, 0.55), rgba(243, 247, 248, 0.9));
 }
 
+.statement-print__summary--footer {
+  margin-top: 0.25rem;
+}
+
 @media (min-width: 640px) {
   .statement-print__summary {
     grid-template-columns: 1fr 1fr;
@@ -339,16 +343,35 @@ body {
   color: #111111;
 }
 
-.statement-print__movements {
+.statement-print__closing-line {
+  font-weight: 700;
+  font-size: 0.78rem !important;
+}
+
+.statement-print__movements,
+.statement-panel__movements {
   margin-top: 0.15rem;
   font-size: 0.7rem !important;
   color: #111111;
+  border-collapse: collapse;
+  border: 1px solid #9aa8b0;
+}
+
+.statement-panel__movements {
+  font-size: 0.875rem !important;
+  width: 100%;
+}
+
+.statement-print__movements th,
+.statement-print__movements td,
+.statement-panel__movements th,
+.statement-panel__movements td {
+  border: 1px solid #9aa8b0 !important;
 }
 
 .statement-print__movements th {
   background: rgba(13, 115, 119, 0.1) !important;
   color: #064e51 !important;
-  border-bottom: 1px solid rgba(13, 115, 119, 0.18);
   padding: 0.45rem 0.5rem !important;
 }
 
@@ -359,11 +382,38 @@ body {
   background: #fff !important;
 }
 
-.statement-print__movements tfoot td {
-  border-top: 1.5px solid rgba(13, 115, 119, 0.25);
-  background: rgba(230, 238, 242, 0.55);
-  padding-top: 0.5rem !important;
-  padding-bottom: 0.5rem !important;
+.statement-panel__movements th {
+  background: rgba(13, 115, 119, 0.1);
+  color: #064e51;
+  font-weight: 650;
+}
+
+.statement-panel__movements td {
+  color: #111111;
+  background: #fff;
+  vertical-align: middle;
+}
+
+.statement-print__movements tfoot td,
+.statement-panel__movements tfoot td {
+  background: rgba(230, 238, 242, 0.75) !important;
+  font-weight: 650;
+}
+
+/* Payment rows (receipt / supplier payment) — distinctive amber wash */
+.statement-print__movements .statement-row--payment > td,
+.statement-panel__movements .statement-row--payment > td {
+  background: #fff3d6 !important;
+  color: #111111 !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.statement-print__movements .statement-row--payment > td:nth-child(2),
+.statement-panel__movements .statement-row--payment > td:nth-child(2),
+.statement-panel__movements .statement-row--payment > td:nth-child(3) {
+  font-weight: 650;
+  color: #8a5a00 !important;
 }
 
 .statement-print__empty {
@@ -372,10 +422,11 @@ body {
   color: rgba(12, 26, 34, 0.45);
 }
 
-.statement-print__detail-row > td {
+.statement-print__detail-row > td,
+.statement-panel__detail-row > td {
   padding: 0.35rem 0.35rem 0.85rem !important;
-  border-top: none !important;
-  background: transparent !important;
+  background: #f3f6f8 !important;
+  vertical-align: top;
 }
 
 .statement-invoice-detail {
@@ -409,29 +460,39 @@ body {
   color: #2a3d48;
 }
 
-.statement-invoice-detail__lines {
+.statement-invoice-detail__lines,
+.statement-invoice-lines {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.65rem;
-  border: 1px solid rgba(15, 28, 36, 0.12);
-  border-radius: 0.25rem;
-  overflow: hidden;
+  border: 1px solid #9aa8b0;
   color: #111111;
 }
 
-.statement-invoice-detail__lines th {
+.statement-invoice-lines {
+  font-size: 0.75rem;
+}
+
+.statement-invoice-detail__lines th,
+.statement-invoice-detail__lines td,
+.statement-invoice-lines th,
+.statement-invoice-lines td {
+  border: 1px solid #9aa8b0 !important;
+  text-align: start;
+  vertical-align: top;
+}
+
+.statement-invoice-detail__lines th,
+.statement-invoice-lines th {
   background: rgba(13, 115, 119, 0.12) !important;
   color: #064e51 !important;
   font-weight: 700;
-  text-align: start;
   padding: 0.35rem 0.45rem !important;
-  border-bottom: 1px solid rgba(13, 115, 119, 0.2);
 }
 
-.statement-invoice-detail__lines td {
+.statement-invoice-detail__lines td,
+.statement-invoice-lines td {
   padding: 0.32rem 0.45rem !important;
-  border-top: 1px solid rgba(15, 28, 36, 0.1);
-  vertical-align: top;
   background: #fff !important;
   color: #111111 !important;
 }
@@ -443,37 +504,6 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.58rem;
   color: #3d4f5a;
-}
-
-.statement-print__closing {
-  margin-top: 0.35rem;
-  margin-inline-start: auto;
-  max-width: 18rem;
-  padding-top: 0.75rem;
-  border-top: 1.5px solid rgba(13, 115, 119, 0.22);
-  text-align: start;
-}
-
-.statement-print__closing p {
-  margin: 0;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #111111;
-}
-
-/* On-screen nested invoice lines (PartnerStatementPanel) — high contrast always */
-.statement-invoice-lines {
-  color: #111111;
-}
-
-.statement-invoice-lines th {
-  color: #064e51 !important;
-  font-weight: 700;
-}
-
-.statement-invoice-lines td {
-  color: #111111 !important;
-  background: #fff !important;
 }
 
 .print-brand-header > :first-child {
@@ -1270,9 +1300,29 @@ textarea {
 
   .statement-print,
   .statement-print__movements,
+  .statement-panel__movements,
   .statement-invoice-detail,
-  .statement-invoice-detail__lines {
+  .statement-invoice-detail__lines,
+  .statement-invoice-lines {
     color: #111111 !important;
+  }
+
+  .statement-print__movements,
+  .statement-panel__movements,
+  .statement-invoice-detail__lines,
+  .statement-invoice-lines {
+    border: 1px solid #6b7a84 !important;
+  }
+
+  .statement-print__movements th,
+  .statement-print__movements td,
+  .statement-panel__movements th,
+  .statement-panel__movements td,
+  .statement-invoice-detail__lines th,
+  .statement-invoice-detail__lines td,
+  .statement-invoice-lines th,
+  .statement-invoice-lines td {
+    border: 1px solid #6b7a84 !important;
   }
 
   .statement-print__movements th,
@@ -1281,20 +1331,37 @@ textarea {
   }
 
   .statement-print__movements th,
-  .statement-invoice-detail__lines th {
+  .statement-invoice-detail__lines th,
+  .statement-invoice-lines th {
     color: #064e51 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
   .statement-print__movements td,
-  .statement-invoice-detail__lines td {
+  .statement-invoice-detail__lines td,
+  .statement-invoice-lines td {
     color: #111111 !important;
     background: #fff !important;
   }
 
-  .statement-print__detail-row > td {
+  .statement-print__movements .statement-row--payment > td,
+  .statement-panel__movements .statement-row--payment > td {
+    background: #fff3d6 !important;
+    color: #111111 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .statement-print__movements .statement-row--payment > td:nth-child(2),
+  .statement-panel__movements .statement-row--payment > td:nth-child(3) {
+    color: #8a5a00 !important;
+  }
+
+  .statement-print__detail-row > td,
+  .statement-panel__detail-row > td {
     padding: 0.25rem 0.25rem 0.65rem !important;
+    background: #f3f6f8 !important;
   }
 
   .statement-invoice-detail {
@@ -1320,19 +1387,12 @@ textarea {
     padding: 0.28rem 0.4rem !important;
   }
 
-  /* On-screen statement panel nested lines (reports / partners) */
-  .statement-invoice-lines,
-  .statement-invoice-lines td {
-    color: #111111 !important;
+  .statement-print__summary--footer {
+    margin-top: 0.35rem !important;
   }
 
-  .statement-invoice-lines th {
-    color: #064e51 !important;
-  }
-
-  .statement-print__closing {
-    padding-top: 0.55rem !important;
-    margin-top: 0.25rem !important;
+  .statement-print__closing-line {
+    font-size: 0.78rem !important;
   }
 
   /* Compact spacing inside print documents */
