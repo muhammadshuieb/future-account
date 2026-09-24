@@ -444,6 +444,40 @@ body {
   color: #3d4f5a;
 }
 
+.product-identity-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  line-height: 1.35;
+  color: #111111;
+}
+
+.product-identity-stacked__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.4rem;
+  align-items: baseline;
+}
+
+.product-identity-stacked__label {
+  color: #3d4f5a;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.product-identity-stacked__value {
+  color: #111111;
+  font-weight: 550;
+}
+
+.product-identity-stacked__serial {
+  display: block;
+  margin-top: 0.12rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  color: #3d4f5a;
+}
+
 .statement-print__closing {
   margin-top: 0.35rem;
   margin-inline-start: auto;
@@ -1308,6 +1342,16 @@ textarea {
   .statement-invoice-detail__meta strong,
   .statement-invoice-detail__notes {
     color: #111111 !important;
+  }
+
+  .product-identity-stacked,
+  .product-identity-stacked__value {
+    color: #111111 !important;
+  }
+
+  .product-identity-stacked__label,
+  .product-identity-stacked__serial {
+    color: #2a3d48 !important;
   }
 
   .statement-invoice-detail__lines th,

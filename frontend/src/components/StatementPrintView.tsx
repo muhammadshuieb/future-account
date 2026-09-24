@@ -1,8 +1,15 @@
 import { Fragment } from 'react'
 import { LOGO } from '@/lib/brand'
 import { todayYmd } from '@/lib/dates'
-import { productLabel } from '@/lib/productLabel'
+import { ProductIdentityStacked } from '@/components/ProductIdentityCells'
 import { formatMoney, formatQuantity } from '@/components/ui'
+
+const STATEMENT_PRODUCT_LABELS = {
+  product: 'الصنف',
+  brand: 'الماركة',
+  model: 'الموديل',
+} as const
+
 
 export type StatementInvoiceLine = {
   quantity?: number
@@ -153,10 +160,11 @@ function InvoiceDetailBlock({
               return (
                 <tr key={i}>
                   <td>
-                    {productLabel(line.product)}
-                    {line.serial_no ? (
-                      <span className="statement-invoice-detail__serial">{line.serial_no}</span>
-                    ) : null}
+                    <ProductIdentityStacked
+                      product={line.product}
+                      labels={STATEMENT_PRODUCT_LABELS}
+                      serialNo={line.serial_no}
+                    />
                   </td>
                   <td className="tabular-nums">{formatQuantity(qty)}</td>
                   <td className="tabular-nums">{formatMoney(unitPrice, docCurrency)}</td>
