@@ -104,8 +104,8 @@ function InvoiceDetailBlock({
   const lines = invoice.lines || []
 
   return (
-    <div className="mt-1 space-y-1 rounded border border-black/10 bg-mist/30 p-1.5 text-[10px]">
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-black/70">
+    <div className="statement-invoice-detail">
+      <div className="statement-invoice-detail__meta">
         <span>
           نوع الدفع: <strong>{statementPaymentTypeLabel(invoice.payment_type)}</strong>
         </span>
@@ -133,18 +133,16 @@ function InvoiceDetailBlock({
         </span>
       </div>
       {invoice.notes ? (
-        <p className="text-black/55">
-          ملاحظات: {invoice.notes}
-        </p>
+        <p className="statement-invoice-detail__notes">ملاحظات: {invoice.notes}</p>
       ) : null}
       {lines.length > 0 && (
-        <table className="w-full border-collapse text-[10px]">
+        <table className="statement-invoice-detail__lines">
           <thead>
-            <tr className="text-black/55">
-              <th className="border-b border-black/10 py-0.5 text-start font-medium">الصنف</th>
-              <th className="border-b border-black/10 py-0.5 text-start font-medium">كمية</th>
-              <th className="border-b border-black/10 py-0.5 text-start font-medium">سعر</th>
-              <th className="border-b border-black/10 py-0.5 text-start font-medium">الإجمالي</th>
+            <tr>
+              <th>الصنف</th>
+              <th>كمية</th>
+              <th>سعر</th>
+              <th>الإجمالي</th>
             </tr>
           </thead>
           <tbody>
@@ -154,15 +152,15 @@ function InvoiceDetailBlock({
               const lineTotal = Number(line.line_total ?? qty * unitPrice)
               return (
                 <tr key={i}>
-                  <td className="py-0.5 align-top">
+                  <td>
                     {productLabel(line.product)}
                     {line.serial_no ? (
-                      <span className="mt-0.5 block font-mono text-[9px] text-black/45">{line.serial_no}</span>
+                      <span className="statement-invoice-detail__serial">{line.serial_no}</span>
                     ) : null}
                   </td>
-                  <td className="py-0.5 tabular-nums">{formatQuantity(qty)}</td>
-                  <td className="py-0.5 tabular-nums">{formatMoney(unitPrice, docCurrency)}</td>
-                  <td className="py-0.5 tabular-nums">{formatMoney(lineTotal, docCurrency)}</td>
+                  <td className="tabular-nums">{formatQuantity(qty)}</td>
+                  <td className="tabular-nums">{formatMoney(unitPrice, docCurrency)}</td>
+                  <td className="tabular-nums">{formatMoney(lineTotal, docCurrency)}</td>
                 </tr>
               )
             })}
@@ -201,22 +199,22 @@ export function StatementPrintView({
       : 'كامل الفترة'
 
   return (
-    <div className="space-y-2 text-xs" dir="rtl">
-      <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2">
+    <div className="statement-print" dir="rtl">
+      <header className="print-brand-header statement-print__header">
         {/* First in RTL → visual right: company + report title */}
         <div className="min-w-0 text-start">
-          <p className="text-base font-bold leading-tight">شركة ساينا — Syna Co</p>
-          <p className="text-[11px] text-black/55">SYNAMOR TECHNOLOGY</p>
-          <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
-          <p className="mt-0.5 text-[11px] text-black/55">تاريخ الطباعة: {todayYmd()}</p>
+          <p className="statement-print__company">شركة ساينا — Syna Co</p>
+          <p className="statement-print__brand">SYNAMOR TECHNOLOGY</p>
+          <p className="statement-print__doc-title">{documentLabel}</p>
+          <p className="statement-print__muted">تاريخ الطباعة: {todayYmd()}</p>
         </div>
         {/* Second in RTL → visual left: logo */}
         <BrandLogo />
       </header>
 
-      <div className="grid gap-1 sm:grid-cols-2">
+      <section className="statement-print__meta">
         <p>
-          <span className="text-black/55">{partnerLabel}: </span>
+          <span className="statement-print__label">{partnerLabel}: </span>
           <strong>
             {partner?.code ? `${partner.code} — ` : ''}
             {partner?.name || '—'}
@@ -224,21 +222,21 @@ export function StatementPrintView({
         </p>
         {partner?.phone && (
           <p>
-            <span className="text-black/55">الهاتف: </span>
+            <span className="statement-print__label">الهاتف: </span>
             {partner.phone}
           </p>
         )}
         <p>
-          <span className="text-black/55">الفترة: </span>
+          <span className="statement-print__label">الفترة: </span>
           {period}
         </p>
         <p>
-          <span className="text-black/55">العملة: </span>
+          <span className="statement-print__label">العملة: </span>
           {currency}
         </p>
-      </div>
+      </section>
 
-      <div className="grid gap-1 rounded border border-black/10 bg-mist/40 p-2 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="statement-print__summary">
         <p>
           الرصيد الافتتاحي:{' '}
           <strong className="tabular-nums">{formatMoney(opening, currency)}</strong>
@@ -255,9 +253,9 @@ export function StatementPrintView({
           الرصيد الختامي:{' '}
           <strong className="tabular-nums">{formatMoney(closing, currency)}</strong>
         </p>
-      </div>
+      </section>
 
-      <table className="data-table text-[11px]">
+      <table className="data-table statement-print__movements">
         <thead>
           <tr>
             <th>التاريخ</th>
@@ -271,7 +269,7 @@ export function StatementPrintView({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="py-6 text-center text-black/45">
+              <td colSpan={6} className="statement-print__empty">
                 لا توجد حركات في الفترة المحددة
               </td>
             </tr>
@@ -287,8 +285,8 @@ export function StatementPrintView({
                   <td className="tabular-nums">{formatMoney(Number(r.balance) || 0, currency)}</td>
                 </tr>
                 {r.type === 'invoice' && r.invoice ? (
-                  <tr className="print-avoid-break">
-                    <td colSpan={6} className="!border-t-0 bg-transparent p-1">
+                  <tr className="print-avoid-break statement-print__detail-row">
+                    <td colSpan={6}>
                       <InvoiceDetailBlock invoice={r.invoice} fallbackCurrency={currency} />
                     </td>
                   </tr>
@@ -309,8 +307,8 @@ export function StatementPrintView({
         )}
       </table>
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
-        <p className="text-sm font-bold">
+      <div className="print-avoid-break statement-print__closing">
+        <p>
           الرصيد الختامي ({currency}):{' '}
           <span className="tabular-nums">{formatMoney(closing, currency)}</span>
         </p>

@@ -50,7 +50,7 @@ function InvoiceMeta({
 }) {
   const docCurrency = invoice.currency || fallbackCurrency
   return (
-    <dl className="mb-2 grid gap-1 text-xs text-black/65 sm:grid-cols-2 lg:grid-cols-3">
+    <dl className="mb-3 grid gap-2 text-xs text-black/65 sm:grid-cols-2 lg:grid-cols-3">
       <DetailRow
         label={t('common.paymentType')}
         value={paymentTypeLabel(invoice.payment_type, t)}
@@ -96,38 +96,40 @@ function InvoiceLinesTable({
   t: (key: string) => string
   dense?: boolean
 }) {
-  const cell = dense ? 'px-2 py-1' : 'px-2 py-2'
+  const cell = dense ? 'px-2.5 py-1.5' : 'px-3 py-2.5'
   return (
-    <table className="w-full text-xs">
-      <thead className="bg-mist/80 text-black/60">
-        <tr>
-          <th className={`${cell} text-start`}>{t('common.product')}</th>
-          <th className={`${cell} text-start`}>{t('common.quantity')}</th>
-          <th className={`${cell} text-start`}>{t('common.price')}</th>
-          <th className={`${cell} text-start`}>{t('common.total')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {lines.map((line, i) => {
-          const unitPrice = Number(line.unit_price ?? line.unit_cost ?? 0)
-          const qty = Number(line.quantity) || 0
-          const lineTotal = Number(line.line_total ?? qty * unitPrice)
-          return (
-            <tr key={i} className="border-t border-black/5">
-              <td className={cell}>
-                {productLabel(line.product)}
-                {line.serial_no ? (
-                  <span className="mt-0.5 block font-mono text-[10px] text-black/45">{line.serial_no}</span>
-                ) : null}
-              </td>
-              <td className={`${cell} tabular-nums`}>{formatQuantity(qty)}</td>
-              <td className={`${cell} tabular-nums`}>{formatMoney(unitPrice, currency)}</td>
-              <td className={`${cell} tabular-nums`}>{formatMoney(lineTotal, currency)}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <div className="overflow-x-auto rounded-md border border-[var(--color-line)]">
+      <table className="w-full text-xs">
+        <thead className="bg-teal-soft/50 text-teal-dark">
+          <tr>
+            <th className={`${cell} text-start font-semibold`}>{t('common.product')}</th>
+            <th className={`${cell} text-start font-semibold`}>{t('common.quantity')}</th>
+            <th className={`${cell} text-start font-semibold`}>{t('common.price')}</th>
+            <th className={`${cell} text-start font-semibold`}>{t('common.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((line, i) => {
+            const unitPrice = Number(line.unit_price ?? line.unit_cost ?? 0)
+            const qty = Number(line.quantity) || 0
+            const lineTotal = Number(line.line_total ?? qty * unitPrice)
+            return (
+              <tr key={i} className="border-t border-[var(--color-line)] bg-surface">
+                <td className={cell}>
+                  {productLabel(line.product)}
+                  {line.serial_no ? (
+                    <span className="mt-0.5 block font-mono text-[10px] text-black/45">{line.serial_no}</span>
+                  ) : null}
+                </td>
+                <td className={`${cell} tabular-nums`}>{formatQuantity(qty)}</td>
+                <td className={`${cell} tabular-nums`}>{formatMoney(unitPrice, currency)}</td>
+                <td className={`${cell} tabular-nums`}>{formatMoney(lineTotal, currency)}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -161,8 +163,8 @@ export default function PartnerStatementPanel({
   }
   const isRtl = i18n.dir() === 'rtl'
 
-  const pad = dense ? 'px-2 py-2' : 'px-4 py-3'
-  const theadPad = dense ? 'px-2 py-2' : 'px-4 py-3'
+  const pad = dense ? 'px-2.5 py-2.5' : 'px-4 py-3.5'
+  const theadPad = dense ? 'px-2.5 py-2.5' : 'px-4 py-3.5'
   const colCount = 7
 
   const rowKey = (r: StatementRow, idx: number) =>
@@ -174,7 +176,11 @@ export default function PartnerStatementPanel({
 
   return (
     <>
-      <div className={`grid gap-3 ${dense ? 'mb-3 sm:grid-cols-2 lg:grid-cols-4' : 'px-4 py-3 sm:grid-cols-2 lg:grid-cols-4'}`}>
+      <div
+        className={`statement-panel grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${
+          dense ? 'mb-5' : 'mb-1 border-b border-[var(--color-line)] px-4 py-5'
+        }`}
+      >
         <StatTile
           label={t('common.openingBalance')}
           value={formatMoney(opening, currency)}
@@ -198,6 +204,7 @@ export default function PartnerStatementPanel({
         />
       </div>
 
+      <div className={dense ? '' : 'px-1 pb-2'}>
       <table className={`w-full text-sm ${dense ? 'data-table' : ''}`}>
         <thead className={dense ? undefined : 'bg-mist text-right text-black/60'}>
           <tr>
@@ -264,22 +271,24 @@ export default function PartnerStatementPanel({
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.balance) || 0, currency)}</td>
                   </tr>
                   {hasInvoiceDetail && isOpen && invoice ? (
-                    <tr className="border-t border-black/5 bg-mist/30">
-                      <td colSpan={colCount} className={dense ? 'px-2 py-2' : 'px-4 py-3'}>
-                        <p className="mb-2 text-xs font-semibold text-black/70">
-                          {t('common.invoiceDetails')}
-                        </p>
-                        <InvoiceMeta invoice={invoice} fallbackCurrency={currency} t={t} />
-                        {(invoice.lines || []).length > 0 ? (
-                          <InvoiceLinesTable
-                            lines={invoice.lines || []}
-                            currency={docCurrency}
-                            t={t}
-                            dense={dense}
-                          />
-                        ) : (
-                          <p className="text-xs text-black/45">{t('common.noInvoiceLines')}</p>
-                        )}
+                    <tr className="border-t border-[var(--color-line)] bg-paper/80">
+                      <td colSpan={colCount} className={dense ? 'px-3 py-3.5' : 'px-5 py-4'}>
+                        <div className="space-y-3 rounded-md border border-teal/15 bg-surface p-3.5 shadow-[0_1px_0_rgba(12,26,34,0.04)]">
+                          <p className="text-xs font-semibold tracking-wide text-teal-dark">
+                            {t('common.invoiceDetails')}
+                          </p>
+                          <InvoiceMeta invoice={invoice} fallbackCurrency={currency} t={t} />
+                          {(invoice.lines || []).length > 0 ? (
+                            <InvoiceLinesTable
+                              lines={invoice.lines || []}
+                              currency={docCurrency}
+                              t={t}
+                              dense={dense}
+                            />
+                          ) : (
+                            <p className="text-xs text-black/45">{t('common.noInvoiceLines')}</p>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ) : null}
@@ -299,6 +308,7 @@ export default function PartnerStatementPanel({
           </tfoot>
         )}
       </table>
+      </div>
 
       <Modal
         open={!!selected}

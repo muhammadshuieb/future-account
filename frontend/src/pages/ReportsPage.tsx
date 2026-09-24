@@ -585,8 +585,8 @@ export default function ReportsPage() {
             )}
 
             {(tab === 'customer-statement' || tab === 'supplier-statement') && (
-              <div>
-                <p className="mb-2 font-semibold">
+              <div className="space-y-4">
+                <p className="font-semibold text-teal-dark">
                   {report.data.customer?.name || report.data.supplier?.name}
                 </p>
                 <PartnerStatementPanel

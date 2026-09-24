@@ -226,8 +226,8 @@ body {
   display: block;
   height: auto;
   width: auto;
-  max-height: 56px;
-  max-width: min(160px, 45mm);
+  max-height: 68px;
+  max-width: min(180px, 52mm);
   flex-shrink: 0;
   object-fit: contain;
   -webkit-print-color-adjust: exact;
@@ -241,6 +241,209 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   width: 100%;
+}
+
+/* ── Account statement (print + on-screen preview) ── */
+.statement-print {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  font-size: 0.75rem;
+  color: var(--color-ink);
+  letter-spacing: normal;
+}
+
+.statement-print__header {
+  gap: 1rem !important;
+  padding-bottom: 0.85rem !important;
+  border-bottom: 1.5px solid rgba(13, 115, 119, 0.22) !important;
+  margin-bottom: 0.15rem;
+}
+
+.statement-print__company {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--color-ink);
+}
+
+.statement-print__brand {
+  font-size: 0.7rem;
+  color: rgba(12, 26, 34, 0.5);
+  margin-top: 0.1rem;
+}
+
+.statement-print__doc-title {
+  margin-top: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--color-teal-dark);
+}
+
+.statement-print__muted,
+.statement-print__label {
+  color: rgba(12, 26, 34, 0.52);
+}
+
+.statement-print__muted {
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+}
+
+.statement-print__meta {
+  display: grid;
+  gap: 0.45rem 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.45rem;
+  background: rgba(230, 238, 242, 0.45);
+}
+
+@media (min-width: 640px) {
+  .statement-print__meta {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.statement-print__summary {
+  display: grid;
+  gap: 0.55rem 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(13, 115, 119, 0.2);
+  border-radius: 0.45rem;
+  background: linear-gradient(180deg, rgba(215, 236, 236, 0.55), rgba(243, 247, 248, 0.9));
+}
+
+@media (min-width: 640px) {
+  .statement-print__summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .statement-print__summary {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.statement-print__summary p {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.statement-print__summary strong {
+  color: var(--color-ink);
+}
+
+.statement-print__movements {
+  margin-top: 0.15rem;
+  font-size: 0.7rem !important;
+}
+
+.statement-print__movements th {
+  background: rgba(13, 115, 119, 0.1) !important;
+  color: var(--color-teal-dark) !important;
+  border-bottom: 1px solid rgba(13, 115, 119, 0.18);
+  padding: 0.45rem 0.5rem !important;
+}
+
+.statement-print__movements td {
+  padding: 0.4rem 0.5rem !important;
+  vertical-align: top;
+}
+
+.statement-print__movements tfoot td {
+  border-top: 1.5px solid rgba(13, 115, 119, 0.25);
+  background: rgba(230, 238, 242, 0.55);
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+}
+
+.statement-print__empty {
+  padding: 1.5rem 0.5rem !important;
+  text-align: center;
+  color: rgba(12, 26, 34, 0.45);
+}
+
+.statement-print__detail-row > td {
+  padding: 0.35rem 0.35rem 0.85rem !important;
+  border-top: none !important;
+  background: transparent !important;
+}
+
+.statement-invoice-detail {
+  margin-top: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(13, 115, 119, 0.18);
+  border-radius: 0.4rem;
+  background: #f7fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.65rem;
+}
+
+.statement-invoice-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  color: rgba(12, 26, 34, 0.68);
+  line-height: 1.45;
+}
+
+.statement-invoice-detail__notes {
+  margin: 0;
+  color: rgba(12, 26, 34, 0.55);
+}
+
+.statement-invoice-detail__lines {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.statement-invoice-detail__lines th {
+  background: rgba(13, 115, 119, 0.08) !important;
+  color: var(--color-teal-dark) !important;
+  font-weight: 600;
+  text-align: start;
+  padding: 0.35rem 0.45rem !important;
+  border-bottom: 1px solid rgba(13, 115, 119, 0.15);
+}
+
+.statement-invoice-detail__lines td {
+  padding: 0.32rem 0.45rem !important;
+  border-top: 1px solid var(--color-line);
+  vertical-align: top;
+  background: #fff;
+}
+
+.statement-invoice-detail__serial {
+  display: block;
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  color: rgba(12, 26, 34, 0.45);
+}
+
+.statement-print__closing {
+  margin-top: 0.35rem;
+  margin-inline-start: auto;
+  max-width: 18rem;
+  padding-top: 0.75rem;
+  border-top: 1.5px solid rgba(13, 115, 119, 0.22);
+  text-align: start;
+}
+
+.statement-print__closing p {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-ink);
 }
 
 .print-brand-header > :first-child {
@@ -1009,12 +1212,56 @@ textarea {
   .print-sheet img.print-logo,
   img.brand-logo--print,
   img.print-logo {
-    max-height: 56px !important;
-    max-width: 45mm !important;
+    max-height: 68px !important;
+    max-width: 52mm !important;
     width: auto !important;
     height: auto !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
+  }
+
+  /* Statement: keep section rhythm; nested invoice tables must not collapse */
+  .statement-print {
+    gap: 0.85rem !important;
+  }
+
+  .statement-print__header {
+    padding-bottom: 0.65rem !important;
+    margin-bottom: 0.1rem !important;
+  }
+
+  .statement-print__meta,
+  .statement-print__summary {
+    padding: 0.55rem 0.7rem !important;
+    gap: 0.4rem 0.85rem !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .statement-print__movements th,
+  .statement-print__movements td {
+    padding: 0.28rem 0.4rem !important;
+  }
+
+  .statement-print__detail-row > td {
+    padding: 0.25rem 0.25rem 0.65rem !important;
+  }
+
+  .statement-invoice-detail {
+    padding: 0.5rem 0.6rem !important;
+    gap: 0.4rem !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .statement-invoice-detail__lines th,
+  .statement-invoice-detail__lines td {
+    padding: 0.28rem 0.4rem !important;
+  }
+
+  .statement-print__closing {
+    padding-top: 0.55rem !important;
+    margin-top: 0.25rem !important;
   }
 
   /* Compact spacing inside print documents */
