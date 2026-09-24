@@ -219,6 +219,13 @@ export default function PartnersPage() {
                       printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
                       fileName={`statement-${tab}-${r.id}`}
                       documentLabel={`كشف حساب — ${r.name}`}
+                      messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+                      excelPath={`/exports/reports/${tab === 'suppliers' ? 'supplier-statement' : 'customer-statement'}`}
+                      excelParams={{
+                        from,
+                        to,
+                        ...(tab === 'suppliers' ? { supplier_id: r.id } : { customer_id: r.id }),
+                      }}
                     />
                   </TableActions>
                 </td>
@@ -260,6 +267,13 @@ export default function PartnersPage() {
                 printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
                 fileName={`statement-${tab}-${statementId}`}
                 documentLabel={`كشف حساب — ${(rows || []).find((r) => r.id === statementId)?.name || ''}`}
+                messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+                excelPath={`/exports/reports/${tab === 'suppliers' ? 'supplier-statement' : 'customer-statement'}`}
+                excelParams={{
+                  from,
+                  to,
+                  ...(tab === 'suppliers' ? { supplier_id: statementId } : { customer_id: statementId }),
+                }}
               />
             </div>
           </div>

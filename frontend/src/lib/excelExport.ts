@@ -1,12 +1,20 @@
 import api from '@/lib/api'
 import { downloadBlob } from '@/lib/documentCapture'
 
-/** Download an Excel export from the API (`responseType: 'blob'`). */
-export async function downloadExcelExport(
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+export type ExcelFile = {
+  blob: Blob
+  fileName: string
+  mimeType: string
+}
+
+/** Fetch an Excel export blob from the API without triggering a download. */
+export async function fetchExcelExport(
   path: string,
   params?: Record<string, string | number | undefined | null>,
   fallbackFileName = 'syna-export.xlsx',
-): Promise<void> {
+): Promise<ExcelFile> {
   const cleanParams: Record<string, string> = {}
   if (params) {
     for (const [k, v] of Object.entries(params)) {
@@ -27,11 +35,23 @@ export async function downloadExcelExport(
 
   const blob = res.data instanceof Blob
     ? res.data
-    : new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      })
+    : new Blob([res.data], { type: XLSX_MIME })
 
-  downloadBlob(blob, fileName)
+  return {
+    blob: blob.type ? blob : new Blob([blob], { type: XLSX_MIME }),
+    fileName,
+    mimeType: blob.type || XLSX_MIME,
+  }
+}
+
+/** Download an Excel export from the API (`responseType: 'blob'`). */
+export async function downloadExcelExport(
+  path: string,
+  params?: Record<string, string | number | undefined | null>,
+  fallbackFileName = 'syna-export.xlsx',
+): Promise<void> {
+  const file = await fetchExcelExport(path, params, fallbackFileName)
+  downloadBlob(file.blob, file.fileName)
 }
 
 export function excelModuleForSalesTab(tab: string): string {

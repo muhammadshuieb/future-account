@@ -242,6 +242,19 @@ export default function ReportsPage() {
               printPath={statementPrintPath}
               fileName={`report-${tab}`}
               documentLabel={tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
+              messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+              excelPath={`/exports/reports/${tab}`}
+              excelParams={{
+                from,
+                to,
+                as_of: to,
+                branch_id: branchId || undefined,
+                warehouse_id: warehouseId || undefined,
+                customer_id: customerId || undefined,
+                supplier_id: supplierId || undefined,
+                product_id: productId || undefined,
+                account_id: accountId || undefined,
+              }}
             />
           </div>
         }

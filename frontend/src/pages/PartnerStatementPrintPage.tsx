@@ -83,6 +83,13 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
           defaultPhone={partnerPhone}
           fileName={`statement-${kind}-${partnerId}`}
           documentLabel={`${documentLabel}${partnerName ? ` — ${partnerName}` : ''}`}
+          messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+          excelPath={`/exports/reports/${isCustomer ? 'customer-statement' : 'supplier-statement'}`}
+          excelParams={{
+            from,
+            to,
+            ...(isCustomer ? { customer_id: partnerId } : { supplier_id: partnerId }),
+          }}
         />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}

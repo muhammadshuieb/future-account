@@ -8,25 +8,52 @@ import {
   downloadBlob,
   type CaptureFormat,
 } from '@/lib/documentCapture'
-import { normalizeWhatsAppPhone, whatsAppChatUrl } from '@/lib/phone'
+import { fetchExcelExport } from '@/lib/excelExport'
+import { normalizeWhatsAppPhone, openWhatsAppChat } from '@/lib/phone'
 import { Button, Field, Modal, inputClass } from '@/components/ui'
+
+type ShareFormat = CaptureFormat | 'xlsx'
 
 type Props = {
   /** Prefill from customer.phone / supplier.phone */
   defaultPhone?: string
   /** Base file name without extension */
   fileName?: string
-  /** Short Arabic label used in the WhatsApp draft message */
+  /** Short label used in the WhatsApp draft message */
   documentLabel?: string
   /** Capture from current page (default `.print-area`) */
   captureSelector?: string
-  /** When set, open this print route in a popup and capture from there */
+  /** When set, open this print route and capture from there */
   printPath?: string
+  /** Optional Excel export API path (enables Excel format option) */
+  excelPath?: string
+  /** Query params for excelPath */
+  excelParams?: Record<string, string | number | undefined | null>
+  /** Extra lines appended to the WhatsApp draft (e.g. period summary) */
+  messageExtra?: string
   variant?: 'primary' | 'secondary'
   className?: string
   disabled?: boolean
   /** Compact text-link style for table rows */
   compact?: boolean
+}
+
+async function tryNativeShare(file: File, title: string, text: string): Promise<'shared' | 'cancelled' | 'unavailable'> {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
+    return 'unavailable'
+  }
+  const payload: ShareData = { files: [file], title, text }
+  try {
+    if (typeof navigator.canShare === 'function' && !navigator.canShare(payload)) {
+      return 'unavailable'
+    }
+    await navigator.share(payload)
+    return 'shared'
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled'
+    if (e instanceof Error && e.name === 'AbortError') return 'cancelled'
+    return 'unavailable'
+  }
 }
 
 export default function WhatsAppSendButton({
@@ -35,6 +62,9 @@ export default function WhatsAppSendButton({
   documentLabel = 'مستند',
   captureSelector = '.print-area',
   printPath,
+  excelPath,
+  excelParams,
+  messageExtra,
   variant = 'secondary',
   className = '',
   disabled = false,
@@ -43,14 +73,19 @@ export default function WhatsAppSendButton({
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [phone, setPhone] = useState(defaultPhone ?? '')
-  const [format, setFormat] = useState<CaptureFormat>('pdf')
+  const [format, setFormat] = useState<ShareFormat>('pdf')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [hint, setHint] = useState('')
   const [cloudConfigured, setCloudConfigured] = useState(false)
 
   useEffect(() => {
-    if (open) setPhone(defaultPhone ?? '')
+    if (open) {
+      setPhone(defaultPhone ?? '')
+      setFormat('pdf')
+      setError('')
+      setHint('')
+    }
   }, [open, defaultPhone])
 
   useEffect(() => {
@@ -82,6 +117,41 @@ export default function WhatsAppSendButton({
     return true
   }
 
+  async function prepareFile(): Promise<{ blob: Blob; fileName: string; mimeType: string }> {
+    if (format === 'xlsx') {
+      if (!excelPath) throw new Error(t('whatsapp.failed'))
+      const xlsxName = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`
+      return fetchExcelExport(excelPath, excelParams, xlsxName)
+    }
+
+    const captureFormat: CaptureFormat = format === 'png' ? 'png' : 'pdf'
+    const localEl = document.querySelector<HTMLElement>(captureSelector)
+    const hasLocalPrint =
+      !!localEl &&
+      (localEl.getAttribute('data-print-ready') === '1' ||
+        localEl.innerText.replace(/\s+/g, ' ').trim().length > 20)
+
+    if (hasLocalPrint) {
+      return captureSelectorInDocument(document, captureSelector, { format: captureFormat, fileName })
+    }
+    if (printPath) {
+      return captureFromPrintPopup(printPath, { format: captureFormat, fileName })
+    }
+    return captureSelectorInDocument(document, captureSelector, { format: captureFormat, fileName })
+  }
+
+  function buildDraft(file: string, cloudOk: boolean): string {
+    const lines = [documentLabel]
+    if (messageExtra?.trim()) lines.push(messageExtra.trim())
+    if (cloudOk) {
+      lines.push(t('whatsapp.draftCloud'))
+    } else {
+      lines.push(t('whatsapp.draftAttach', { file }))
+    }
+    lines.push('— Syna Co')
+    return lines.join('\n')
+  }
+
   async function handleSend() {
     setError('')
     setHint('')
@@ -94,20 +164,21 @@ export default function WhatsAppSendButton({
     setBusy(true)
     setHint(t('whatsapp.preparing'))
     try {
-      // Prefer same-page capture when print content is already rendered.
-      // Otherwise load printPath in a hidden iframe (no flickering popup).
-      const localEl = document.querySelector<HTMLElement>(captureSelector)
-      const hasLocalPrint =
-        !!localEl &&
-        (localEl.getAttribute('data-print-ready') === '1' ||
-          localEl.innerText.replace(/\s+/g, ' ').trim().length > 20)
+      const captured = await prepareFile()
+      const file = new File([captured.blob], captured.fileName, { type: captured.mimeType })
 
-      const captured = hasLocalPrint
-        ? await captureSelectorInDocument(document, captureSelector, { format, fileName })
-        : printPath
-          ? await captureFromPrintPopup(printPath, { format, fileName })
-          : await captureSelectorInDocument(document, captureSelector, { format, fileName })
+      // Best path on mobile / supported browsers: OS share sheet with the file attached.
+      const shareResult = await tryNativeShare(file, documentLabel, buildDraft(captured.fileName, false))
+      if (shareResult === 'shared') {
+        setHint(t('whatsapp.sentShare'))
+        return
+      }
+      if (shareResult === 'cancelled') {
+        setHint('')
+        return
+      }
 
+      // Always download so the user has the file ready to attach in Desktop/Web.
       downloadBlob(captured.blob, captured.fileName)
 
       let cloudOk = false
@@ -117,17 +188,10 @@ export default function WhatsAppSendButton({
         cloudOk = false
       }
 
-      const draft = cloudOk
-        ? `${documentLabel} — تم الإرسال تلقائياً من Syna Co`
-        : `${documentLabel} — يرجى إرفاق الملف الذي تم تنزيله (${captured.fileName})`
-      const url = whatsAppChatUrl(normalized, draft)
-      if (url) window.open(url, '_blank', 'noopener,noreferrer')
+      const draft = buildDraft(captured.fileName, cloudOk)
+      openWhatsAppChat(normalized, draft)
 
-      setHint(
-        cloudOk
-          ? t('whatsapp.sentCloud')
-          : t('whatsapp.sentManual'),
-      )
+      setHint(cloudOk ? t('whatsapp.sentCloud') : t('whatsapp.sentManual'))
     } catch (e) {
       setHint('')
       setError(e instanceof Error ? e.message : t('whatsapp.failed'))
@@ -201,6 +265,18 @@ export default function WhatsAppSendButton({
               />
               PDF
             </label>
+            {excelPath ? (
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="wa-format"
+                  checked={format === 'xlsx'}
+                  onChange={() => setFormat('xlsx')}
+                  disabled={busy}
+                />
+                Excel
+              </label>
+            ) : null}
             <label className="flex items-center gap-2">
               <input
                 type="radio"

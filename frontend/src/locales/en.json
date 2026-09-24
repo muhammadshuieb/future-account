@@ -730,10 +730,13 @@
     "preparing": "Preparing the file…",
     "invalidPhone": "Enter a valid mobile number",
     "failed": "Could not prepare the file for sending",
-    "manualHint": "The file will download and WhatsApp will open. Attach the file from Downloads after the chat opens.",
-    "cloudReady": "Cloud API is connected — automatic send will be tried, plus a download and WhatsApp open.",
-    "sentCloud": "Sent via Cloud API. A copy was downloaded and WhatsApp opened for confirmation.",
-    "sentManual": "File downloaded and WhatsApp opened. Attach the file from Downloads, then send."
+    "manualHint": "The file (PDF or Excel) downloads first, then WhatsApp Desktop opens. Open the chat and attach the downloaded file — browsers cannot auto-attach files for security reasons.",
+    "cloudReady": "Cloud API is connected — automatic send with attachment will be tried, plus a download and WhatsApp Desktop open.",
+    "sentCloud": "Sent via Cloud API with the file. A copy was downloaded and WhatsApp opened for confirmation.",
+    "sentManual": "File downloaded and WhatsApp opened. Open the chat, attach the downloaded file, then send.",
+    "sentShare": "Share sheet opened with the file. Choose WhatsApp to send the attachment.",
+    "draftAttach": "Please attach the downloaded file: {{file}}",
+    "draftCloud": "File was sent automatically from Syna Co"
   },
   "login": {
     "subtitle": "Syna Co — ERP for accounting & business management"

@@ -35,10 +35,68 @@ export function normalizeWhatsAppPhone(phone: string): string | null {
   return null
 }
 
+/** Classic wa.me link (app / web redirect). */
 export function whatsAppChatUrl(phone: string, text?: string): string | null {
   const normalized = normalizeWhatsAppPhone(phone)
   if (!normalized) return null
   const base = `https://wa.me/${normalized}`
   if (!text) return base
   return `${base}?text=${encodeURIComponent(text)}`
+}
+
+/** WhatsApp Desktop / mobile app deep link. */
+export function whatsAppDesktopUrl(phone: string, text?: string): string | null {
+  const normalized = normalizeWhatsAppPhone(phone)
+  if (!normalized) return null
+  const base = `whatsapp://send?phone=${normalized}`
+  if (!text) return base
+  return `${base}&text=${encodeURIComponent(text)}`
+}
+
+/** WhatsApp Web send URL (fallback when Desktop is not installed). */
+export function whatsAppWebUrl(phone: string, text?: string): string | null {
+  const normalized = normalizeWhatsAppPhone(phone)
+  if (!normalized) return null
+  const base = `https://web.whatsapp.com/send?phone=${normalized}`
+  if (!text) return base
+  return `${base}&text=${encodeURIComponent(text)}`
+}
+
+/**
+ * Open WhatsApp Desktop when possible; if the protocol does not take focus,
+ * fall back to WhatsApp Web (then wa.me).
+ * Pure web apps cannot attach files into WhatsApp — caller should download first.
+ */
+export function openWhatsAppChat(phone: string, text?: string): 'desktop' | 'web' | 'wa.me' | null {
+  const desktop = whatsAppDesktopUrl(phone, text)
+  const web = whatsAppWebUrl(phone, text)
+  const waMe = whatsAppChatUrl(phone, text)
+  if (!desktop && !web && !waMe) return null
+
+  let opened: 'desktop' | 'web' | 'wa.me' | null = null
+
+  if (desktop) {
+    try {
+      const a = document.createElement('a')
+      a.href = desktop
+      a.rel = 'noopener'
+      a.style.display = 'none'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      opened = 'desktop'
+    } catch {
+      opened = null
+    }
+  }
+
+  // If Desktop protocol did not steal focus, open Web (or wa.me) after a short wait.
+  window.setTimeout(() => {
+    if (document.hidden || !document.hasFocus()) return
+    const fallback = web || waMe
+    if (!fallback) return
+    window.open(fallback, '_blank', 'noopener,noreferrer')
+  }, 1200)
+
+  return opened ?? (web ? 'web' : waMe ? 'wa.me' : null)
 }

@@ -724,10 +724,13 @@
     "preparing": "Dosya hazırlanıyor…",
     "invalidPhone": "Geçerli bir cep numarası girin",
     "failed": "Dosya hazırlanamadı",
-    "manualHint": "Dosya iner ve WhatsApp açılır. Sohbet açıldıktan sonra İndirilenler’den ekleyin.",
-    "cloudReady": "Cloud API bağlı — otomatik gönderim denenecek; ayrıca indirme ve WhatsApp açılır.",
-    "sentCloud": "Cloud API ile gönderildi. Kopya indirildi ve WhatsApp açıldı.",
-    "sentManual": "Dosya indirildi ve WhatsApp açıldı. İndirilenler’den ekleyip gönderin."
+    "manualHint": "Önce dosya (PDF veya Excel) iner, sonra WhatsApp Masaüstü açılır. Sohbeti açıp indirilen dosyayı ekleyin — tarayıcılar güvenlik nedeniyle dosyayı otomatik ekleyemez.",
+    "cloudReady": "Cloud API bağlı — ekli otomatik gönderim denenecek; ayrıca indirme ve WhatsApp Masaüstü açılır.",
+    "sentCloud": "Cloud API ile dosya gönderildi. Kopya indirildi ve WhatsApp açıldı.",
+    "sentManual": "Dosya indirildi ve WhatsApp açıldı. Sohbeti açın, indirilen dosyayı ekleyin ve gönderin.",
+    "sentShare": "Dosyalı paylaşım penceresi açıldı. Eki göndermek için WhatsApp’ı seçin.",
+    "draftAttach": "Lütfen indirilen dosyayı ekleyin: {{file}}",
+    "draftCloud": "Dosya Syna Co’dan otomatik gönderildi"
   },
   "login": {
     "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP"
