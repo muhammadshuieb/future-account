@@ -12,6 +12,8 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPartnersTab } from '@/lib/excelExport'
+import { buildDocumentBaseName, buildDocumentFileName } from '@/lib/documentFileName'
+import { statementMessageDetails } from '@/lib/whatsappDraft'
 import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, PageHeader, Panel, TableActions, Tabs, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 
@@ -211,15 +213,20 @@ export default function PartnersPage() {
                     <PdfExportButton
                       compact
                       printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                      fileName={`statement-${tab}-${r.id}`}
+                      fileName={buildDocumentBaseName(t('documents.accountStatement'), r.name)}
                     />
                     <WhatsAppSendButton
                       compact
                       defaultPhone={r.phone}
                       printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                      fileName={`statement-${tab}-${r.id}`}
-                      documentLabel={`كشف حساب — ${r.name}`}
-                      messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+                      fileName={buildDocumentBaseName(t('documents.accountStatement'), r.name)}
+                      documentLabel={t('documents.accountStatement')}
+                      messageDetails={statementMessageDetails(t, {
+                        partnerName: r.name,
+                        partnerKind: tab === 'suppliers' ? 'supplier' : 'customer',
+                        from,
+                        to,
+                      })}
                       excelPath={`/exports/reports/${tab === 'suppliers' ? 'supplier-statement' : 'customer-statement'}`}
                       excelParams={{
                         from,
@@ -254,20 +261,36 @@ export default function PartnersPage() {
                   to,
                   ...(tab === 'suppliers' ? { supplier_id: statementId } : { customer_id: statementId }),
                 }}
+                fileName={buildDocumentFileName(
+                  t('documents.accountStatement'),
+                  (rows || []).find((r) => r.id === statementId)?.name,
+                  'xlsx',
+                )}
               />
               <Button variant="secondary" onClick={() => printStatement(statementId)}>
                 <Printer size={16} /> طباعة
               </Button>
               <PdfExportButton
                 printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                fileName={`statement-${tab}-${statementId}`}
+                fileName={buildDocumentBaseName(
+                  t('documents.accountStatement'),
+                  (rows || []).find((r) => r.id === statementId)?.name,
+                )}
               />
               <WhatsAppSendButton
                 defaultPhone={(rows || []).find((r) => r.id === statementId)?.phone}
                 printPath={`/print/${tab}/${statementId}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                fileName={`statement-${tab}-${statementId}`}
-                documentLabel={`كشف حساب — ${(rows || []).find((r) => r.id === statementId)?.name || ''}`}
-                messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+                fileName={buildDocumentBaseName(
+                  t('documents.accountStatement'),
+                  (rows || []).find((r) => r.id === statementId)?.name,
+                )}
+                documentLabel={t('documents.accountStatement')}
+                messageDetails={statementMessageDetails(t, {
+                  partnerName: (rows || []).find((r) => r.id === statementId)?.name,
+                  partnerKind: tab === 'suppliers' ? 'supplier' : 'customer',
+                  from,
+                  to,
+                })}
                 excelPath={`/exports/reports/${tab === 'suppliers' ? 'supplier-statement' : 'customer-statement'}`}
                 excelParams={{
                   from,

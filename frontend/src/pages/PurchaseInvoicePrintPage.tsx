@@ -8,6 +8,8 @@ import api from '@/lib/api'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button } from '@/components/ui'
 
 export default function PurchaseInvoicePrintPage() {
@@ -22,11 +24,16 @@ export default function PurchaseInvoicePrintPage() {
     queryFn: async () => (await api.get(`/purchase-invoices/${invoiceId}`)).data.data as PurchaseInvoicePrintData,
   })
 
+  const fileBaseName = buildDocumentBaseName(
+    t('documents.purchaseInvoice'),
+    invoice.data?.supplier?.name,
+  )
+
   useEffect(() => {
-    if (invoice.data?.invoice_number) {
-      document.title = `${invoice.data.invoice_number} — Syna Co`
+    if (invoice.data) {
+      document.title = `${fileBaseName} — Syna Co`
     }
-  }, [invoice.data?.invoice_number])
+  }, [invoice.data, fileBaseName])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>
@@ -51,12 +58,17 @@ export default function PurchaseInvoicePrintPage() {
           <Printer size={16} /> {t('common.print')}
         </Button>
         <PdfExportButton
-          fileName={invoice.data.invoice_number || `purchase-invoice-${invoiceId}`}
+          fileName={fileBaseName}
         />
         <WhatsAppSendButton
           defaultPhone={invoice.data.supplier?.phone}
-          fileName={invoice.data.invoice_number || `purchase-invoice-${invoiceId}`}
-          documentLabel={`فاتورة مشتريات ${invoice.data.invoice_number || ''}`}
+          fileName={fileBaseName}
+          documentLabel={t('documents.purchaseInvoice')}
+          messageDetails={invoiceMessageDetails(t, {
+            partnerName: invoice.data.supplier?.name,
+            partnerKind: 'supplier',
+            documentNumber: invoice.data.invoice_number,
+          })}
         />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}

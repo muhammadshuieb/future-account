@@ -14,6 +14,8 @@ import { DocumentCurrencyFields, type CurrencyOption } from '@/components/Curren
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import {
   Button,
   EmptyState,
@@ -349,6 +351,9 @@ export default function PrintInvoicesPage() {
   }
 
   const selectedCustomerPhone = (customers.data || []).find((c) => String(c.id) === form.customer_id)?.phone
+  const selectedCustomerName = (customers.data || []).find((c) => String(c.id) === form.customer_id)?.name
+  const selectedInvoiceFileName = buildDocumentBaseName(t('documents.printInvoice'), selectedCustomerName)
+  const selectedInvoiceNumber = (invoices.data || []).find((row) => row.id === selectedId)?.invoice_number
   const list = invoices.data || []
   const readOnly = modal === 'view'
 
@@ -417,14 +422,19 @@ export default function PrintInvoicesPage() {
                           <Printer size={14} className="inline" /> {t('common.print')}
                         </button>
                         <PdfExportButton
-                          fileName={row.invoice_number}
+                          fileName={buildDocumentBaseName(t('documents.printInvoice'), row.customer?.name)}
                           printPath={`/print/print-invoices/${row.id}`}
                           compact
                         />
                         <WhatsAppSendButton
                           defaultPhone={row.customer?.phone}
-                          fileName={row.invoice_number}
-                          documentLabel={`${t('printInvoices.documentTitle')} ${row.invoice_number}`}
+                          fileName={buildDocumentBaseName(t('documents.printInvoice'), row.customer?.name)}
+                          documentLabel={t('documents.printInvoice')}
+                          messageDetails={invoiceMessageDetails(t, {
+                            partnerName: row.customer?.name,
+                            partnerKind: 'customer',
+                            documentNumber: row.invoice_number,
+                          })}
                           printPath={`/print/print-invoices/${row.id}`}
                           compact
                         />
@@ -474,13 +484,18 @@ export default function PrintInvoicesPage() {
                     <Printer size={16} /> {t('common.print')}
                   </Button>
                   <PdfExportButton
-                    fileName={`print-invoice-${selectedId}`}
+                    fileName={selectedInvoiceFileName}
                     printPath={`/print/print-invoices/${selectedId}`}
                   />
                   <WhatsAppSendButton
                     defaultPhone={selectedCustomerPhone}
-                    fileName={`print-invoice-${selectedId}`}
-                    documentLabel={t('printInvoices.documentTitle')}
+                    fileName={selectedInvoiceFileName}
+                    documentLabel={t('documents.printInvoice')}
+                    messageDetails={invoiceMessageDetails(t, {
+                      partnerName: selectedCustomerName,
+                      partnerKind: 'customer',
+                      documentNumber: selectedInvoiceNumber,
+                    })}
                     printPath={`/print/print-invoices/${selectedId}`}
                   />
                 </>

@@ -11,6 +11,8 @@ import type { PartnerStatementData } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { formatWhatsAppPeriod, statementMessageDetails } from '@/lib/whatsappDraft'
 import { Button, EmptyState, Field, LoadingBlock, PageHeader, Panel, StatTile, Tabs, formatMoney, formatQuantity, inputClass } from '@/components/ui'
 import { productLabel } from '@/lib/productLabel'
 import { useAuth } from '@/context/AuthContext'
@@ -167,6 +169,40 @@ export default function ReportsPage() {
     return ''
   })()
 
+  const statementPartnerName = (() => {
+    if (tab === 'customer-statement' && customerId) {
+      const c = (customers.data || []).find((x: { id: number }) => String(x.id) === customerId) as { name?: string } | undefined
+      return c?.name || ''
+    }
+    if (tab === 'supplier-statement' && supplierId) {
+      const s = (suppliers.data || []).find((x: { id: number }) => String(x.id) === supplierId) as { name?: string } | undefined
+      return s?.name || ''
+    }
+    return ''
+  })()
+
+  const reportDocLabel =
+    tab === 'customer-statement' || tab === 'supplier-statement'
+      ? t('documents.accountStatement')
+      : tab === 'general-ledger'
+        ? t('reports.generalLedger')
+        : reportTitleFallback[tab]
+
+  const reportFileName =
+    tab === 'customer-statement' || tab === 'supplier-statement'
+      ? buildDocumentBaseName(t('documents.accountStatement'), statementPartnerName)
+      : reportDocLabel
+
+  const reportMessageDetails =
+    tab === 'customer-statement' || tab === 'supplier-statement'
+      ? statementMessageDetails(t, {
+          partnerName: statementPartnerName,
+          partnerKind: tab === 'supplier-statement' ? 'supplier' : 'customer',
+          from,
+          to,
+        })
+      : [formatWhatsAppPeriod(t, from, to)].filter((x): x is string => Boolean(x))
+
   const statementPrintPath = (() => {
     if (tab === 'customer-statement' && customerId) {
       return `/print/customers/${customerId}/statement?${new URLSearchParams({ from, to }).toString()}`
@@ -230,7 +266,7 @@ export default function ReportsPage() {
             <PdfExportButton
               className="print-hide"
               disabled={exportDisabled}
-              fileName={`report-${tab}`}
+              fileName={reportFileName}
               captureSelector=".print-area"
               printPath={statementPrintPath}
             />
@@ -240,9 +276,9 @@ export default function ReportsPage() {
               defaultPhone={statementPhone}
               captureSelector=".print-area"
               printPath={statementPrintPath}
-              fileName={`report-${tab}`}
-              documentLabel={tab === 'general-ledger' ? t('reports.generalLedger') : reportTitleFallback[tab]}
-              messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+              fileName={reportFileName}
+              documentLabel={reportDocLabel}
+              messageDetails={reportMessageDetails}
               excelPath={`/exports/reports/${tab}`}
               excelParams={{
                 from,

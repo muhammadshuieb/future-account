@@ -1,5 +1,6 @@
 import api from '@/lib/api'
 import { downloadBlob } from '@/lib/documentCapture'
+import { safeDownloadFileName } from '@/lib/documentFileName'
 
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
@@ -9,11 +10,16 @@ export type ExcelFile = {
   mimeType: string
 }
 
+function withXlsxExt(name: string): string {
+  return /\.xlsx$/i.test(name) ? name : `${name}.xlsx`
+}
+
 /** Fetch an Excel export blob from the API without triggering a download. */
 export async function fetchExcelExport(
   path: string,
   params?: Record<string, string | number | undefined | null>,
-  fallbackFileName = 'syna-export.xlsx',
+  /** When set, used as the saved filename (preferred over Content-Disposition). */
+  preferredFileName?: string,
 ): Promise<ExcelFile> {
   const cleanParams: Record<string, string> = {}
   if (params) {
@@ -31,7 +37,11 @@ export async function fetchExcelExport(
 
   const disposition = String(res.headers['content-disposition'] || '')
   const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(disposition)
-  const fileName = match ? decodeURIComponent(match[1].replace(/"/g, '')) : fallbackFileName
+  const fromHeader = match ? decodeURIComponent(match[1].replace(/"/g, '')) : null
+
+  const fileName = preferredFileName
+    ? safeDownloadFileName(withXlsxExt(preferredFileName), 'xlsx')
+    : safeDownloadFileName(fromHeader || 'syna-export.xlsx', 'xlsx')
 
   const blob = res.data instanceof Blob
     ? res.data
@@ -48,9 +58,9 @@ export async function fetchExcelExport(
 export async function downloadExcelExport(
   path: string,
   params?: Record<string, string | number | undefined | null>,
-  fallbackFileName = 'syna-export.xlsx',
+  preferredFileName?: string,
 ): Promise<void> {
-  const file = await fetchExcelExport(path, params, fallbackFileName)
+  const file = await fetchExcelExport(path, params, preferredFileName)
   downloadBlob(file.blob, file.fileName)
 }
 

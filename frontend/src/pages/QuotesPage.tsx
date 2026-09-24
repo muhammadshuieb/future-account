@@ -14,6 +14,8 @@ import { DocumentCurrencyFields, type CurrencyOption } from '@/components/Curren
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import {
   Button,
   EmptyState,
@@ -388,6 +390,8 @@ export default function QuotesPage() {
   }
 
   const selectedCustomerPhone = (customers.data || []).find((c) => String(c.id) === form.customer_id)?.phone
+  const selectedCustomerName = (customers.data || []).find((c) => String(c.id) === form.customer_id)?.name
+  const selectedQuoteFileName = buildDocumentBaseName(t('documents.priceQuote'), selectedCustomerName)
   const list = quotes.data || []
   const readOnly = modal === 'view'
 
@@ -456,14 +460,20 @@ export default function QuotesPage() {
                           <Printer size={14} className="inline" /> {t('common.print')}
                         </button>
                         <PdfExportButton
-                          fileName={q.quote_number}
+                          fileName={buildDocumentBaseName(t('documents.priceQuote'), q.customer?.name)}
                           printPath={`/print/sales-quotes/${q.id}`}
                           compact
                         />
                         <WhatsAppSendButton
                           defaultPhone={q.customer?.phone}
-                          fileName={q.quote_number}
-                          documentLabel={`${t('quotes.documentTitle')} ${q.quote_number}`}
+                          fileName={buildDocumentBaseName(t('documents.priceQuote'), q.customer?.name)}
+                          documentLabel={t('documents.priceQuote')}
+                          messageDetails={invoiceMessageDetails(t, {
+                            partnerName: q.customer?.name,
+                            partnerKind: 'customer',
+                            documentNumber: q.quote_number,
+                            numberLabel: t('whatsapp.quoteNumber'),
+                          })}
                           printPath={`/print/sales-quotes/${q.id}`}
                           compact
                         />
@@ -513,13 +523,19 @@ export default function QuotesPage() {
                     <Printer size={16} /> {t('common.print')}
                   </Button>
                   <PdfExportButton
-                    fileName={`quote-${selectedId}`}
+                    fileName={selectedQuoteFileName}
                     printPath={`/print/sales-quotes/${selectedId}`}
                   />
                   <WhatsAppSendButton
                     defaultPhone={selectedCustomerPhone}
-                    fileName={`quote-${selectedId}`}
-                    documentLabel={t('quotes.documentTitle')}
+                    fileName={selectedQuoteFileName}
+                    documentLabel={t('documents.priceQuote')}
+                    messageDetails={invoiceMessageDetails(t, {
+                      partnerName: selectedCustomerName,
+                      partnerKind: 'customer',
+                      documentNumber: (quotes.data || []).find((q) => q.id === selectedId)?.quote_number,
+                      numberLabel: t('whatsapp.quoteNumber'),
+                    })}
                     printPath={`/print/sales-quotes/${selectedId}`}
                   />
                 </>

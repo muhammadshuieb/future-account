@@ -9,6 +9,7 @@ import {
   type CaptureFormat,
 } from '@/lib/documentCapture'
 import { fetchExcelExport } from '@/lib/excelExport'
+import { useCompanyDisplayName } from '@/lib/companyName'
 import { normalizeWhatsAppPhone, openWhatsAppChat } from '@/lib/phone'
 import { Button, Field, Modal, inputClass } from '@/components/ui'
 
@@ -19,8 +20,10 @@ type Props = {
   defaultPhone?: string
   /** Base file name without extension */
   fileName?: string
-  /** Short label used in the WhatsApp draft message */
+  /** Document type title (first line of WhatsApp draft), e.g. كشف حساب */
   documentLabel?: string
+  /** Detail lines under the title (partner, period, invoice #, …) — no attach prompts */
+  messageDetails?: string[]
   /** Capture from current page (default `.print-area`) */
   captureSelector?: string
   /** When set, open this print route and capture from there */
@@ -29,8 +32,6 @@ type Props = {
   excelPath?: string
   /** Query params for excelPath */
   excelParams?: Record<string, string | number | undefined | null>
-  /** Extra lines appended to the WhatsApp draft (e.g. period summary) */
-  messageExtra?: string
   variant?: 'primary' | 'secondary'
   className?: string
   disabled?: boolean
@@ -60,17 +61,18 @@ export default function WhatsAppSendButton({
   defaultPhone = '',
   fileName = 'syna-document',
   documentLabel = 'مستند',
+  messageDetails,
   captureSelector = '.print-area',
   printPath,
   excelPath,
   excelParams,
-  messageExtra,
   variant = 'secondary',
   className = '',
   disabled = false,
   compact = false,
 }: Props) {
   const { t } = useTranslation()
+  const companyName = useCompanyDisplayName()
   const [open, setOpen] = useState(false)
   const [phone, setPhone] = useState(defaultPhone ?? '')
   const [format, setFormat] = useState<ShareFormat>('pdf')
@@ -104,11 +106,25 @@ export default function WhatsAppSendButton({
     }
   }, [open])
 
+  /** Professional body only — no «please attach file» prompts. */
+  function buildDraft(): string {
+    const lines: string[] = []
+    if (documentLabel?.trim()) lines.push(documentLabel.trim())
+    for (const line of messageDetails || []) {
+      if (line?.trim()) lines.push(line.trim())
+    }
+    const companyLine = `${t('whatsapp.companyName')}: ${companyName}`
+    if (!lines.some((l) => l.includes(companyName))) {
+      lines.push(companyLine)
+    }
+    return lines.join('\n')
+  }
+
   async function tryCloudSend(blob: Blob, name: string, mime: string, to: string) {
     if (!cloudConfigured) return false
     const form = new FormData()
     form.append('phone', to)
-    form.append('caption', `${documentLabel} — Syna Co`)
+    form.append('caption', buildDraft())
     form.append('file', blob, name)
     form.append('mime_type', mime)
     await api.post('/whatsapp/send', form, {
@@ -140,18 +156,6 @@ export default function WhatsAppSendButton({
     return captureSelectorInDocument(document, captureSelector, { format: captureFormat, fileName })
   }
 
-  function buildDraft(file: string, cloudOk: boolean): string {
-    const lines = [documentLabel]
-    if (messageExtra?.trim()) lines.push(messageExtra.trim())
-    if (cloudOk) {
-      lines.push(t('whatsapp.draftCloud'))
-    } else {
-      lines.push(t('whatsapp.draftAttach', { file }))
-    }
-    lines.push('— Syna Co')
-    return lines.join('\n')
-  }
-
   async function handleSend() {
     setError('')
     setHint('')
@@ -166,9 +170,10 @@ export default function WhatsAppSendButton({
     try {
       const captured = await prepareFile()
       const file = new File([captured.blob], captured.fileName, { type: captured.mimeType })
+      const draft = buildDraft()
 
       // Best path on mobile / supported browsers: OS share sheet with the file attached.
-      const shareResult = await tryNativeShare(file, documentLabel, buildDraft(captured.fileName, false))
+      const shareResult = await tryNativeShare(file, documentLabel, draft)
       if (shareResult === 'shared') {
         setHint(t('whatsapp.sentShare'))
         return
@@ -178,7 +183,7 @@ export default function WhatsAppSendButton({
         return
       }
 
-      // Always download so the user has the file ready to attach in Desktop/Web.
+      // Download the file, then open WhatsApp with the detailed message (no attach nag).
       downloadBlob(captured.blob, captured.fileName)
 
       let cloudOk = false
@@ -188,9 +193,7 @@ export default function WhatsAppSendButton({
         cloudOk = false
       }
 
-      const draft = buildDraft(captured.fileName, cloudOk)
       openWhatsAppChat(normalized, draft)
-
       setHint(cloudOk ? t('whatsapp.sentCloud') : t('whatsapp.sentManual'))
     } catch (e) {
       setHint('')

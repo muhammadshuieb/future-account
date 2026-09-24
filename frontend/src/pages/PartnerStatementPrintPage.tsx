@@ -8,6 +8,8 @@ import api from '@/lib/api'
 import { StatementPrintView, type PartnerStatementData } from '@/components/StatementPrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { statementMessageDetails } from '@/lib/whatsappDraft'
 import { Button } from '@/components/ui'
 
 type Kind = 'customers' | 'suppliers'
@@ -21,7 +23,7 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
   const from = searchParams.get('from') || undefined
   const to = searchParams.get('to') || undefined
   const isCustomer = kind === 'customers'
-  const documentLabel = isCustomer ? 'كشف حساب عميل' : 'كشف حساب مورد'
+  const documentLabel = t('documents.accountStatement')
 
   const currencies = useQuery({
     queryKey: ['currencies'],
@@ -47,12 +49,13 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
   const partnerPhone = isCustomer
     ? statement.data?.customer?.phone
     : statement.data?.supplier?.phone
+  const fileBaseName = buildDocumentBaseName(documentLabel, partnerName)
 
   useEffect(() => {
     if (partnerName) {
-      document.title = `${documentLabel} — ${partnerName} — Syna Co`
+      document.title = `${fileBaseName} — Syna Co`
     }
-  }, [partnerName, documentLabel])
+  }, [partnerName, fileBaseName])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>
@@ -77,13 +80,18 @@ export default function PartnerStatementPrintPage({ kind }: { kind: Kind }) {
           <Printer size={16} /> {t('common.print')}
         </Button>
         <PdfExportButton
-          fileName={`statement-${kind}-${partnerId}`}
+          fileName={fileBaseName}
         />
         <WhatsAppSendButton
           defaultPhone={partnerPhone}
-          fileName={`statement-${kind}-${partnerId}`}
-          documentLabel={`${documentLabel}${partnerName ? ` — ${partnerName}` : ''}`}
-          messageExtra={from || to ? `${from || '…'} → ${to || '…'}` : undefined}
+          fileName={fileBaseName}
+          documentLabel={documentLabel}
+          messageDetails={statementMessageDetails(t, {
+            partnerName,
+            partnerKind: isCustomer ? 'customer' : 'supplier',
+            from,
+            to,
+          })}
           excelPath={`/exports/reports/${isCustomer ? 'customer-statement' : 'supplier-statement'}`}
           excelParams={{
             from,

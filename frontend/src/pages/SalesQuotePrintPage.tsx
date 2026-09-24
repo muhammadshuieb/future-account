@@ -8,6 +8,8 @@ import api from '@/lib/api'
 import { SalesQuotePrintView, type SalesQuotePrintData } from '@/components/InvoicePrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button } from '@/components/ui'
 
 export default function SalesQuotePrintPage() {
@@ -22,11 +24,16 @@ export default function SalesQuotePrintPage() {
     queryFn: async () => (await api.get(`/sales-quotes/${quoteId}`)).data.data as SalesQuotePrintData,
   })
 
+  const fileBaseName = buildDocumentBaseName(
+    t('documents.priceQuote'),
+    quote.data?.customer?.name,
+  )
+
   useEffect(() => {
-    if (quote.data?.quote_number) {
-      document.title = `${quote.data.quote_number} — Syna Co`
+    if (quote.data) {
+      document.title = `${fileBaseName} — Syna Co`
     }
-  }, [quote.data?.quote_number])
+  }, [quote.data, fileBaseName])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>
@@ -53,11 +60,17 @@ export default function SalesQuotePrintPage() {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
-        <PdfExportButton fileName={quote.data.quote_number || `price-quote-${quoteId}`} />
+        <PdfExportButton fileName={fileBaseName} />
         <WhatsAppSendButton
           defaultPhone={quote.data.customer?.phone}
-          fileName={quote.data.quote_number || `price-quote-${quoteId}`}
-          documentLabel={`${t('quotes.documentTitle')} ${quote.data.quote_number || ''}`}
+          fileName={fileBaseName}
+          documentLabel={t('documents.priceQuote')}
+          messageDetails={invoiceMessageDetails(t, {
+            partnerName: quote.data.customer?.name,
+            partnerKind: 'customer',
+            documentNumber: quote.data.quote_number,
+            numberLabel: t('whatsapp.quoteNumber'),
+          })}
         />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}

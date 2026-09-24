@@ -17,6 +17,8 @@ import PdfExportButton from '@/components/PdfExportButton'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button, EmptyState, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { useAuth } from '@/context/AuthContext'
@@ -1287,7 +1289,7 @@ export default function SalesPage() {
                         <PdfExportButton
                           compact
                           printPath={`/print/sales-invoices/${i.id}`}
-                          fileName={i.invoice_number}
+                          fileName={buildDocumentBaseName(t('documents.salesInvoice'), i.customer?.name)}
                         />
                       </span>
                       <span className="print-hide">
@@ -1295,8 +1297,13 @@ export default function SalesPage() {
                           compact
                           defaultPhone={i.customer?.phone}
                           printPath={`/print/sales-invoices/${i.id}`}
-                          fileName={i.invoice_number}
-                          documentLabel={`فاتورة مبيعات ${i.invoice_number}`}
+                          fileName={buildDocumentBaseName(t('documents.salesInvoice'), i.customer?.name)}
+                          documentLabel={t('documents.salesInvoice')}
+                          messageDetails={invoiceMessageDetails(t, {
+                            partnerName: i.customer?.name,
+                            partnerKind: 'customer',
+                            documentNumber: i.invoice_number,
+                          })}
                         />
                       </span>
                       {canCollectInvoice(i) && (
@@ -1428,18 +1435,31 @@ export default function SalesPage() {
                   <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
                   <PdfExportButton
                     printPath={`/print/sales-invoices/${selectedId}`}
-                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                      || `sales-${selectedId}`)}
+                    fileName={buildDocumentBaseName(
+                      t('documents.salesInvoice'),
+                      (detail.data as { customer?: { name?: string } } | undefined)?.customer?.name
+                        || (selectedRow as { customer?: { name?: string } } | null)?.customer?.name,
+                    )}
                   />
                   <WhatsAppSendButton
                     defaultPhone={(detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
                       || (selectedRow as { customer?: { phone?: string } } | null)?.customer?.phone}
                     printPath={`/print/sales-invoices/${selectedId}`}
-                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                      || `sales-${selectedId}`)}
-                    documentLabel={`فاتورة مبيعات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+                    fileName={buildDocumentBaseName(
+                      t('documents.salesInvoice'),
+                      (detail.data as { customer?: { name?: string } } | undefined)?.customer?.name
+                        || (selectedRow as { customer?: { name?: string } } | null)?.customer?.name,
+                    )}
+                    documentLabel={t('documents.salesInvoice')}
+                    messageDetails={invoiceMessageDetails(t, {
+                      partnerName:
+                        (detail.data as { customer?: { name?: string } } | undefined)?.customer?.name
+                        || (selectedRow as { customer?: { name?: string } } | null)?.customer?.name,
+                      partnerKind: 'customer',
+                      documentNumber:
+                        (detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                        || (selectedRow as { invoice_number?: string } | null)?.invoice_number,
+                    })}
                   />
                 </>
               )}

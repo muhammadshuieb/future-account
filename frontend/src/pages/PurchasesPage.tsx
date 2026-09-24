@@ -14,6 +14,8 @@ import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import { excelModuleForPurchasesTab } from '@/lib/excelExport'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
@@ -1031,7 +1033,7 @@ export default function PurchasesPage() {
                         <PdfExportButton
                           compact
                           printPath={`/print/purchase-invoices/${i.id}`}
-                          fileName={i.invoice_number}
+                          fileName={buildDocumentBaseName(t('documents.purchaseInvoice'), i.supplier?.name)}
                         />
                       </span>
                       <span className="print-hide">
@@ -1039,8 +1041,13 @@ export default function PurchasesPage() {
                           compact
                           defaultPhone={i.supplier?.phone}
                           printPath={`/print/purchase-invoices/${i.id}`}
-                          fileName={i.invoice_number}
-                          documentLabel={`فاتورة مشتريات ${i.invoice_number}`}
+                          fileName={buildDocumentBaseName(t('documents.purchaseInvoice'), i.supplier?.name)}
+                          documentLabel={t('documents.purchaseInvoice')}
+                          messageDetails={invoiceMessageDetails(t, {
+                            partnerName: i.supplier?.name,
+                            partnerKind: 'supplier',
+                            documentNumber: i.invoice_number,
+                          })}
                         />
                       </span>
                       {canPayInvoice(i) && (
@@ -1166,18 +1173,31 @@ export default function PurchasesPage() {
                   <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
                   <PdfExportButton
                     printPath={`/print/purchase-invoices/${selectedId}`}
-                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                      || `purchase-${selectedId}`)}
+                    fileName={buildDocumentBaseName(
+                      t('documents.purchaseInvoice'),
+                      (detail.data as { supplier?: { name?: string } } | undefined)?.supplier?.name
+                        || (selectedRow as { supplier?: { name?: string } } | null)?.supplier?.name,
+                    )}
                   />
                   <WhatsAppSendButton
                     defaultPhone={(detail.data as { supplier?: { phone?: string } } | undefined)?.supplier?.phone
                       || (selectedRow as { supplier?: { phone?: string } } | null)?.supplier?.phone}
                     printPath={`/print/purchase-invoices/${selectedId}`}
-                    fileName={String((detail.data as { invoice_number?: string } | undefined)?.invoice_number
-                      || (selectedRow as { invoice_number?: string } | null)?.invoice_number
-                      || `purchase-${selectedId}`)}
-                    documentLabel={`فاتورة مشتريات ${String((detail.data as { invoice_number?: string } | undefined)?.invoice_number || selectedId)}`}
+                    fileName={buildDocumentBaseName(
+                      t('documents.purchaseInvoice'),
+                      (detail.data as { supplier?: { name?: string } } | undefined)?.supplier?.name
+                        || (selectedRow as { supplier?: { name?: string } } | null)?.supplier?.name,
+                    )}
+                    documentLabel={t('documents.purchaseInvoice')}
+                    messageDetails={invoiceMessageDetails(t, {
+                      partnerName:
+                        (detail.data as { supplier?: { name?: string } } | undefined)?.supplier?.name
+                        || (selectedRow as { supplier?: { name?: string } } | null)?.supplier?.name,
+                      partnerKind: 'supplier',
+                      documentNumber:
+                        (detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                        || (selectedRow as { invoice_number?: string } | null)?.invoice_number,
+                    })}
                   />
                 </>
               )}

@@ -712,6 +712,13 @@
       "warehouse": { "update": "Depo bilgilerini güncelle" }
     }
   },
+  "documents": {
+    "accountStatement": "Hesap ekstresi",
+    "salesInvoice": "Satış faturası",
+    "purchaseInvoice": "Satın alma faturası",
+    "priceQuote": "Fiyat teklifi",
+    "printInvoice": "Yazdırma faturası"
+  },
   "whatsapp": {
     "button": "WhatsApp",
     "title": "WhatsApp ile gönder",
@@ -724,13 +731,18 @@
     "preparing": "Dosya hazırlanıyor…",
     "invalidPhone": "Geçerli bir cep numarası girin",
     "failed": "Dosya hazırlanamadı",
-    "manualHint": "Önce dosya (PDF veya Excel) iner, sonra WhatsApp Masaüstü açılır. Sohbeti açıp indirilen dosyayı ekleyin — tarayıcılar güvenlik nedeniyle dosyayı otomatik ekleyemez.",
-    "cloudReady": "Cloud API bağlı — ekli otomatik gönderim denenecek; ayrıca indirme ve WhatsApp Masaüstü açılır.",
+    "manualHint": "Dosya indirilir, ardından WhatsApp belge detaylarıyla açılır.",
+    "cloudReady": "Cloud API bağlı — ekli otomatik gönderim denenecek; ayrıca indirme ve WhatsApp açılır.",
     "sentCloud": "Cloud API ile dosya gönderildi. Kopya indirildi ve WhatsApp açıldı.",
-    "sentManual": "Dosya indirildi ve WhatsApp açıldı. Sohbeti açın, indirilen dosyayı ekleyin ve gönderin.",
+    "sentManual": "Dosya indirildi ve WhatsApp belge detaylarıyla açıldı.",
     "sentShare": "Dosyalı paylaşım penceresi açıldı. Eki göndermek için WhatsApp’ı seçin.",
-    "draftAttach": "Lütfen indirilen dosyayı ekleyin: {{file}}",
-    "draftCloud": "Dosya Syna Co’dan otomatik gönderildi"
+    "customerName": "Müşteri adı",
+    "supplierName": "Tedarikçi adı",
+    "companyName": "Şirket adı",
+    "invoiceNumber": "Fatura numarası",
+    "quoteNumber": "Teklif numarası",
+    "periodLine": "Dönem: {{from}} — {{to}}",
+    "untilToday": "bugün"
   },
   "login": {
     "subtitle": "Syna Co — muhasebe ve iş yönetimi ERP"

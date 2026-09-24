@@ -8,6 +8,8 @@ import api from '@/lib/api'
 import { PrintInvoicePrintView, type PrintInvoicePrintData } from '@/components/InvoicePrintView'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button } from '@/components/ui'
 
 export default function PrintInvoicePrintPage() {
@@ -22,11 +24,16 @@ export default function PrintInvoicePrintPage() {
     queryFn: async () => (await api.get(`/print-invoices/${invoiceId}`)).data.data as PrintInvoicePrintData,
   })
 
+  const fileBaseName = buildDocumentBaseName(
+    t('documents.printInvoice'),
+    invoice.data?.customer?.name,
+  )
+
   useEffect(() => {
-    if (invoice.data?.invoice_number) {
-      document.title = `${invoice.data.invoice_number} — Syna Co`
+    if (invoice.data) {
+      document.title = `${fileBaseName} — Syna Co`
     }
-  }, [invoice.data?.invoice_number])
+  }, [invoice.data, fileBaseName])
 
   if (authLoading) {
     return <div className="p-8 text-center text-sm text-black/55">{t('common.loading')}</div>
@@ -53,11 +60,16 @@ export default function PrintInvoicePrintPage() {
         <Button variant="primary" onClick={() => window.print()}>
           <Printer size={16} /> {t('common.print')}
         </Button>
-        <PdfExportButton fileName={invoice.data.invoice_number || `print-invoice-${invoiceId}`} />
+        <PdfExportButton fileName={fileBaseName} />
         <WhatsAppSendButton
           defaultPhone={invoice.data.customer?.phone}
-          fileName={invoice.data.invoice_number || `print-invoice-${invoiceId}`}
-          documentLabel={`${t('printInvoices.documentTitle')} ${invoice.data.invoice_number || ''}`}
+          fileName={fileBaseName}
+          documentLabel={t('documents.printInvoice')}
+          messageDetails={invoiceMessageDetails(t, {
+            partnerName: invoice.data.customer?.name,
+            partnerKind: 'customer',
+            documentNumber: invoice.data.invoice_number,
+          })}
         />
         <Button variant="secondary" onClick={() => window.close()}>
           {t('common.close')}

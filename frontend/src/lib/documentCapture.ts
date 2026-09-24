@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas-pro'
 import { jsPDF } from 'jspdf'
+import { sanitizeFileName, safeDownloadFileName } from '@/lib/documentFileName'
 
 export type CaptureFormat = 'pdf' | 'png'
 
@@ -529,7 +530,7 @@ export async function captureElement(
     throw friendlyCaptureError(err)
   }
 
-  const baseName = opts.fileName.replace(/\.(pdf|png)$/i, '') || 'document'
+  const baseName = sanitizeFileName(opts.fileName.replace(/\.(pdf|png|xlsx)$/i, '')) || 'document'
 
   if (opts.format === 'png') {
     const blob = await canvasToPngBlob(canvas)
@@ -544,7 +545,7 @@ export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = fileName
+  a.download = safeDownloadFileName(fileName)
   a.rel = 'noopener'
   document.body.appendChild(a)
   a.click()
@@ -700,7 +701,7 @@ export async function exportMergedPdfFromPrintPaths(
 ): Promise<CapturedFile> {
   if (paths.length === 0) throw new Error('لا توجد مستندات للتصدير')
 
-  const baseName = opts.fileName.replace(/\.(pdf|png)$/i, '') || 'documents'
+  const baseName = sanitizeFileName(opts.fileName.replace(/\.(pdf|png)$/i, '')) || 'documents'
   const pdf = newA4Pdf()
   let pageAdded = false
 

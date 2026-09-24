@@ -718,6 +718,13 @@
       "warehouse": { "update": "Update warehouse details" }
     }
   },
+  "documents": {
+    "accountStatement": "Account Statement",
+    "salesInvoice": "Sales Invoice",
+    "purchaseInvoice": "Purchase Invoice",
+    "priceQuote": "Price Quote",
+    "printInvoice": "Print Invoice"
+  },
   "whatsapp": {
     "button": "WhatsApp",
     "title": "Send via WhatsApp",
@@ -730,13 +737,18 @@
     "preparing": "Preparing the file…",
     "invalidPhone": "Enter a valid mobile number",
     "failed": "Could not prepare the file for sending",
-    "manualHint": "The file (PDF or Excel) downloads first, then WhatsApp Desktop opens. Open the chat and attach the downloaded file — browsers cannot auto-attach files for security reasons.",
-    "cloudReady": "Cloud API is connected — automatic send with attachment will be tried, plus a download and WhatsApp Desktop open.",
-    "sentCloud": "Sent via Cloud API with the file. A copy was downloaded and WhatsApp opened for confirmation.",
-    "sentManual": "File downloaded and WhatsApp opened. Open the chat, attach the downloaded file, then send.",
+    "manualHint": "The file downloads, then WhatsApp opens with a detailed document message.",
+    "cloudReady": "Cloud API is connected — automatic send with attachment will be tried, plus a download and WhatsApp open.",
+    "sentCloud": "Sent via Cloud API with the file. A copy was downloaded and WhatsApp opened.",
+    "sentManual": "File downloaded and WhatsApp opened with document details.",
     "sentShare": "Share sheet opened with the file. Choose WhatsApp to send the attachment.",
-    "draftAttach": "Please attach the downloaded file: {{file}}",
-    "draftCloud": "File was sent automatically from Syna Co"
+    "customerName": "Customer name",
+    "supplierName": "Supplier name",
+    "companyName": "Company name",
+    "invoiceNumber": "Invoice number",
+    "quoteNumber": "Quote number",
+    "periodLine": "Period: from {{from}} to {{to}}",
+    "untilToday": "today"
   },
   "login": {
     "subtitle": "Syna Co — ERP for accounting & business management"
