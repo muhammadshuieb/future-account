@@ -1,56 +1,34 @@
+import { useTranslation } from 'react-i18next'
 import type { ProductIdentity } from '@/lib/productLabel'
 
-export function ProductIdentityCells({ product }: { product?: ProductIdentity | null }) {
+export function ProductIdentityHeaders({ className }: { className?: string }) {
+  const { t } = useTranslation()
   return (
     <>
-      <td>{product?.name?.trim() || '—'}</td>
-      <td>{product?.brand?.trim() || '—'}</td>
-      <td>{product?.model?.trim() || '—'}</td>
+      <th className={className}>{t('common.product')}</th>
+      <th className={className}>{t('warehouse.brand')}</th>
+      <th className={className}>{t('warehouse.model')}</th>
     </>
   )
 }
 
-export type ProductIdentityStackedLabels = {
-  product: string
-  brand: string
-  model: string
-}
-
-/** Compact stacked identity for single-column tables (statement invoice lines). */
-export function ProductIdentityStacked({
+export function ProductIdentityCells({
   product,
-  labels,
+  className,
   serialNo,
 }: {
   product?: ProductIdentity | null
-  labels: ProductIdentityStackedLabels
+  className?: string
   serialNo?: string | null
 }) {
-  const name = product?.name?.trim() || '—'
-  const brand = product?.brand?.trim() || ''
-  const model = product?.model?.trim() || ''
-
   return (
-    <div className="product-identity-stacked">
-      <div className="product-identity-stacked__row">
-        <span className="product-identity-stacked__label">{labels.product}:</span>
-        <span className="product-identity-stacked__value">{name}</span>
-      </div>
-      {brand ? (
-        <div className="product-identity-stacked__row">
-          <span className="product-identity-stacked__label">{labels.brand}:</span>
-          <span className="product-identity-stacked__value">{brand}</span>
-        </div>
-      ) : null}
-      {model ? (
-        <div className="product-identity-stacked__row">
-          <span className="product-identity-stacked__label">{labels.model}:</span>
-          <span className="product-identity-stacked__value">{model}</span>
-        </div>
-      ) : null}
-      {serialNo ? (
-        <span className="product-identity-stacked__serial">{serialNo}</span>
-      ) : null}
-    </div>
+    <>
+      <td className={className}>
+        {product?.name?.trim() || '—'}
+        {serialNo ? <span className="product-identity-serial">{serialNo}</span> : null}
+      </td>
+      <td className={className}>{product?.brand?.trim() || '—'}</td>
+      <td className={className}>{product?.model?.trim() || '—'}</td>
+    </>
   )
 }

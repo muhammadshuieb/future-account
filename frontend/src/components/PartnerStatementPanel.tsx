@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { ProductIdentityStacked } from '@/components/ProductIdentityCells'
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
 import { paymentTypeLabel } from '@/components/PaymentTypeFields'
 import {
   statementTypeLabel,
@@ -102,7 +102,7 @@ function InvoiceLinesTable({
       <table className="statement-invoice-lines w-full text-xs text-[#111111]">
         <thead className="bg-[rgba(13,115,119,0.12)] text-[#064e51]">
           <tr>
-            <th className={`${cell} text-start font-bold`}>{t('common.product')}</th>
+            <ProductIdentityHeaders className={`${cell} text-start font-bold`} />
             <th className={`${cell} text-start font-bold`}>{t('common.quantity')}</th>
             <th className={`${cell} text-start font-bold`}>{t('common.price')}</th>
             <th className={`${cell} text-start font-bold`}>{t('common.total')}</th>
@@ -115,17 +115,11 @@ function InvoiceLinesTable({
             const lineTotal = Number(line.line_total ?? qty * unitPrice)
             return (
               <tr key={i} className="border-t border-[rgba(15,28,36,0.1)] bg-white">
-                <td className={`${cell} text-[#111111]`}>
-                  <ProductIdentityStacked
-                    product={line.product}
-                    labels={{
-                      product: t('common.product'),
-                      brand: t('warehouse.brand'),
-                      model: t('warehouse.model'),
-                    }}
-                    serialNo={line.serial_no}
-                  />
-                </td>
+                <ProductIdentityCells
+                  product={line.product}
+                  className={`${cell} text-[#111111]`}
+                  serialNo={line.serial_no}
+                />
                 <td className={`${cell} tabular-nums text-[#111111]`}>{formatQuantity(qty)}</td>
                 <td className={`${cell} tabular-nums text-[#111111]`}>{formatMoney(unitPrice, currency)}</td>
                 <td className={`${cell} tabular-nums text-[#111111]`}>{formatMoney(lineTotal, currency)}</td>

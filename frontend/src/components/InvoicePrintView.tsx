@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime } from '@/lib/dates'
-import { ProductIdentityCells } from '@/components/ProductIdentityCells'
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
 import { unitFromProduct } from '@/lib/productUnit'
 
 export type SalesInvoicePrintData = {
@@ -72,17 +72,6 @@ type StructuredEInvoice = {
   uuid?: string
   seller?: { name?: string; tax_number?: string }
   tax_breakdown?: { rate: number; taxable: number; tax: number }[]
-}
-
-function ProductIdentityHeaders() {
-  const { t } = useTranslation()
-  return (
-    <>
-      <th>{t('common.product')}</th>
-      <th>{t('warehouse.brand')}</th>
-      <th>{t('warehouse.model')}</th>
-    </>
-  )
 }
 
 function BrandLogo() {
