@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Printer } from 'lucide-react'
+import { FileText, Printer } from 'lucide-react'
 import api from '@/lib/api'
 import { todayYmd, yearStartYmd } from '@/lib/dates'
 import { openPrintPopup } from '@/lib/printPopup'
@@ -29,11 +29,26 @@ export default function PartnersPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState(emptyForm)
+  const statementPanelRef = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
   const kind = tab === 'customers' ? 'customer' : 'supplier'
   const balanceLabels = { owedByThem: t('common.owedByThem'), owedToThem: t('common.owedToThem') }
+
+  useEffect(() => {
+    if (!statementId) return
+    const id = window.setTimeout(() => {
+      statementPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+    return () => window.clearTimeout(id)
+  }, [statementId])
+
+  function openStatement(id: number) {
+    setModalOpen(false)
+    setEditingId(null)
+    setStatementId(id)
+  }
 
   const customers = useQuery({
     queryKey: ['customers', search.debouncedQ],
@@ -140,6 +155,7 @@ export default function PartnersPage() {
           <span className="text-black/60">{t('common.totalBalances')}</span>
           <strong className="tabular-nums">{balanceLabel(totalBalance)}</strong>
         </div>
+        <div className="table-wrap">
         <table className="w-full text-sm">
           <thead className="bg-mist text-right text-black/60">
             <tr>
@@ -164,53 +180,57 @@ export default function PartnersPage() {
                 <td className="px-4 py-3">{r.name}</td>
                 <td className="px-4 py-3">{r.phone || '—'}</td>
                 <td className="px-4 py-3 tabular-nums font-medium">{balanceLabel(Number(r.balance) || 0)}</td>
-                <td className="px-4 py-3">
+                <td
+                  className="whitespace-nowrap px-2 py-2"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
                   <TableActions>
                     <button
                       type="button"
                       className="text-xs text-teal"
                       onClick={(e) => {
+                        e.preventDefault()
                         e.stopPropagation()
-                        setStatementId(r.id)
+                        openStatement(r.id)
                       }}
                     >
-                      كشف حساب
+                      <FileText size={14} aria-hidden /> كشف حساب
                     </button>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-xs text-teal"
+                      className="text-xs text-teal"
                       onClick={(e) => {
+                        e.preventDefault()
                         e.stopPropagation()
                         printStatement(r.id)
                       }}
                     >
-                      <Printer size={14} /> طباعة
+                      <Printer size={14} aria-hidden /> طباعة
                     </button>
-                    <span onClick={(e) => e.stopPropagation()}>
-                      <PdfExportButton
-                        compact
-                        printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                        fileName={`statement-${tab}-${r.id}`}
-                      />
-                    </span>
-                    <span onClick={(e) => e.stopPropagation()}>
-                      <WhatsAppSendButton
-                        compact
-                        defaultPhone={r.phone}
-                        printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
-                        fileName={`statement-${tab}-${r.id}`}
-                        documentLabel={`كشف حساب — ${r.name}`}
-                      />
-                    </span>
+                    <PdfExportButton
+                      compact
+                      printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                      fileName={`statement-${tab}-${r.id}`}
+                    />
+                    <WhatsAppSendButton
+                      compact
+                      defaultPhone={r.phone}
+                      printPath={`/print/${tab}/${r.id}/statement${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) }).toString()}` : ''}`}
+                      fileName={`statement-${tab}-${r.id}`}
+                      documentLabel={`كشف حساب — ${r.name}`}
+                    />
                   </TableActions>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
       </Panel>
 
       {statementId && (
+        <div ref={statementPanelRef}>
         <Panel>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 px-4 py-3">
             <div className="font-semibold">
@@ -250,6 +270,9 @@ export default function PartnersPage() {
             <Field label="إلى">
               <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
             </Field>
+            <Button variant="ghost" className="self-end" onClick={() => setStatementId(null)}>
+              إغلاق
+            </Button>
           </div>
           {statement.isLoading && <p className="p-4 text-sm text-black/55">جاري التحميل...</p>}
           {statement.error && <p className="p-4 text-sm text-danger">تعذر تحميل كشف الحساب</p>}
@@ -257,6 +280,7 @@ export default function PartnersPage() {
             <PartnerStatementPanel data={statement.data} kind={kind} currency={base} />
           )}
         </Panel>
+        </div>
       )}
 
       <Modal

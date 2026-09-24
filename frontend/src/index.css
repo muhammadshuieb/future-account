@@ -583,15 +583,16 @@ textarea {
 
 /*
  * Row action clusters (Print / PDF / WhatsApp / Delete / Collect…).
- * Use flex + gap — never space-x — so RTL wrap never overlaps labels.
- * Scoped away from .print-brand-header { flex-wrap: nowrap }.
+ * Prefer a single horizontal row; wrap only on very narrow viewports.
+ * Use flex + gap — never space-x — so RTL never overlaps labels.
  */
 .table-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 0.35rem 0.7rem;
-  max-width: 18rem;
+  gap: 0.15rem 0.2rem;
+  max-width: none;
+  width: max-content;
 }
 
 .table-actions > * {
@@ -602,7 +603,39 @@ textarea {
 .table-actions a,
 .table-actions span {
   white-space: nowrap;
-  line-height: 1.3;
+  line-height: 1.35;
+}
+
+/* Adequately sized hit targets — avoids cramped / overlapping clicks */
+.table-actions button,
+.table-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.4rem;
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}
+
+.table-actions button:hover,
+.table-actions a:hover {
+  background: rgba(13, 115, 119, 0.08);
+}
+
+[data-theme="dark"] .table-actions button:hover,
+[data-theme="dark"] .table-actions a:hover {
+  background: rgba(45, 212, 191, 0.12);
+}
+
+@media (max-width: 640px) {
+  .table-actions {
+    flex-wrap: wrap;
+    gap: 0.35rem 0.45rem;
+    width: auto;
+    max-width: 100%;
+  }
 }
 
 .data-table tbody tr:hover {
