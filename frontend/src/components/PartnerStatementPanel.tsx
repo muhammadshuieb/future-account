@@ -33,8 +33,8 @@ export function partnerBalanceLabel(
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-4">
-      <dt className="text-black/50">{label}</dt>
-      <dd className="text-end">{value}</dd>
+      <dt className="text-[#3d4f5a]">{label}</dt>
+      <dd className="text-end font-medium text-[#111111]">{value}</dd>
     </div>
   )
 }
@@ -50,7 +50,7 @@ function InvoiceMeta({
 }) {
   const docCurrency = invoice.currency || fallbackCurrency
   return (
-    <dl className="mb-3 grid gap-2 text-xs text-black/65 sm:grid-cols-2 lg:grid-cols-3">
+    <dl className="mb-3 grid gap-2 text-xs text-[#1a2b34] sm:grid-cols-2 lg:grid-cols-3">
       <DetailRow
         label={t('common.paymentType')}
         value={paymentTypeLabel(invoice.payment_type, t)}
@@ -98,14 +98,14 @@ function InvoiceLinesTable({
 }) {
   const cell = dense ? 'px-2.5 py-1.5' : 'px-3 py-2.5'
   return (
-    <div className="overflow-x-auto rounded-md border border-[var(--color-line)]">
-      <table className="w-full text-xs">
-        <thead className="bg-teal-soft/50 text-teal-dark">
+    <div className="overflow-x-auto rounded-md border border-[rgba(15,28,36,0.12)]">
+      <table className="statement-invoice-lines w-full text-xs text-[#111111]">
+        <thead className="bg-[rgba(13,115,119,0.12)] text-[#064e51]">
           <tr>
-            <th className={`${cell} text-start font-semibold`}>{t('common.product')}</th>
-            <th className={`${cell} text-start font-semibold`}>{t('common.quantity')}</th>
-            <th className={`${cell} text-start font-semibold`}>{t('common.price')}</th>
-            <th className={`${cell} text-start font-semibold`}>{t('common.total')}</th>
+            <th className={`${cell} text-start font-bold`}>{t('common.product')}</th>
+            <th className={`${cell} text-start font-bold`}>{t('common.quantity')}</th>
+            <th className={`${cell} text-start font-bold`}>{t('common.price')}</th>
+            <th className={`${cell} text-start font-bold`}>{t('common.total')}</th>
           </tr>
         </thead>
         <tbody>
@@ -114,16 +114,16 @@ function InvoiceLinesTable({
             const qty = Number(line.quantity) || 0
             const lineTotal = Number(line.line_total ?? qty * unitPrice)
             return (
-              <tr key={i} className="border-t border-[var(--color-line)] bg-surface">
-                <td className={cell}>
+              <tr key={i} className="border-t border-[rgba(15,28,36,0.1)] bg-white">
+                <td className={`${cell} text-[#111111]`}>
                   {productLabel(line.product)}
                   {line.serial_no ? (
-                    <span className="mt-0.5 block font-mono text-[10px] text-black/45">{line.serial_no}</span>
+                    <span className="mt-0.5 block font-mono text-[10px] text-[#3d4f5a]">{line.serial_no}</span>
                   ) : null}
                 </td>
-                <td className={`${cell} tabular-nums`}>{formatQuantity(qty)}</td>
-                <td className={`${cell} tabular-nums`}>{formatMoney(unitPrice, currency)}</td>
-                <td className={`${cell} tabular-nums`}>{formatMoney(lineTotal, currency)}</td>
+                <td className={`${cell} tabular-nums text-[#111111]`}>{formatQuantity(qty)}</td>
+                <td className={`${cell} tabular-nums text-[#111111]`}>{formatMoney(unitPrice, currency)}</td>
+                <td className={`${cell} tabular-nums text-[#111111]`}>{formatMoney(lineTotal, currency)}</td>
               </tr>
             )
           })}
@@ -273,8 +273,8 @@ export default function PartnerStatementPanel({
                   {hasInvoiceDetail && isOpen && invoice ? (
                     <tr className="border-t border-[var(--color-line)] bg-paper/80">
                       <td colSpan={colCount} className={dense ? 'px-3 py-3.5' : 'px-5 py-4'}>
-                        <div className="space-y-3 rounded-md border border-teal/15 bg-surface p-3.5 shadow-[0_1px_0_rgba(12,26,34,0.04)]">
-                          <p className="text-xs font-semibold tracking-wide text-teal-dark">
+                        <div className="space-y-3 rounded-md border border-teal/20 bg-white p-3.5 text-[#111111] shadow-[0_1px_0_rgba(12,26,34,0.04)]">
+                          <p className="text-xs font-bold tracking-wide text-[#064e51]">
                             {t('common.invoiceDetails')}
                           </p>
                           <InvoiceMeta invoice={invoice} fallbackCurrency={currency} t={t} />
@@ -286,7 +286,7 @@ export default function PartnerStatementPanel({
                               dense={dense}
                             />
                           ) : (
-                            <p className="text-xs text-black/45">{t('common.noInvoiceLines')}</p>
+                            <p className="text-xs text-[#3d4f5a]">{t('common.noInvoiceLines')}</p>
                           )}
                         </div>
                       </td>
