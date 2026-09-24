@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\JournalEntry;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
+use App\Models\PurchaseInvoiceLine;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseReturn;
@@ -1317,7 +1318,7 @@ class PurchaseService
 
         // Every event is expressed in the system base currency, otherwise a foreign-currency
         // invoice or payment would be summed against base-currency documents.
-        foreach ($supplier->invoices()->where('status', 'posted')->get() as $inv) {
+        foreach ($supplier->invoices()->where('status', 'posted')->with(['lines.product'])->get() as $inv) {
             $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
@@ -1328,6 +1329,7 @@ class PurchaseService
                 'notes' => $inv->notes,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
+                'invoice' => $this->statementInvoiceDetail($inv),
             ];
         }
 
@@ -1342,6 +1344,7 @@ class PurchaseService
                 'notes' => $pay->notes,
                 'debit' => $this->baseValue($pay->base_amount, $pay->amount, $pay->exchange_rate),
                 'credit' => 0.0,
+                'invoice' => null,
             ];
         }
 
@@ -1356,6 +1359,7 @@ class PurchaseService
                 'notes' => null,
                 'debit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
                 'credit' => 0.0,
+                'invoice' => null,
             ];
         }
 
@@ -1394,6 +1398,7 @@ class PurchaseService
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
+                'invoice' => $event['invoice'],
             ];
         }
 
@@ -1431,5 +1436,42 @@ class PurchaseService
         $rate = (float) ($exchangeRate ?: 1);
 
         return round((float) $documentAmount * ($rate > 0 ? $rate : 1), 2);
+    }
+
+    /**
+     * Full purchase-invoice payload for account-statement rows (avoids N+1 on the client).
+     *
+     * @return array<string, mixed>
+     */
+    protected function statementInvoiceDetail(PurchaseInvoice $invoice): array
+    {
+        return [
+            'payment_type' => $invoice->payment_type,
+            'subtotal' => (float) $invoice->subtotal,
+            'discount_amount' => (float) $invoice->discount_amount,
+            'tax_amount' => (float) $invoice->tax_amount,
+            'total' => (float) $invoice->total,
+            'paid_amount' => (float) $invoice->paid_amount,
+            'currency' => $invoice->currency,
+            'notes' => $invoice->notes,
+            'lines' => $invoice->lines->map(static function (PurchaseInvoiceLine $line): array {
+                $product = $line->product;
+
+                return [
+                    'quantity' => (float) $line->quantity,
+                    'unit_cost' => (float) $line->unit_cost,
+                    'line_total' => (float) $line->line_total,
+                    'tax_rate' => (float) $line->tax_rate,
+                    'batch_no' => $line->batch_no,
+                    'serial_no' => $line->serial_no,
+                    'product' => $product ? [
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'brand' => $product->brand,
+                        'model' => $product->model,
+                    ] : null,
+                ];
+            })->values()->all(),
+        ];
     }
 }

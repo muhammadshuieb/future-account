@@ -1,6 +1,31 @@
+import { Fragment } from 'react'
 import { LOGO } from '@/lib/brand'
 import { todayYmd } from '@/lib/dates'
-import { formatMoney } from '@/components/ui'
+import { productLabel } from '@/lib/productLabel'
+import { formatMoney, formatQuantity } from '@/components/ui'
+
+export type StatementInvoiceLine = {
+  quantity?: number
+  unit_price?: number
+  unit_cost?: number
+  line_total?: number
+  tax_rate?: number
+  batch_no?: string | null
+  serial_no?: string | null
+  product?: { name?: string; sku?: string; brand?: string; model?: string } | null
+}
+
+export type StatementInvoiceDetail = {
+  payment_type?: string | null
+  subtotal?: number
+  discount_amount?: number
+  tax_amount?: number
+  total?: number
+  paid_amount?: number
+  currency?: string
+  notes?: string | null
+  lines?: StatementInvoiceLine[]
+}
 
 export type StatementRow = {
   date: string
@@ -13,6 +38,7 @@ export type StatementRow = {
   debit: number
   credit: number
   balance: number
+  invoice?: StatementInvoiceDetail | null
 }
 
 export type PartnerStatementData = {
@@ -36,6 +62,12 @@ const TYPE_LABELS: Record<string, string> = {
   return: 'مرتجع',
 }
 
+const PAYMENT_TYPE_LABELS: Record<string, string> = {
+  cash: 'نقدي',
+  credit: 'آجل',
+  partial: 'دفعة من المبلغ',
+}
+
 function BrandLogo() {
   return (
     <img
@@ -54,6 +86,91 @@ function BrandLogo() {
 
 export function statementTypeLabel(type: string): string {
   return TYPE_LABELS[type] || type
+}
+
+export function statementPaymentTypeLabel(type?: string | null): string {
+  if (!type) return '—'
+  return PAYMENT_TYPE_LABELS[type] || type
+}
+
+function InvoiceDetailBlock({
+  invoice,
+  fallbackCurrency,
+}: {
+  invoice: StatementInvoiceDetail
+  fallbackCurrency: string
+}) {
+  const docCurrency = invoice.currency || fallbackCurrency
+  const lines = invoice.lines || []
+
+  return (
+    <div className="mt-1 space-y-1 rounded border border-black/10 bg-mist/30 p-1.5 text-[10px]">
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-black/70">
+        <span>
+          نوع الدفع: <strong>{statementPaymentTypeLabel(invoice.payment_type)}</strong>
+        </span>
+        <span>
+          العملة: <strong>{docCurrency}</strong>
+        </span>
+        <span>
+          فرعي: <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, docCurrency)}</strong>
+        </span>
+        {Number(invoice.discount_amount) > 0 && (
+          <span>
+            حسم: <strong className="tabular-nums">{formatMoney(Number(invoice.discount_amount) || 0, docCurrency)}</strong>
+          </span>
+        )}
+        {Number(invoice.tax_amount) > 0 && (
+          <span>
+            ضريبة: <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, docCurrency)}</strong>
+          </span>
+        )}
+        <span>
+          الإجمالي: <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, docCurrency)}</strong>
+        </span>
+        <span>
+          المدفوع: <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}</strong>
+        </span>
+      </div>
+      {invoice.notes ? (
+        <p className="text-black/55">
+          ملاحظات: {invoice.notes}
+        </p>
+      ) : null}
+      {lines.length > 0 && (
+        <table className="w-full border-collapse text-[10px]">
+          <thead>
+            <tr className="text-black/55">
+              <th className="border-b border-black/10 py-0.5 text-start font-medium">الصنف</th>
+              <th className="border-b border-black/10 py-0.5 text-start font-medium">كمية</th>
+              <th className="border-b border-black/10 py-0.5 text-start font-medium">سعر</th>
+              <th className="border-b border-black/10 py-0.5 text-start font-medium">الإجمالي</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((line, i) => {
+              const unitPrice = Number(line.unit_price ?? line.unit_cost ?? 0)
+              const qty = Number(line.quantity) || 0
+              const lineTotal = Number(line.line_total ?? qty * unitPrice)
+              return (
+                <tr key={i}>
+                  <td className="py-0.5 align-top">
+                    {productLabel(line.product)}
+                    {line.serial_no ? (
+                      <span className="mt-0.5 block font-mono text-[9px] text-black/45">{line.serial_no}</span>
+                    ) : null}
+                  </td>
+                  <td className="py-0.5 tabular-nums">{formatQuantity(qty)}</td>
+                  <td className="py-0.5 tabular-nums">{formatMoney(unitPrice, docCurrency)}</td>
+                  <td className="py-0.5 tabular-nums">{formatMoney(lineTotal, docCurrency)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
 }
 
 export function StatementPrintView({
@@ -160,14 +277,23 @@ export function StatementPrintView({
             </tr>
           ) : (
             rows.map((r, i) => (
-              <tr key={`${r.number}-${i}`}>
-                <td>{r.date}</td>
-                <td>{statementTypeLabel(r.type)}</td>
-                <td className="font-mono text-xs">{r.number}</td>
-                <td className="tabular-nums">{formatMoney(Number(r.debit) || 0, currency)}</td>
-                <td className="tabular-nums">{formatMoney(Number(r.credit) || 0, currency)}</td>
-                <td className="tabular-nums">{formatMoney(Number(r.balance) || 0, currency)}</td>
-              </tr>
+              <Fragment key={`${r.number}-${i}`}>
+                <tr>
+                  <td>{r.date}</td>
+                  <td>{statementTypeLabel(r.type)}</td>
+                  <td className="font-mono text-xs">{r.number}</td>
+                  <td className="tabular-nums">{formatMoney(Number(r.debit) || 0, currency)}</td>
+                  <td className="tabular-nums">{formatMoney(Number(r.credit) || 0, currency)}</td>
+                  <td className="tabular-nums">{formatMoney(Number(r.balance) || 0, currency)}</td>
+                </tr>
+                {r.type === 'invoice' && r.invoice ? (
+                  <tr className="print-avoid-break">
+                    <td colSpan={6} className="!border-t-0 bg-transparent p-1">
+                      <InvoiceDetailBlock invoice={r.invoice} fallbackCurrency={currency} />
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))
           )}
         </tbody>

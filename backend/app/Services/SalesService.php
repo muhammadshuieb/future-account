@@ -1222,7 +1222,7 @@ class SalesService
 
         // Every event is expressed in the system base currency, otherwise a foreign-currency
         // receipt would be summed against base-currency invoices.
-        foreach ($customer->invoices()->where('status', 'posted')->get() as $inv) {
+        foreach ($customer->invoices()->where('status', 'posted')->with(['lines.product'])->get() as $inv) {
             $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
@@ -1233,6 +1233,7 @@ class SalesService
                 'notes' => $inv->notes,
                 'debit' => $this->baseValue($inv->base_amount, $inv->total, $inv->exchange_rate),
                 'credit' => 0.0,
+                'invoice' => $this->statementInvoiceDetail($inv),
             ];
         }
 
@@ -1247,6 +1248,7 @@ class SalesService
                 'notes' => $rc->notes,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($rc->base_amount, $rc->amount, $rc->exchange_rate),
+                'invoice' => null,
             ];
         }
 
@@ -1261,6 +1263,7 @@ class SalesService
                 'notes' => null,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
+                'invoice' => null,
             ];
         }
 
@@ -1298,6 +1301,7 @@ class SalesService
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
                 'balance' => round($balance, 2),
+                'invoice' => $event['invoice'],
             ];
         }
 
@@ -1335,6 +1339,43 @@ class SalesService
         $rate = (float) ($exchangeRate ?: 1);
 
         return round((float) $documentAmount * ($rate > 0 ? $rate : 1), 2);
+    }
+
+    /**
+     * Full invoice payload for account-statement rows (avoids N+1 on the client).
+     *
+     * @return array<string, mixed>
+     */
+    protected function statementInvoiceDetail(SalesInvoice $invoice): array
+    {
+        return [
+            'payment_type' => $invoice->payment_type,
+            'subtotal' => (float) $invoice->subtotal,
+            'discount_amount' => (float) $invoice->discount_amount,
+            'tax_amount' => (float) $invoice->tax_amount,
+            'total' => (float) $invoice->total,
+            'paid_amount' => (float) $invoice->paid_amount,
+            'currency' => $invoice->currency,
+            'notes' => $invoice->notes,
+            'lines' => $invoice->lines->map(static function (SalesInvoiceLine $line): array {
+                $product = $line->product;
+
+                return [
+                    'quantity' => (float) $line->quantity,
+                    'unit_price' => (float) $line->unit_price,
+                    'line_total' => (float) $line->line_total,
+                    'tax_rate' => (float) $line->tax_rate,
+                    'batch_no' => $line->batch_no,
+                    'serial_no' => $line->serial_no,
+                    'product' => $product ? [
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'brand' => $product->brand,
+                        'model' => $product->model,
+                    ] : null,
+                ];
+            })->values()->all(),
+        ];
     }
 
     public function deleteQuote(SalesQuote $quote): void

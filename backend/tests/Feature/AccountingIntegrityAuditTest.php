@@ -302,6 +302,29 @@ class AccountingIntegrityAuditTest extends TestCase
         // 1000 USD + 100.01 USD (1.5M SYP) − 500 USD return.
         $this->assertEqualsWithDelta(600.01, (float) $statement['closing_balance'], 0.02);
         $this->assertEqualsWithDelta($this->accountBalance('1103'), (float) $statement['closing_balance'], 0.02);
+
+        $invoiceRows = collect($statement['rows'])->where('type', 'invoice')->values();
+        $this->assertCount(2, $invoiceRows);
+        foreach ($invoiceRows as $row) {
+            $this->assertIsArray($row['invoice']);
+            $this->assertArrayHasKey('payment_type', $row['invoice']);
+            $this->assertArrayHasKey('subtotal', $row['invoice']);
+            $this->assertArrayHasKey('discount_amount', $row['invoice']);
+            $this->assertArrayHasKey('tax_amount', $row['invoice']);
+            $this->assertArrayHasKey('total', $row['invoice']);
+            $this->assertArrayHasKey('paid_amount', $row['invoice']);
+            $this->assertArrayHasKey('lines', $row['invoice']);
+            $this->assertNotEmpty($row['invoice']['lines']);
+            $line = $row['invoice']['lines'][0];
+            $this->assertArrayHasKey('product', $line);
+            $this->assertArrayHasKey('quantity', $line);
+            $this->assertArrayHasKey('unit_price', $line);
+            $this->assertArrayHasKey('line_total', $line);
+            $this->assertSame($this->product->name, $line['product']['name']);
+        }
+
+        $returnRow = collect($statement['rows'])->firstWhere('type', 'return');
+        $this->assertNull($returnRow['invoice']);
     }
 
     public function test_supplier_statement_is_reported_in_base_currency_and_includes_returns(): void
@@ -347,6 +370,21 @@ class AccountingIntegrityAuditTest extends TestCase
         // 1000 USD + 300 USD (10 000 TRY) − 200 USD return, shown as a positive liability.
         $this->assertEqualsWithDelta(1100, (float) $statement['closing_balance'], 0.02);
         $this->assertEqualsWithDelta(1100, $this->accountBalance('2101'), 0.02);
+
+        $invoiceRows = collect($statement['rows'])->where('type', 'invoice')->values();
+        $this->assertCount(2, $invoiceRows);
+        foreach ($invoiceRows as $row) {
+            $this->assertIsArray($row['invoice']);
+            $this->assertArrayHasKey('payment_type', $row['invoice']);
+            $this->assertNotEmpty($row['invoice']['lines']);
+            $line = $row['invoice']['lines'][0];
+            $this->assertArrayHasKey('unit_cost', $line);
+            $this->assertArrayHasKey('line_total', $line);
+            $this->assertSame($this->product->name, $line['product']['name']);
+        }
+
+        $returnRow = collect($statement['rows'])->firstWhere('type', 'return');
+        $this->assertNull($returnRow['invoice']);
     }
 
     public function test_tax_report_converts_document_tax_to_base_currency(): void
