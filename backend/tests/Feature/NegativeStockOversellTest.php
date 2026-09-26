@@ -122,6 +122,122 @@ class NegativeStockOversellTest extends TestCase
         $this->assertDatabaseHas('sales_invoices', ['id' => $invoiceId, 'status' => 'posted']);
     }
 
+    public function test_sell_already_negative_stock_with_zero_cost_balanced_je(): void
+    {
+        Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');
+
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $product->update(['cost_price' => 0, 'sale_price' => 0, 'track_batch' => false]);
+
+        StockLevel::query()->where('product_id', $product->id)->delete();
+        StockLevel::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_id' => $product->id,
+            'batch_no' => '',
+            'quantity' => -3,
+        ]);
+
+        $sales = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 175, 'tax_rate' => 0]],
+        ]);
+
+        $sales->assertCreated()->assertJsonPath('data.status', 'posted');
+        $this->assertSame(-5.0, (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity'));
+
+        $journalId = (int) $sales->json('data.journal_entry_id');
+        $this->assertJournalBalanced($journalId);
+        $this->assertGreaterThan(0, JournalDetail::query()->where('journal_entry_id', $journalId)->sum('debit'));
+
+        $cogsPosted = JournalDetail::query()
+            ->where('journal_entry_id', $journalId)
+            ->whereHas('account', fn ($q) => $q->where('code', '5101'))
+            ->exists();
+        $this->assertFalse($cogsPosted);
+    }
+
+    public function test_safe_edit_repost_zero_cost_oversell_stays_balanced(): void
+    {
+        Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');
+
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $product->update(['cost_price' => 0, 'track_batch' => false]);
+        StockLevel::query()->where('product_id', $product->id)->delete();
+
+        $created = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 4, 'unit_price' => 90, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $created->json('data.id');
+
+        $updated = $this->putJson("/api/sales-invoices/{$id}", [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 6, 'unit_price' => 95, 'tax_rate' => 0]],
+        ]);
+
+        $updated->assertOk()->assertJsonPath('data.status', 'posted');
+        $this->assertSame(-6.0, (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity'));
+
+        $journalId = (int) $updated->json('data.journal_entry_id');
+        $this->assertNotNull($journalId);
+        $this->assertJournalBalanced($journalId);
+        $this->assertEqualsWithDelta(570.0, (float) JournalDetail::query()->where('journal_entry_id', $journalId)->sum('debit'), 0.01);
+    }
+
+    public function test_post_recovers_when_base_amount_stored_as_zero_string(): void
+    {
+        Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');
+
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $product->update(['cost_price' => 0, 'track_batch' => false]);
+        StockLevel::query()->where('product_id', $product->id)->delete();
+
+        $draft = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'draft',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 120, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $id = $draft->json('data.id');
+        // Simulate the decimal-cast trap: base_amount "0.00" with a real total.
+        \App\Models\SalesInvoice::query()->whereKey($id)->update(['base_amount' => 0]);
+
+        $posted = $this->postJson("/api/sales-invoices/{$id}/post");
+        $posted->assertOk()->assertJsonPath('data.status', 'posted');
+        $this->assertJournalBalanced((int) $posted->json('data.journal_entry_id'));
+        $this->assertEqualsWithDelta(360.0, (float) JournalDetail::query()
+            ->where('journal_entry_id', $posted->json('data.journal_entry_id'))
+            ->sum('debit'), 0.01);
+    }
+
     public function test_transfer_still_blocked_even_when_allow_negative_stock_is_on(): void
     {
         Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');

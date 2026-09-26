@@ -155,13 +155,22 @@ class JournalEntryService
             $credit += (float) ($line['credit'] ?? 0);
         }
 
-        if (round($debit, 2) !== round($credit, 2) || $debit <= 0) {
+        $debitR = round($debit, 2);
+        $creditR = round($credit, 2);
+
+        if ($debitR <= 0 && $creditR <= 0) {
+            throw ValidationException::withMessages([
+                'details' => ['القيد فارغ أو بمبالغ صفر — لا يمكن ترحيل قيد بدون مدين/دائن.'],
+            ]);
+        }
+
+        if ($debitR !== $creditR || $debitR <= 0) {
             throw ValidationException::withMessages([
                 'details' => [
                     sprintf(
                         'القيد غير متوازن: مدين %s ≠ دائن %s',
-                        number_format(round($debit, 2), 2),
-                        number_format(round($credit, 2), 2)
+                        number_format($debitR, 2),
+                        number_format($creditR, 2)
                     ),
                 ],
             ]);

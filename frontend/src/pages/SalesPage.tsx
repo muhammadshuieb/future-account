@@ -64,7 +64,8 @@ function linePayload(productId: string, qty: string, price: string, _batch: stri
   return {
     product_id: Number(productId),
     quantity: Number(qty),
-    unit_price: price ? Number(price) : undefined,
+    // Keep explicit 0; only omit when the field is blank (backend falls back to sale_price).
+    unit_price: price !== '' ? Number(price) : undefined,
     tax_rate: taxRate,
     serial_no: serial || undefined,
   }

@@ -157,8 +157,18 @@ class SalesService
             $cogsAccount = Account::query()->where('code', '5101')->firstOrFail();
             $inventoryAccount = Account::query()->where('code', '1104')->firstOrFail();
 
-            $rate = (float) ($invoice->exchange_rate ?: 1);
-            $baseTotal = (float) ($invoice->base_amount ?: round((float) $invoice->total * $rate, 2));
+            // decimal:2 casts return strings like "0.00" which are truthy in PHP — never use ?: on them.
+            $baseTotal = $this->baseValue($invoice->base_amount, $invoice->total, $invoice->exchange_rate);
+            if ($baseTotal <= 0) {
+                throw ValidationException::withMessages([
+                    'total' => ['لا يمكن ترحيل فاتورة بمبلغ صفر. تأكد من إدخال سعر البيع للأصناف.'],
+                ]);
+            }
+
+            $rate = (float) ($invoice->exchange_rate);
+            if ($rate <= 0) {
+                $rate = 1.0;
+            }
             $baseTax = round((float) $invoice->tax_amount * $rate, 2);
             $baseDiscount = round((float) ($invoice->discount_amount ?? 0) * $rate, 2);
             // Gross sales absorbs FX rounding so the entry always balances against base_amount.
@@ -204,9 +214,11 @@ class SalesService
                 );
 
                 // COGS uses line cost_price (from product.cost_price at invoice create).
-                // Unknown/zero cost → COGS GL lines are omitted; later purchase sets cost via MAC.
+                // Unknown/zero cost → omit COGS/inventory GL lines; AR/Sales still post. Later purchase sets cost via MAC.
                 $cost = round((float) $line->quantity * (float) $line->cost_price, 2);
-                $cogsTotal += $cost;
+                if ($cost > 0) {
+                    $cogsTotal += $cost;
+                }
 
                 $movement = $this->inventory->adjustStock(
                     $invoice->warehouse_id,
@@ -235,6 +247,13 @@ class SalesService
             if ($cogsTotal > 0) {
                 $glLines[] = ['account_id' => $cogsAccount->id, 'debit' => $cogsTotal, 'credit' => 0];
                 $glLines[] = ['account_id' => $inventoryAccount->id, 'debit' => 0, 'credit' => $cogsTotal];
+            }
+
+            $glLines = $this->nonzeroGlLines($glLines);
+            if (count($glLines) < 2) {
+                throw ValidationException::withMessages([
+                    'details' => ['تعذّر بناء قيد اليومية للفاتورة (لا توجد أسطر بمبالغ).'],
+                ]);
             }
 
             $entry = $this->journals->create([
@@ -581,7 +600,12 @@ class SalesService
                 : Account::query()->where('code', '1103')->firstOrFail();
             $sales = Account::query()->where('code', '4101')->firstOrFail();
 
-            $baseAmount = (float) ($ret->base_amount ?: $ret->total);
+            $baseAmount = $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate);
+            if ($baseAmount <= 0) {
+                throw ValidationException::withMessages([
+                    'total' => ['لا يمكن ترحيل مرتجع بمبلغ صفر.'],
+                ]);
+            }
 
             $glLines = [
                 ['account_id' => $sales->id, 'debit' => $baseAmount, 'credit' => 0],
@@ -597,6 +621,8 @@ class SalesService
                 $glLines[] = ['account_id' => $inventoryAccount->id, 'debit' => $returnedCost, 'credit' => 0, 'memo' => 'إرجاع تكلفة بضاعة'];
                 $glLines[] = ['account_id' => $cogsAccount->id, 'debit' => 0, 'credit' => $returnedCost, 'memo' => 'عكس تكلفة البضاعة المباعة'];
             }
+
+            $glLines = $this->nonzeroGlLines($glLines);
 
             $entry = $this->journals->create([
                 'entry_date' => $ret->return_date->toDateString(),
@@ -813,7 +839,12 @@ class SalesService
                 ? Account::query()->findOrFail($receipt->customer->account_id)
                 : Account::query()->where('code', '1103')->firstOrFail();
 
-            $baseAmount = (float) ($receipt->base_amount ?: $receipt->amount);
+            $baseAmount = $this->baseValue($receipt->base_amount, $receipt->amount, $receipt->exchange_rate);
+            if ($baseAmount <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => ['لا يمكن ترحيل سند قبض بمبلغ صفر.'],
+                ]);
+            }
 
             if ($receipt->sales_invoice_id) {
                 $invoice = SalesInvoice::query()->lockForUpdate()->findOrFail($receipt->sales_invoice_id);
@@ -867,7 +898,7 @@ class SalesService
             return (float) $receipt->amount;
         }
 
-        $receiptBase = (float) ($receipt->base_amount ?: round((float) $receipt->amount * (float) ($receipt->exchange_rate ?: 1), 2));
+        $receiptBase = $this->baseValue($receipt->base_amount, $receipt->amount, $receipt->exchange_rate);
         $invRate = (float) ($invoice->exchange_rate ?: 1);
 
         return $invRate > 0 ? round($receiptBase / $invRate, 2) : $receiptBase;
@@ -1335,6 +1366,8 @@ class SalesService
 
     /**
      * Document value expressed in the system base currency.
+     *
+     * Laravel decimal casts return strings like "0.00", which are truthy — never use ?: on them.
      */
     protected function baseValue(mixed $baseAmount, mixed $documentAmount, mixed $exchangeRate): float
     {
@@ -1345,6 +1378,21 @@ class SalesService
         $rate = (float) ($exchangeRate ?: 1);
 
         return round((float) $documentAmount * ($rate > 0 ? $rate : 1), 2);
+    }
+
+    /**
+     * Drop zero-amount GL lines so JournalEntryService never sees empty debit/credit rows.
+     *
+     * @param  list<array{account_id:int, debit?:float|int, credit?:float|int, memo?:string|null}>  $lines
+     * @return list<array{account_id:int, debit?:float|int, credit?:float|int, memo?:string|null}>
+     */
+    protected function nonzeroGlLines(array $lines): array
+    {
+        return array_values(array_filter(
+            $lines,
+            static fn (array $line): bool => round((float) ($line['debit'] ?? 0), 2) > 0
+                || round((float) ($line['credit'] ?? 0), 2) > 0
+        ));
     }
 
     /**
