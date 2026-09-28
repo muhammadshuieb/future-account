@@ -52,7 +52,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExcelExportService
 {
-    public function __construct(protected ReportService $reports) {}
+    public function __construct(
+        protected ReportService $reports,
+        protected SalesService $sales,
+        protected PurchaseService $purchases,
+    ) {}
 
     /** @return array<string, string> module => permission */
     public static function modulePermissions(): array
@@ -877,46 +881,117 @@ class ExcelExportService
         if ($id <= 0) {
             throw new \InvalidArgumentException($kind === 'customer' ? 'customer_id مطلوب.' : 'supplier_id مطلوب.');
         }
+
         if ($kind === 'customer') {
-            $customer = Customer::query()->findOrFail($id);
-            // Reuse statement endpoint logic via controller service if available — flatten balances from invoices/receipts.
-            $invoices = SalesInvoice::query()->where('customer_id', $id)
-                ->when($from, fn ($q) => $q->whereDate('invoice_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('invoice_date', '<=', $to))
-                ->orderBy('invoice_date')->get();
-            $receipts = Receipt::query()->where('customer_id', $id)
-                ->when($from, fn ($q) => $q->whereDate('receipt_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('receipt_date', '<=', $to))
-                ->orderBy('receipt_date')->get();
-            $rows = [];
-            foreach ($invoices as $inv) {
-                $rows[] = [optional($inv->invoice_date)?->format('Y-m-d'), 'فاتورة', $inv->invoice_number, $inv->total, 0, $inv->currency];
-            }
-            foreach ($receipts as $rec) {
-                $rows[] = [optional($rec->receipt_date)?->format('Y-m-d'), 'قبض', $rec->receipt_number, 0, $rec->amount, $rec->currency];
-            }
-            usort($rows, fn ($a, $b) => strcmp((string) $a[0], (string) $b[0]));
-            $book->addSheet('كشف عميل '.$customer->name, ['التاريخ', 'النوع', 'المرجع', 'مدين', 'دائن', 'العملة'], $rows);
+            $partner = Customer::query()->findOrFail($id);
+            $statement = $this->sales->customerStatement($partner, $from, $to);
+            $title = 'كشف عميل '.$partner->name;
         } else {
-            $supplier = Supplier::query()->findOrFail($id);
-            $invoices = PurchaseInvoice::query()->where('supplier_id', $id)
-                ->when($from, fn ($q) => $q->whereDate('invoice_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('invoice_date', '<=', $to))
-                ->orderBy('invoice_date')->get();
-            $payments = SupplierPayment::query()->where('supplier_id', $id)
-                ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to))
-                ->orderBy('payment_date')->get();
-            $rows = [];
-            foreach ($invoices as $inv) {
-                $rows[] = [optional($inv->invoice_date)?->format('Y-m-d'), 'فاتورة', $inv->invoice_number, $inv->total, 0, $inv->currency];
-            }
-            foreach ($payments as $pay) {
-                $rows[] = [optional($pay->payment_date)?->format('Y-m-d'), 'دفع', $pay->payment_number, 0, $pay->amount, $pay->currency];
-            }
-            usort($rows, fn ($a, $b) => strcmp((string) $a[0], (string) $b[0]));
-            $book->addSheet('كشف مورد '.$supplier->name, ['التاريخ', 'النوع', 'المرجع', 'مدين', 'دائن', 'العملة'], $rows);
+            $partner = Supplier::query()->findOrFail($id);
+            $statement = $this->purchases->supplierStatement($partner, $from, $to);
+            $title = 'كشف مورد '.$partner->name;
         }
+
+        $headers = [
+            'التاريخ', 'النوع', 'المرجع', 'مدين', 'دائن', 'الرصيد', 'العملة',
+            'الصنف', 'الماركة', 'الموديل', 'كمية', 'سعر', 'إجمالي السطر',
+        ];
+        $baseCurrency = (string) ($statement['currency'] ?? '');
+        $rows = [];
+
+        $rows[] = [
+            $from ?: '',
+            'رصيد افتتاحي',
+            '',
+            '',
+            '',
+            $statement['opening_balance'] ?? 0,
+            $baseCurrency,
+            '', '', '', '', '', '',
+        ];
+
+        foreach ($statement['rows'] ?? [] as $event) {
+            $type = (string) ($event['type'] ?? '');
+            $rows[] = [
+                $event['date'] ?? '',
+                $this->statementTypeLabel($type),
+                $event['number'] ?? '',
+                $event['debit'] ?? 0,
+                $event['credit'] ?? 0,
+                $event['balance'] ?? 0,
+                $event['currency'] ?? $baseCurrency,
+                '', '', '', '', '', '',
+            ];
+
+            if ($type !== 'invoice') {
+                continue;
+            }
+
+            $invoice = $event['invoice'] ?? null;
+            if (! is_array($invoice)) {
+                continue;
+            }
+
+            foreach ($invoice['lines'] ?? [] as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $product = is_array($line['product'] ?? null) ? $line['product'] : [];
+                $unitPrice = (float) ($line['unit_price'] ?? $line['unit_cost'] ?? 0);
+                $qty = (float) ($line['quantity'] ?? 0);
+                $lineTotal = (float) ($line['line_total'] ?? ($qty * $unitPrice));
+
+                $rows[] = [
+                    $event['date'] ?? '',
+                    '  بند فاتورة',
+                    $event['number'] ?? '',
+                    '',
+                    '',
+                    '',
+                    $invoice['currency'] ?? ($event['currency'] ?? $baseCurrency),
+                    $product['name'] ?? '',
+                    $product['brand'] ?? '',
+                    $product['model'] ?? '',
+                    $qty,
+                    $unitPrice,
+                    $lineTotal,
+                ];
+            }
+        }
+
+        $rows[] = [
+            '',
+            'إجمالي الحركة',
+            '',
+            $statement['total_debit'] ?? 0,
+            $statement['total_credit'] ?? 0,
+            '',
+            $baseCurrency,
+            '', '', '', '', '', '',
+        ];
+        $rows[] = [
+            $to ?: '',
+            'رصيد ختامي',
+            '',
+            '',
+            '',
+            $statement['closing_balance'] ?? ($statement['balance'] ?? 0),
+            $baseCurrency,
+            '', '', '', '', '', '',
+        ];
+
+        $book->addSheet($title, $headers, $rows);
+    }
+
+    protected function statementTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'invoice' => 'فاتورة',
+            'receipt' => 'سند قبض',
+            'payment' => 'سند صرف',
+            'return' => 'مرتجع',
+            default => $type,
+        };
     }
 
     /**
