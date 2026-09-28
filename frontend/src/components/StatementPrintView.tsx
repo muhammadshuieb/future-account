@@ -21,7 +21,8 @@ export type StatementInvoiceDetail = {
   discount_amount?: number
   tax_amount?: number
   total?: number
-  paid_amount?: number
+  /** null/undefined hides the paid row (e.g. returns). */
+  paid_amount?: number | null
   currency?: string
   notes?: string | null
   lines?: StatementInvoiceLine[]
@@ -98,22 +99,33 @@ export function isStatementPaymentRow(type: string): boolean {
   return type === 'receipt' || type === 'payment'
 }
 
+/** Invoices and returns both carry expandable line-item detail in `invoice`. */
+export function isStatementDetailRow(type: string): boolean {
+  return type === 'invoice' || type === 'return'
+}
+
 function InvoiceDetailBlock({
   invoice,
   fallbackCurrency,
+  rowType = 'invoice',
 }: {
   invoice: StatementInvoiceDetail
   fallbackCurrency: string
+  rowType?: string
 }) {
   const docCurrency = invoice.currency || fallbackCurrency
   const lines = invoice.lines || []
+  const showPayment = !!invoice.payment_type
+  const showPaid = invoice.paid_amount != null
 
   return (
     <div className="statement-invoice-detail">
       <div className="statement-invoice-detail__meta">
-        <span>
-          نوع الدفع: <strong>{statementPaymentTypeLabel(invoice.payment_type)}</strong>
-        </span>
+        {showPayment && (
+          <span>
+            نوع الدفع: <strong>{statementPaymentTypeLabel(invoice.payment_type)}</strong>
+          </span>
+        )}
         <span>
           العملة: <strong>{docCurrency}</strong>
         </span>
@@ -133,9 +145,11 @@ function InvoiceDetailBlock({
         <span>
           الإجمالي: <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, docCurrency)}</strong>
         </span>
-        <span>
-          المدفوع: <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}</strong>
-        </span>
+        {showPaid && (
+          <span>
+            المدفوع: <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}</strong>
+          </span>
+        )}
       </div>
       {invoice.notes ? (
         <p className="statement-invoice-detail__notes">ملاحظات: {invoice.notes}</p>
@@ -169,6 +183,9 @@ function InvoiceDetailBlock({
           </tbody>
         </table>
       )}
+      {lines.length === 0 && rowType === 'return' ? (
+        <p className="statement-invoice-detail__notes">لا توجد بنود لهذا المرتجع</p>
+      ) : null}
     </div>
   )
 }
@@ -267,10 +284,14 @@ export function StatementPrintView({
                   <td className="tabular-nums">{formatMoney(Number(r.credit) || 0, currency)}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.balance) || 0, currency)}</td>
                 </tr>
-                {r.type === 'invoice' && r.invoice ? (
+                {isStatementDetailRow(r.type) && r.invoice ? (
                   <tr className="print-avoid-break statement-print__detail-row">
                     <td colSpan={6}>
-                      <InvoiceDetailBlock invoice={r.invoice} fallbackCurrency={currency} />
+                      <InvoiceDetailBlock
+                        invoice={r.invoice}
+                        fallbackCurrency={currency}
+                        rowType={r.type}
+                      />
                     </td>
                   </tr>
                 ) : null}

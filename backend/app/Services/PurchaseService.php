@@ -10,6 +10,7 @@ use App\Models\PurchaseInvoiceLine;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseReturn;
+use App\Models\PurchaseReturnLine;
 use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -1348,7 +1349,13 @@ class PurchaseService
             ];
         }
 
-        foreach (PurchaseReturn::query()->where('supplier_id', $supplier->id)->where('status', 'posted')->get() as $ret) {
+        foreach (
+            PurchaseReturn::query()
+                ->where('supplier_id', $supplier->id)
+                ->where('status', 'posted')
+                ->with(['lines.product'])
+                ->get() as $ret
+        ) {
             $events[] = [
                 'date' => $ret->return_date->toDateString(),
                 'type' => 'return',
@@ -1356,10 +1363,10 @@ class PurchaseService
                 'document_id' => (int) $ret->id,
                 'currency' => $ret->currency,
                 'document_amount' => (float) $ret->total,
-                'notes' => null,
+                'notes' => $ret->notes ?? null,
                 'debit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
                 'credit' => 0.0,
-                'invoice' => null,
+                'invoice' => $this->statementReturnDetail($ret),
             ];
         }
 
@@ -1462,6 +1469,43 @@ class PurchaseService
                     'unit_cost' => (float) $line->unit_cost,
                     'line_total' => (float) $line->line_total,
                     'tax_rate' => (float) $line->tax_rate,
+                    'batch_no' => $line->batch_no,
+                    'serial_no' => $line->serial_no,
+                    'product' => $product ? [
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'brand' => $product->brand,
+                        'model' => $product->model,
+                    ] : null,
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    /**
+     * Full purchase-return payload for account-statement rows (same shape as invoice detail).
+     *
+     * @return array<string, mixed>
+     */
+    protected function statementReturnDetail(PurchaseReturn $ret): array
+    {
+        return [
+            'payment_type' => null,
+            'subtotal' => (float) $ret->total,
+            'discount_amount' => 0.0,
+            'tax_amount' => 0.0,
+            'total' => (float) $ret->total,
+            'paid_amount' => null,
+            'currency' => $ret->currency,
+            'notes' => $ret->notes ?? null,
+            'lines' => $ret->lines->map(static function (PurchaseReturnLine $line): array {
+                $product = $line->product;
+
+                return [
+                    'quantity' => (float) $line->quantity,
+                    'unit_cost' => (float) $line->unit_cost,
+                    'line_total' => (float) $line->line_total,
+                    'tax_rate' => 0.0,
                     'batch_no' => $line->batch_no,
                     'serial_no' => $line->serial_no,
                     'product' => $product ? [

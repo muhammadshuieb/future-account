@@ -923,7 +923,7 @@ class ExcelExportService
                 '', '', '', '', '', '',
             ];
 
-            if ($type !== 'invoice') {
+            if ($type !== 'invoice' && $type !== 'return') {
                 continue;
             }
 
@@ -931,6 +931,8 @@ class ExcelExportService
             if (! is_array($invoice)) {
                 continue;
             }
+
+            $lineLabel = $type === 'return' ? '  بند مرتجع' : '  بند فاتورة';
 
             foreach ($invoice['lines'] ?? [] as $line) {
                 if (! is_array($line)) {
@@ -943,7 +945,7 @@ class ExcelExportService
 
                 $rows[] = [
                     $event['date'] ?? '',
-                    '  بند فاتورة',
+                    $lineLabel,
                     $event['number'] ?? '',
                     '',
                     '',

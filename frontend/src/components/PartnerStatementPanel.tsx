@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
 import { paymentTypeLabel } from '@/components/PaymentTypeFields'
 import {
+  isStatementDetailRow,
   isStatementPaymentRow,
   statementTypeLabel,
   type PartnerStatementData,
@@ -50,12 +51,16 @@ function InvoiceMeta({
   t: (key: string) => string
 }) {
   const docCurrency = invoice.currency || fallbackCurrency
+  const showPayment = !!invoice.payment_type
+  const showPaid = invoice.paid_amount != null
   return (
     <dl className="mb-3 grid gap-2 text-xs text-[#1a2b34] sm:grid-cols-2 lg:grid-cols-3">
-      <DetailRow
-        label={t('common.paymentType')}
-        value={paymentTypeLabel(invoice.payment_type, t)}
-      />
+      {showPayment && (
+        <DetailRow
+          label={t('common.paymentType')}
+          value={paymentTypeLabel(invoice.payment_type, t)}
+        />
+      )}
       <DetailRow label={t('common.currency')} value={docCurrency} />
       <DetailRow
         label={t('common.subtotal')}
@@ -77,10 +82,12 @@ function InvoiceMeta({
         label={t('common.total')}
         value={formatMoney(Number(invoice.total) || 0, docCurrency)}
       />
-      <DetailRow
-        label={t('common.paidAmount')}
-        value={formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}
-      />
+      {showPaid && (
+        <DetailRow
+          label={t('common.paidAmount')}
+          value={formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}
+        />
+      )}
       {invoice.notes ? <DetailRow label={t('common.notes')} value={invoice.notes} /> : null}
     </dl>
   )
@@ -199,11 +206,17 @@ export default function PartnerStatementPanel({
           ) : (
             rows.map((r, idx) => {
               const key = rowKey(r, idx)
-              const hasInvoiceDetail = r.type === 'invoice' && !!r.invoice
+              const hasInvoiceDetail = isStatementDetailRow(r.type) && !!r.invoice
               const isOpen = !!expanded[key]
               const invoice = r.invoice
               const docCurrency = invoice?.currency || r.currency || currency
               const isPayment = isStatementPaymentRow(r.type)
+              const detailTitleKey =
+                r.type === 'return' ? 'common.returnDetails' : 'common.invoiceDetails'
+              const expandHintKey =
+                r.type === 'return' ? 'common.clickToExpandReturn' : 'common.clickToExpandInvoice'
+              const emptyLinesKey =
+                r.type === 'return' ? 'common.noReturnLines' : 'common.noInvoiceLines'
 
               return (
                 <Fragment key={key}>
@@ -223,7 +236,7 @@ export default function PartnerStatementPanel({
                     tabIndex={0}
                     title={
                       hasInvoiceDetail
-                        ? t('common.clickToExpandInvoice')
+                        ? t(expandHintKey)
                         : t('common.clickForDetails')
                     }
                   >
@@ -250,7 +263,7 @@ export default function PartnerStatementPanel({
                       <td colSpan={colCount} className={dense ? 'px-3 py-3.5' : 'px-5 py-4'}>
                         <div className="space-y-3 rounded-md border border-teal/20 bg-white p-3.5 text-[#111111] shadow-[0_1px_0_rgba(12,26,34,0.04)]">
                           <p className="text-xs font-bold tracking-wide text-[#064e51]">
-                            {t('common.invoiceDetails')}
+                            {t(detailTitleKey)}
                           </p>
                           <InvoiceMeta invoice={invoice} fallbackCurrency={currency} t={t} />
                           {(invoice.lines || []).length > 0 ? (
@@ -261,7 +274,7 @@ export default function PartnerStatementPanel({
                               dense={dense}
                             />
                           ) : (
-                            <p className="text-xs text-[#3d4f5a]">{t('common.noInvoiceLines')}</p>
+                            <p className="text-xs text-[#3d4f5a]">{t(emptyLinesKey)}</p>
                           )}
                         </div>
                       </td>

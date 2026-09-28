@@ -1289,7 +1289,13 @@ class SalesService
             ];
         }
 
-        foreach (SalesReturn::query()->where('customer_id', $customer->id)->where('status', 'posted')->get() as $ret) {
+        foreach (
+            SalesReturn::query()
+                ->where('customer_id', $customer->id)
+                ->where('status', 'posted')
+                ->with(['lines.product'])
+                ->get() as $ret
+        ) {
             $events[] = [
                 'date' => $ret->return_date->toDateString(),
                 'type' => 'return',
@@ -1297,10 +1303,10 @@ class SalesService
                 'document_id' => (int) $ret->id,
                 'currency' => $ret->currency,
                 'document_amount' => (float) $ret->total,
-                'notes' => null,
+                'notes' => $ret->notes ?? null,
                 'debit' => 0.0,
                 'credit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
-                'invoice' => null,
+                'invoice' => $this->statementReturnDetail($ret),
             ];
         }
 
@@ -1419,6 +1425,43 @@ class SalesService
                     'unit_price' => (float) $line->unit_price,
                     'line_total' => (float) $line->line_total,
                     'tax_rate' => (float) $line->tax_rate,
+                    'batch_no' => $line->batch_no,
+                    'serial_no' => $line->serial_no,
+                    'product' => $product ? [
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'brand' => $product->brand,
+                        'model' => $product->model,
+                    ] : null,
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    /**
+     * Full sales-return payload for account-statement rows (same shape as invoice detail).
+     *
+     * @return array<string, mixed>
+     */
+    protected function statementReturnDetail(SalesReturn $ret): array
+    {
+        return [
+            'payment_type' => null,
+            'subtotal' => (float) $ret->total,
+            'discount_amount' => 0.0,
+            'tax_amount' => 0.0,
+            'total' => (float) $ret->total,
+            'paid_amount' => null,
+            'currency' => $ret->currency,
+            'notes' => $ret->notes ?? null,
+            'lines' => $ret->lines->map(static function (SalesReturnLine $line): array {
+                $product = $line->product;
+
+                return [
+                    'quantity' => (float) $line->quantity,
+                    'unit_price' => (float) $line->unit_price,
+                    'line_total' => (float) $line->line_total,
+                    'tax_rate' => 0.0,
                     'batch_no' => $line->batch_no,
                     'serial_no' => $line->serial_no,
                     'product' => $product ? [
