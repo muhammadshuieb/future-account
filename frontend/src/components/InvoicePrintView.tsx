@@ -549,8 +549,6 @@ export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintD
           <span className="tabular-nums">{invoice.total}</span>
         </p>
       </div>
-
-      <p className="mt-4 text-[10px] text-black/45">{t('printInvoices.printDisclaimer')}</p>
     </div>
   )
 }
