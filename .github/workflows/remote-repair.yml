@@ -2,31 +2,52 @@ name: Remote repair
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'What to repair'
+        required: true
+        default: 'purchase-returns'
+        type: choice
+        options:
+          - purchase-returns
+          - sales-returns-abd
+          - both
 
 jobs:
-  repair-sales-return-credit:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy status + repair Abd al-Qader credit
+      - name: Deploy + repair return credit on prod
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script_stop: true
-          command_timeout: 10m
+          command_timeout: 20m
           script: |
             set -euo pipefail
+            MODE='${{ github.event.inputs.mode }}'
             cd /opt/future-account
+            echo "=== DEPLOY ==="
+            DEPLOY_ENV=prod ./scripts/deploy.sh
             echo "HEAD=$(git rev-parse --short HEAD)"
             echo "FULL=$(git rev-parse HEAD)"
-            echo "=== contains 3ec8aee? ==="
-            git merge-base --is-ancestor 3ec8aee HEAD && echo "YES 3ec8aee is deployed" || echo "NO 3ec8aee missing"
-            echo "=== migrate status (sales_return) ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan migrate:status 2>/dev/null | grep -i sales_return || true
-            echo "=== DRY RUN ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-sales-return-credit --customer="عبد القادر" --dry-run
-            echo "=== APPLY ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-sales-return-credit --customer="عبد القادر"
-            echo "=== VERIFY invoices + partner balance ==="
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='$c=\App\Models\Customer::query()->where("name","like","%عبد القادر%")->first(); if(!$c){echo "CUSTOMER_NOT_FOUND".PHP_EOL; return;} echo "customer_id={$c->id} name={$c->name}".PHP_EOL; $invs=\App\Models\SalesInvoice::query()->where("customer_id",$c->id)->orderBy("id")->get(["id","invoice_number","status","total","paid_amount"]); foreach($invs as $i){ $rem=round((float)$i->total-(float)$i->paid_amount,2); echo "inv#{$i->id} num={$i->invoice_number} status={$i->status} total={$i->total} paid={$i->paid_amount} remaining={$rem}".PHP_EOL; } $bal=app(\App\Services\SalesService::class)->customerBalance($c); echo "customer_balance={$bal}".PHP_EOL;'
+            echo "=== migrate purchase_return ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan migrate:status 2>/dev/null | grep -i purchase_return || true
+
+            if [[ "$MODE" == "purchase-returns" || "$MODE" == "both" ]]; then
+              echo "=== DRY RUN purchase returns ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-purchase-return-credit --dry-run
+              echo "=== APPLY purchase returns ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-purchase-return-credit
+              echo "=== VERIFY purchase returns ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='$rets=\App\Models\PurchaseReturn::query()->where("status","posted")->orderBy("id")->get(["id","return_number","supplier_id","total","applied_amount","refund_amount","purchase_invoice_id"]); foreach($rets as $r){ $open=round((float)$r->total-(float)$r->applied_amount-(float)$r->refund_amount,2); echo "PR#{$r->id} {$r->return_number} total={$r->total} applied={$r->applied_amount} refund={$r->refund_amount} open={$open}".PHP_EOL; if($r->purchase_invoice_id){ $i=\App\Models\PurchaseInvoice::find($r->purchase_invoice_id); if($i){ $rem=round((float)$i->total-(float)$i->paid_amount,2); echo "  linked_inv {$i->invoice_number} total={$i->total} paid={$i->paid_amount} remaining={$rem}".PHP_EOL; } } } $openInvs=\App\Models\PurchaseInvoice::query()->where("status","posted")->whereRaw("(total-paid_amount)>0.001")->orderBy("id")->get(["id","invoice_number","supplier_id","total","paid_amount"]); echo "open_purchase_invoices=".count($openInvs).PHP_EOL; foreach($openInvs as $i){ $rem=round((float)$i->total-(float)$i->paid_amount,2); echo "PI {$i->invoice_number} remaining={$rem}".PHP_EOL; }'
+            fi
+
+            if [[ "$MODE" == "sales-returns-abd" || "$MODE" == "both" ]]; then
+              echo "=== DRY RUN sales Abd al-Qader ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-sales-return-credit --customer="عبد القادر" --dry-run
+              echo "=== APPLY sales Abd al-Qader ==="
+              docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-sales-return-credit --customer="عبد القادر"
+            fi
