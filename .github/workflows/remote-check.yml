@@ -20,30 +20,12 @@ jobs:
             cd /opt/future-account
             echo "HEAD=$(git rev-parse --short HEAD)"
             echo "=== .env.prod Google keys ==="
-            grep -E '^(GOOGLE_DRIVE_OAUTH_|FRONTEND_URL=|APP_URL=)' .env.prod | while IFS= read -r line; do
-              k="${line%%=*}"
-              v="${line#*=}"
-              case "$k" in
-                GOOGLE_DRIVE_OAUTH_CLIENT_ID|GOOGLE_DRIVE_OAUTH_CLIENT_SECRET)
-                  if [ -z "$v" ]; then echo "$k=EMPTY"; else echo "$k=SET(len=${#v})"; fi
-                  ;;
-                *)
-                  echo "$k=$v"
-                  ;;
-              esac
-            done
+            awk -F= '$1=="GOOGLE_DRIVE_OAUTH_CLIENT_ID"{if($2=="") print "GOOGLE_DRIVE_OAUTH_CLIENT_ID=EMPTY"; else print "GOOGLE_DRIVE_OAUTH_CLIENT_ID=SET(len=" length($2) ")"}' .env.prod
+            awk -F= '$1=="GOOGLE_DRIVE_OAUTH_CLIENT_SECRET"{if($2=="") print "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=EMPTY"; else print "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=SET(len=" length($2) ")"}' .env.prod
+            awk -F= '$1=="GOOGLE_DRIVE_OAUTH_REDIRECT_URI"{print "GOOGLE_DRIVE_OAUTH_REDIRECT_URI="$2}' .env.prod
+            awk -F= '$1=="FRONTEND_URL"{print "FRONTEND_URL="$2}' .env.prod
+            awk -F= '$1=="APP_URL"{print "APP_URL="$2}' .env.prod
             echo "=== app status ==="
-            docker exec future_account_api php -r '
-            require "vendor/autoload.php";
-            $app = require "bootstrap/app.php";
-            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
-            $st = app(App\Services\BackupDistributionService::class)->googleDriveStatus();
-            echo "oauth_available=" . (!empty($st["oauth_available"]) ? "1" : "0");
-            echo " oauth_connected=" . (!empty($st["oauth_connected"]) ? "1" : "0");
-            echo " configured=" . (!empty($st["configured"]) ? "1" : "0");
-            echo " rclone_available=" . (!empty($st["rclone_available"]) ? "1" : "0");
-            echo " method=" . ($st["method"] ?? "null") . PHP_EOL;
-            echo "redirect_uri=" . app(App\Services\GoogleDriveOAuthService::class)->redirectUri() . PHP_EOL;
-            '
+            docker exec future_account_api php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); $st=app(App\Services\BackupDistributionService::class)->googleDriveStatus(); echo "oauth_available=".(!empty($st["oauth_available"])?"1":"0")." oauth_connected=".(!empty($st["oauth_connected"])?"1":"0")." configured=".(!empty($st["configured"])?"1":"0")." rclone_available=".(!empty($st["rclone_available"])?"1":"0")." method=".($st["method"]??"null").PHP_EOL; echo "redirect_uri=".app(App\Services\GoogleDriveOAuthService::class)->redirectUri().PHP_EOL;'
             echo "=== rclone ==="
-            docker exec future_account_api sh -c 'command -v rclone || echo rclone_MISSING; rclone version 2>/dev/null | head -1 || true'
+            docker exec future_account_api rclone version | head -1
