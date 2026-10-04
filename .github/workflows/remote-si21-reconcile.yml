@@ -1,0 +1,26 @@
+name: Remote SI-21 reconcile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect SI-2026-00021 vs customer settlement
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod cp scripts/prod-si21-reconcile.php backend:/var/www/html/prod-si21-reconcile.php
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php /var/www/html/prod-si21-reconcile.php
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend rm -f /var/www/html/prod-si21-reconcile.php
