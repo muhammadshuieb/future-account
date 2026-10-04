@@ -19,13 +19,23 @@ fi
 
 log() { printf '==> %s\n' "$*"; }
 
-# Append KEY=VALUE to .env.prod only when KEY is missing (never overwrite secrets).
+# Append KEY=VALUE to .env.prod when KEY is missing.
+# If KEY exists but is empty and a non-empty value is provided, fill it (never overwrite secrets).
 ensure_env_prod_key() {
   local key="$1"
   local value="$2"
   local env_file="$PROJECT_ROOT/.env.prod"
   [[ -f "$env_file" ]] || return 0
   if grep -qE "^${key}=" "$env_file"; then
+    local current
+    current="$(grep -E "^${key}=" "$env_file" | head -1 | cut -d= -f2- || true)"
+    if [[ -z "$current" && -n "$value" ]]; then
+      local tmp
+      tmp="$(mktemp)"
+      awk -v k="$key" -v v="$value" 'BEGIN{FS=OFS="="} $1==k{$0=k"="v} {print}' "$env_file" > "$tmp"
+      mv "$tmp" "$env_file"
+      log "Filled empty ${key} in .env.prod"
+    fi
     return 0
   fi
   printf '\n%s=%s\n' "$key" "$value" >> "$env_file"
