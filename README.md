@@ -101,16 +101,38 @@ API: `GET /api/barcodes/labels` ، `POST /api/products/{id}/barcode`
 
 من الواجهة: **الإعدادات → النسخ الاحتياطي → وجهات النسخ الاحتياطي**
 
-- **Google Drive**: ارفع JSON لحساب الخدمة + Folder ID، ثم «اختبار الاتصال».
+#### Google Drive (OAuth + rclone) — إعداد لمرة واحدة على الخادم
+
+1. في [Google Cloud Console](https://console.cloud.google.com/) أنشئ مشروعاً → فعّل **Google Drive API**.
+2. **APIs & Services → Credentials → Create Credentials → OAuth client ID**  
+   النوع: **Web application**.
+3. أضف Authorized redirect URI بالضبط:
+   ```
+   https://synaacc.cloud/api/backups/destinations/google-drive/callback
+   ```
+4. انسخ Client ID و Client Secret إلى `.env.prod` على الـ VPS:
+   ```
+   GOOGLE_DRIVE_OAUTH_CLIENT_ID=...
+   GOOGLE_DRIVE_OAUTH_CLIENT_SECRET=...
+   GOOGLE_DRIVE_OAUTH_REDIRECT_URI=https://synaacc.cloud/api/backups/destinations/google-drive/callback
+   ```
+5. أعد تشغيل الـ backend:  
+   `docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d backend`
+6. من الواجهة (admin): **ربط Google Drive** → الموافقة في Google → يُنشأ مجلد «ساينا باك اب» تلقائياً → **اختبار الاتصال**.
+
 - **Telegram**: Bot Token + Chat ID، ثم «اختبار الإرسال».
 
-الأسرار تُحفظ مشفّرة في جدول `settings` (Laravel Crypt) ولا تُعاد للواجهة بعد الحفظ.  
-الأمر المجدول `syna:backup` يقرأ الإعدادات المحفوظة أولاً، ثم يرجع لمتغيرات البيئة إن وُجدت:
+رمز OAuth يُحفظ مشفّراً في جدول `settings` ولا يُعاد للواجهة.  
+الأمر المجدول `syna:backup` يرفع عبر rclone عند اكتمال الربط.
+
+متغيرات البيئة (مرة واحدة على الخادم):
 
 ```
-GOOGLE_DRIVE_CREDENTIALS_JSON / GOOGLE_DRIVE_FOLDER_ID
+GOOGLE_DRIVE_OAUTH_CLIENT_ID / GOOGLE_DRIVE_OAUTH_CLIENT_SECRET / GOOGLE_DRIVE_OAUTH_REDIRECT_URI
 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID
 ```
+
+(Legacy اختياري: `GOOGLE_DRIVE_CREDENTIALS_JSON` + `GOOGLE_DRIVE_FOLDER_ID` لحساب خدمة قديم.)
 
 المسار داخل الحاوية: `/var/www/html/storage/app/backups`  
 المتغير: `BACKUP_PATH`

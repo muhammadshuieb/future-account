@@ -19,6 +19,31 @@ fi
 
 log() { printf '==> %s\n' "$*"; }
 
+# Append KEY=VALUE to .env.prod only when KEY is missing (never overwrite secrets).
+ensure_env_prod_key() {
+  local key="$1"
+  local value="$2"
+  local env_file="$PROJECT_ROOT/.env.prod"
+  [[ -f "$env_file" ]] || return 0
+  if grep -qE "^${key}=" "$env_file"; then
+    return 0
+  fi
+  printf '\n%s=%s\n' "$key" "$value" >> "$env_file"
+  log "Added missing ${key} to .env.prod"
+}
+
+ensure_google_drive_oauth_placeholders() {
+  [[ "$DEPLOY_ENV" == "prod" && -f "$PROJECT_ROOT/.env.prod" ]] || return 0
+  local app_url redirect
+  app_url="$(grep -E '^APP_URL=' "$PROJECT_ROOT/.env.prod" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)"
+  app_url="${app_url:-https://synaacc.cloud}"
+  app_url="${app_url%/}"
+  redirect="${app_url}/api/backups/destinations/google-drive/callback"
+  ensure_env_prod_key "GOOGLE_DRIVE_OAUTH_CLIENT_ID" ""
+  ensure_env_prod_key "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET" ""
+  ensure_env_prod_key "GOOGLE_DRIVE_OAUTH_REDIRECT_URI" "$redirect"
+}
+
 log "Future Account deploy (env=$DEPLOY_ENV, branch=$BRANCH)"
 
 if [[ "${DEPLOY_SKIP_BACKUP_REMINDER:-0}" != "1" ]]; then
@@ -33,6 +58,9 @@ log "Pulling latest from origin/$BRANCH..."
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
+
+log "Ensuring Google Drive OAuth env placeholders..."
+ensure_google_drive_oauth_placeholders
 
 log "Building containers..."
 "${COMPOSE[@]}" build

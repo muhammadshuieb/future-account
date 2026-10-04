@@ -595,7 +595,7 @@
     "connectGoogleDrive": "Google Drive bağla",
     "driveConnected": "Google Drive bağlı",
     "driveAccountLinked": "Google hesabı bağlandı",
-    "driveOAuthConnected": "Google Drive bağlandı. Klasör linkini yapıştırıp kaydedin.",
+    "driveOAuthConnected": "Google Drive bağlandı ve «ساينا باك اب» klasörü hazır. Bağlantıyı şimdi test edebilirsiniz.",
     "driveOAuthFailed": "Google Drive bağlantısı başarısız",
     "driveOAuthNotConfigured": "Sunucuda OAuth yapılandırılmamış. .env.prod içine GOOGLE_DRIVE_OAUTH_CLIENT_ID ve GOOGLE_DRIVE_OAUTH_CLIENT_SECRET ekleyin.",
     "driveFolderUrl": "Google Drive klasör linki",

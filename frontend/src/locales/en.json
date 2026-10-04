@@ -601,7 +601,7 @@
     "connectGoogleDrive": "Connect Google Drive",
     "driveConnected": "Google Drive connected",
     "driveAccountLinked": "Google account linked",
-    "driveOAuthConnected": "Google Drive linked. Paste the folder URL and save.",
+    "driveOAuthConnected": "Google Drive linked and folder «ساينا باك اب» is ready. You can test the connection now.",
     "driveOAuthFailed": "Google Drive linking failed",
     "driveOAuthNotConfigured": "OAuth is not configured on the server. Set GOOGLE_DRIVE_OAUTH_CLIENT_ID and GOOGLE_DRIVE_OAUTH_CLIENT_SECRET in .env.prod once.",
     "driveFolderUrl": "Google Drive folder link",

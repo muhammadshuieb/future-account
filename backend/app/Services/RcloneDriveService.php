@@ -99,11 +99,18 @@ class RcloneDriveService
         ];
 
         $tokenJson = json_encode($tokenForRclone, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $clientId = (string) (env('GOOGLE_DRIVE_OAUTH_CLIENT_ID') ?: '');
+        $clientSecret = (string) (env('GOOGLE_DRIVE_OAUTH_CLIENT_SECRET') ?: '');
         $ini = "[{$this->remoteSection()}]\n"
             ."type = drive\n"
             ."scope = drive.file\n"
             ."token = {$tokenJson}\n"
             ."root_folder_id = {$folderId}\n";
+        // Must match the OAuth client that issued the token, or rclone refresh fails.
+        if ($clientId !== '' && $clientSecret !== '') {
+            $ini .= "client_id = {$clientId}\n"
+                ."client_secret = {$clientSecret}\n";
+        }
 
         $path = storage_path('app/rclone-'.bin2hex(random_bytes(8)).'.conf');
         file_put_contents($path, $ini);
