@@ -1,0 +1,39 @@
+name: Remote repair purchase returns
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-and-repair-purchase-return-credit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy backend + repair unsettled purchase-return credit
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            echo "=== BEFORE HEAD ==="
+            git rev-parse --short HEAD || true
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            echo "HEAD=$(git rev-parse --short HEAD)"
+            git merge-base --is-ancestor b53561e HEAD && echo "YES b53561e is present" || echo "NO b53561e missing"
+            echo "=== recreate backend ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod up -d --force-recreate --no-deps backend
+            sleep 8
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod ps
+            echo "=== migrate ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan migrate --force
+            echo "=== DRY RUN purchase returns ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-purchase-return-credit --dry-run
+            echo "=== APPLY purchase returns ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-purchase-return-credit
+            echo "=== VERIFY open purchase invoices after repair ==="
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='$rets=\App\Models\PurchaseReturn::query()->where("status","posted")->orderBy("id")->get(["id","return_number","supplier_id","total","applied_amount","refund_amount","purchase_invoice_id"]); foreach($rets as $r){ $open=round((float)$r->total-(float)$r->applied_amount-(float)$r->refund_amount,2); echo "PR#{$r->id} {$r->return_number} total={$r->total} applied={$r->applied_amount} refund={$r->refund_amount} open={$open} inv={$r->purchase_invoice_id}".PHP_EOL; $sup=\App\Models\Supplier::find($r->supplier_id); if($sup){ $invs=\App\Models\PurchaseInvoice::query()->where("supplier_id",$sup->id)->where("status","posted")->orderBy("id")->get(["id","invoice_number","total","paid_amount"]); foreach($invs as $i){ $rem=round((float)$i->total-(float)$i->paid_amount,2); if($rem>0.001 || true){ echo "  PI#{$i->id} {$i->invoice_number} total={$i->total} paid={$i->paid_amount} remaining={$rem}".PHP_EOL; } } $bal=app(\App\Services\PurchaseService::class)->supplierBalance($sup); echo "  supplier={$sup->name} balance={$bal}".PHP_EOL; } }'
