@@ -28,4 +28,4 @@ jobs:
             echo "=== app status ==="
             docker exec future_account_api php -r 'require "vendor/autoload.php"; $app=require "bootstrap/app.php"; $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap(); $st=app(App\Services\BackupDistributionService::class)->googleDriveStatus(); echo "oauth_available=".(!empty($st["oauth_available"])?"1":"0")." oauth_connected=".(!empty($st["oauth_connected"])?"1":"0")." configured=".(!empty($st["configured"])?"1":"0")." rclone_available=".(!empty($st["rclone_available"])?"1":"0")." method=".($st["method"]??"null").PHP_EOL; echo "redirect_uri=".app(App\Services\GoogleDriveOAuthService::class)->redirectUri().PHP_EOL;'
             echo "=== rclone ==="
-            docker exec future_account_api rclone version | head -1
+            docker exec future_account_api sh -c 'rclone version 2>/dev/null | head -1 || true'
