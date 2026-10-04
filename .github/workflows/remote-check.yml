@@ -20,40 +20,24 @@ jobs:
             cd /opt/future-account
             echo "HEAD=$(git rev-parse --short HEAD)"
             echo "=== .env.prod Google keys ==="
-            python3 - <<'PY'
-            from pathlib import Path
-            keys = [
-              "GOOGLE_DRIVE_OAUTH_CLIENT_ID",
-              "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET",
-              "GOOGLE_DRIVE_OAUTH_REDIRECT_URI",
-              "FRONTEND_URL",
-              "APP_URL",
-            ]
-            vals = {}
-            for line in Path(".env.prod").read_text(errors="replace").splitlines():
-              if not line or line.lstrip().startswith("#") or "=" not in line:
+            for k in GOOGLE_DRIVE_OAUTH_CLIENT_ID GOOGLE_DRIVE_OAUTH_CLIENT_SECRET GOOGLE_DRIVE_OAUTH_REDIRECT_URI FRONTEND_URL APP_URL; do
+              line=$(grep -E "^${k}=" .env.prod | head -1 || true)
+              if [ -z "$line" ]; then
+                echo "${k}=MISSING"
                 continue
-              k, v = line.split("=", 1)
-              vals[k.strip()] = v.strip().strip('"').strip("'")
-            for k in keys:
-              v = vals.get(k)
-              if v is None:
-                print(f"{k}=MISSING")
-              elif v == "":
-                print(f"{k}=EMPTY")
-              elif k in ("FRONTEND_URL", "APP_URL", "GOOGLE_DRIVE_OAUTH_REDIRECT_URI"):
-                print(f"{k}={v}")
-              else:
-                print(f"{k}=SET(len={len(v)})")
-            PY
-            echo "=== container status ==="
-            docker exec future_account_api php artisan tinker --execute='
-            $st=app(App\Services\BackupDistributionService::class)->googleDriveStatus();
-            echo "oauth_available=".(($st["oauth_available"]??false)?"1":"0");
-            echo " oauth_connected=".(($st["oauth_connected"]??false)?"1":"0");
-            echo " configured=".(($st["configured"]??false)?"1":"0");
-            echo " rclone_available=".(($st["rclone_available"]??false)?"1":"0");
-            echo " method=".($st["method"]??"null")."\n";
-            echo "redirect_uri=".app(App\Services\GoogleDriveOAuthService::class)->redirectUri()."\n";
-            '
-            docker exec future_account_api sh -c 'command -v rclone; rclone version 2>/dev/null | head -1'
+              fi
+              val="${line#*=}"
+              val="${val%\"}"
+              val="${val#\"}"
+              if [ -z "$val" ]; then
+                echo "${k}=EMPTY"
+              elif [ "$k" = "GOOGLE_DRIVE_OAUTH_CLIENT_ID" ] || [ "$k" = "GOOGLE_DRIVE_OAUTH_CLIENT_SECRET" ]; then
+                echo "${k}=SET(len=${#val})"
+              else
+                echo "${k}=${val}"
+              fi
+            done
+            echo "=== app status ==="
+            docker exec future_account_api php artisan tinker --execute='$st=app(App\Services\BackupDistributionService::class)->googleDriveStatus(); echo "oauth_available=".(($st["oauth_available"]??false)?"1":"0")." oauth_connected=".(($st["oauth_connected"]??false)?"1":"0")." configured=".(($st["configured"]??false)?"1":"0")." rclone_available=".(($st["rclone_available"]??false)?"1":"0")." method=".($st["method"]??"null").PHP_EOL; echo "redirect_uri=".app(App\Services\GoogleDriveOAuthService::class)->redirectUri().PHP_EOL;'
+            echo "=== rclone ==="
+            docker exec future_account_api sh -c 'command -v rclone || echo rclone_MISSING; rclone version 2>/dev/null | head -1 || true'
