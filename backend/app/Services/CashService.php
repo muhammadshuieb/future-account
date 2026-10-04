@@ -10,6 +10,7 @@ use App\Models\CashTransfer;
 use App\Models\CurrencyExchange;
 use App\Models\JournalDetail;
 use App\Models\Receipt;
+use App\Models\SalesReturn;
 use App\Models\Setting;
 use App\Models\SupplierPayment;
 use App\Models\User;
@@ -629,6 +630,21 @@ class CashService
                 $payment->payment_date?->toDateString()
             ));
 
+        $salesReturnRefunds = SalesReturn::query()
+            ->where('cash_box_id', $box->id)
+            ->where('status', 'posted')
+            ->where('refund_amount', '>', 0)
+            ->get()
+            ->sum(fn (SalesReturn $ret) => $this->boxMovementAmount(
+                $currency,
+                $ret->currency,
+                (float) $ret->refund_amount,
+                $ret->base_amount !== null && (float) $ret->total > 0
+                    ? round((float) $ret->base_amount * ((float) $ret->refund_amount / (float) $ret->total), 2)
+                    : null,
+                $ret->return_date?->toDateString()
+            ));
+
         $transfersIn = (float) CashTransfer::query()
             ->where('to_type', 'cash_box')
             ->where('to_id', $box->id)
@@ -655,6 +671,7 @@ class CashService
             (float) $box->opening_balance
             + (float) $receiptsIn
             - (float) $paymentsOut
+            - (float) $salesReturnRefunds
             + $transfersIn
             - $transfersOut
             + $exchangeNet,

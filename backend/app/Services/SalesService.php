@@ -13,8 +13,10 @@ use App\Models\SalesOrder;
 use App\Models\PrintInvoice;
 use App\Models\SalesQuote;
 use App\Models\SalesReturn;
+use App\Models\SalesReturnAllocation;
 use App\Models\SalesReturnLine;
 use App\Models\Setting;
+use App\Models\CashBox;
 use App\Models\StockMovement;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -654,8 +656,246 @@ class SalesService
 
             $ret->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
-            return $ret->fresh(['lines.product', 'customer']);
+            // AR credit is already in GL; allocate to open invoices (FIFO) and
+            // refund leftover cash when the source invoice was cash-settled.
+            $this->settleReturnCredit($ret->fresh(['customer', 'invoice']), $user);
+
+            return $ret->fresh(['lines.product', 'customer', 'allocations.invoice', 'cashBox']);
         });
+    }
+
+    /**
+     * Apply return credit to unpaid invoices (linked first, then FIFO by date),
+     * then cash-refund any leftover when the source sale was cash-paid.
+     *
+     * Idempotent: only settles total − applied_amount − refund_amount.
+     */
+    public function settleReturnCredit(SalesReturn $ret, User $user): SalesReturn
+    {
+        if ($ret->status !== 'posted') {
+            throw ValidationException::withMessages(['status' => ['يجب ترحيل المرتجع قبل تسوية رصيده.']]);
+        }
+
+        return DB::transaction(function () use ($ret, $user) {
+            $ret = SalesReturn::query()->lockForUpdate()->findOrFail($ret->id);
+            $creditLeft = $ret->unallocatedAmount();
+            if ($creditLeft <= 0.001) {
+                return $ret->fresh(['lines.product', 'customer', 'allocations.invoice', 'cashBox']);
+            }
+
+            $applied = 0.0;
+            $invoiceIds = [];
+
+            if ($ret->sales_invoice_id) {
+                $linked = SalesInvoice::query()->lockForUpdate()->find($ret->sales_invoice_id);
+                if ($linked && (int) $linked->customer_id === (int) $ret->customer_id && $linked->status === 'posted') {
+                    $slice = $this->applyReturnCreditToInvoice($ret, $linked, $creditLeft);
+                    if ($slice > 0) {
+                        $applied += $slice;
+                        $creditLeft = round($creditLeft - $slice, 2);
+                        $invoiceIds[] = (int) $linked->id;
+                    }
+                }
+            }
+
+            if ($creditLeft > 0.001) {
+                $open = SalesInvoice::query()
+                    ->where('customer_id', $ret->customer_id)
+                    ->where('status', 'posted')
+                    ->whereRaw('(total - paid_amount) > 0.001')
+                    ->when(
+                        $ret->currency,
+                        fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [
+                            $this->currencies->baseCurrency(),
+                            strtoupper((string) $ret->currency),
+                        ])
+                    )
+                    ->when($invoiceIds !== [], fn ($q) => $q->whereNotIn('id', $invoiceIds))
+                    ->orderBy('invoice_date')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($open as $invoice) {
+                    if ($creditLeft <= 0.001) {
+                        break;
+                    }
+                    $slice = $this->applyReturnCreditToInvoice($ret, $invoice, $creditLeft);
+                    if ($slice <= 0) {
+                        continue;
+                    }
+                    $applied += $slice;
+                    $creditLeft = round($creditLeft - $slice, 2);
+                }
+            }
+
+            $refunded = 0.0;
+            if ($creditLeft > 0.001 && $this->returnEligibleForCashRefund($ret)) {
+                $refunded = $this->refundReturnCredit($ret, $creditLeft, $user);
+                $creditLeft = round($creditLeft - $refunded, 2);
+            }
+
+            if ($applied > 0 || $refunded > 0) {
+                $ret->update([
+                    'applied_amount' => round((float) $ret->applied_amount + $applied, 2),
+                    'refund_amount' => round((float) $ret->refund_amount + $refunded, 2),
+                ]);
+            }
+
+            return $ret->fresh(['lines.product', 'customer', 'allocations.invoice', 'cashBox']);
+        });
+    }
+
+    /**
+     * Apply up to $creditLeft (return currency) against one invoice's remaining.
+     * Returns the amount consumed from the return credit (return currency).
+     */
+    protected function applyReturnCreditToInvoice(SalesReturn $ret, SalesInvoice $invoice, float $creditLeft): float
+    {
+        $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0.001 || $creditLeft <= 0.001) {
+            return 0.0;
+        }
+
+        $applyOnInvoice = min($remaining, $this->returnCreditInInvoiceCurrency($ret, $invoice, $creditLeft));
+        if ($applyOnInvoice <= 0.001) {
+            return 0.0;
+        }
+
+        $invoice->increment('paid_amount', $applyOnInvoice);
+
+        SalesReturnAllocation::query()->create([
+            'sales_return_id' => $ret->id,
+            'sales_invoice_id' => $invoice->id,
+            'amount' => $applyOnInvoice,
+        ]);
+
+        return $this->invoiceAmountInReturnCurrency($ret, $invoice, $applyOnInvoice);
+    }
+
+    protected function returnCreditInInvoiceCurrency(SalesReturn $ret, SalesInvoice $invoice, float $creditInReturnCurrency): float
+    {
+        $retCurrency = strtoupper((string) ($ret->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($retCurrency === $invCurrency) {
+            return round($creditInReturnCurrency, 2);
+        }
+
+        $creditBase = round($creditInReturnCurrency * (float) ($ret->exchange_rate ?: 1), 2);
+        $invRate = (float) ($invoice->exchange_rate ?: 1);
+
+        return $invRate > 0 ? round($creditBase / $invRate, 2) : $creditBase;
+    }
+
+    protected function invoiceAmountInReturnCurrency(SalesReturn $ret, SalesInvoice $invoice, float $amountOnInvoice): float
+    {
+        $retCurrency = strtoupper((string) ($ret->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($retCurrency === $invCurrency) {
+            return round($amountOnInvoice, 2);
+        }
+
+        $invBase = round($amountOnInvoice * (float) ($invoice->exchange_rate ?: 1), 2);
+        $retRate = (float) ($ret->exchange_rate ?: 1);
+
+        return $retRate > 0 ? round($invBase / $retRate, 2) : $invBase;
+    }
+
+    /**
+     * Cash refund is only auto-posted when the linked source invoice had been
+     * collected (cash/partial/receipts). Unpaid credit returns stay as partner credit.
+     */
+    protected function returnEligibleForCashRefund(SalesReturn $ret): bool
+    {
+        if (! $ret->sales_invoice_id) {
+            return false;
+        }
+
+        $invoice = SalesInvoice::query()->with('receipts')->find($ret->sales_invoice_id);
+        if (! $invoice || (int) $invoice->customer_id !== (int) $ret->customer_id) {
+            return false;
+        }
+
+        if (in_array((string) $invoice->payment_type, ['cash', 'partial'], true)) {
+            return true;
+        }
+
+        if ((float) $invoice->paid_amount > 0.001) {
+            return true;
+        }
+
+        return $invoice->receipts->where('status', 'posted')->isNotEmpty();
+    }
+
+    /**
+     * Post cash outflow for leftover return credit: Dr AR / Cr Cash.
+     * Returns the refunded amount in return currency.
+     */
+    protected function refundReturnCredit(SalesReturn $ret, float $amount, User $user): float
+    {
+        $amount = round($amount, 2);
+        if ($amount <= 0.001) {
+            return 0.0;
+        }
+
+        $cashBoxId = $ret->cash_box_id ? (int) $ret->cash_box_id : null;
+        if (! $cashBoxId && $ret->sales_invoice_id) {
+            $invoice = SalesInvoice::query()->with(['receipts' => fn ($q) => $q->where('status', 'posted')])->find($ret->sales_invoice_id);
+            $cashBoxId = $invoice?->cash_box_id ? (int) $invoice->cash_box_id : null;
+            if (! $cashBoxId) {
+                $fromReceipt = $invoice?->receipts->first(fn ($r) => $r->cash_box_id);
+                $cashBoxId = $fromReceipt?->cash_box_id ? (int) $fromReceipt->cash_box_id : null;
+            }
+        }
+        if (! $cashBoxId) {
+            $cashBoxId = $this->cash->resolveDefaultCashBoxId(null, $ret->currency);
+        }
+        if (! $cashBoxId) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => ['تعذّر تحديد صندوق لإرجاع نقد المرتجع بعملة '.$ret->currency.'.'],
+            ]);
+        }
+
+        $this->cash->assertCashBoxCurrency($cashBoxId, $ret->currency);
+        $box = CashBox::query()->findOrFail($cashBoxId);
+        $cashAccount = $this->cash->resolveCashBoxAccount($box);
+
+        $customer = $ret->customer ?? Customer::query()->findOrFail($ret->customer_id);
+        $ar = $customer->account_id
+            ? Account::query()->findOrFail($customer->account_id)
+            : Account::query()->where('code', '1103')->firstOrFail();
+
+        $rate = (float) ($ret->exchange_rate ?: 1);
+        if ($rate <= 0) {
+            $rate = 1.0;
+        }
+        $refundBase = (float) $ret->total > 0 && $ret->base_amount !== null
+            ? round((float) $ret->base_amount * ($amount / (float) $ret->total), 2)
+            : round($amount * $rate, 2);
+
+        if ($refundBase <= 0) {
+            return 0.0;
+        }
+
+        $entry = $this->journals->create([
+            'entry_date' => $ret->return_date->toDateString(),
+            'branch_id' => $this->resolveSalesBranchId($customer->branch_id, $ret->warehouse_id, $customer->branch_id),
+            'description' => 'استرداد نقدي لمرتجع مبيعات '.$ret->return_number,
+            'reference' => $ret->return_number.'-RF',
+            'status' => 'posted',
+        ], [
+            ['account_id' => $ar->id, 'debit' => $refundBase, 'credit' => 0, 'memo' => 'استرداد مرتجع '.$ret->return_number],
+            ['account_id' => $cashAccount->id, 'debit' => 0, 'credit' => $refundBase, 'memo' => 'صرف نقد مرتجع '.$ret->return_number],
+        ], $user);
+
+        $ret->update([
+            'cash_box_id' => $cashBoxId,
+            'refund_journal_entry_id' => $entry->id,
+        ]);
+
+        return $amount;
     }
 
     protected function returnedGoodsCost(SalesReturn $ret): float
@@ -1305,7 +1545,12 @@ class SalesService
                 'document_amount' => (float) $ret->total,
                 'notes' => $ret->notes ?? null,
                 'debit' => 0.0,
-                'credit' => $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate),
+                // Net of cash refund: refund JE already cleared that AR credit.
+                'credit' => round(
+                    $this->baseValue($ret->base_amount, $ret->total, $ret->exchange_rate)
+                    - $this->returnRefundBaseAmount($ret),
+                    2
+                ),
                 'invoice' => $this->statementReturnDetail($ret),
             ];
         }
@@ -1443,6 +1688,21 @@ class SalesService
      *
      * @return array<string, mixed>
      */
+    protected function returnRefundBaseAmount(SalesReturn $ret): float
+    {
+        $refund = round((float) ($ret->refund_amount ?? 0), 2);
+        if ($refund <= 0) {
+            return 0.0;
+        }
+
+        $total = (float) $ret->total;
+        if ($total > 0 && $ret->base_amount !== null && (float) $ret->base_amount > 0) {
+            return round((float) $ret->base_amount * ($refund / $total), 2);
+        }
+
+        return round($refund * (float) ($ret->exchange_rate ?: 1), 2);
+    }
+
     protected function statementReturnDetail(SalesReturn $ret): array
     {
         return [
@@ -1452,6 +1712,8 @@ class SalesService
             'tax_amount' => 0.0,
             'total' => (float) $ret->total,
             'paid_amount' => null,
+            'applied_amount' => (float) ($ret->applied_amount ?? 0),
+            'refund_amount' => (float) ($ret->refund_amount ?? 0),
             'currency' => $ret->currency,
             'notes' => $ret->notes ?? null,
             'lines' => $ret->lines->map(static function (SalesReturnLine $line): array {

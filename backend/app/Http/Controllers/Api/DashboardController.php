@@ -480,9 +480,20 @@ class DashboardController extends Controller
 
     protected function returnAmount(SalesReturn|PurchaseReturn $ret, ?string $currencyFilter): float
     {
-        $total = round((float) $ret->total, 2);
+        // Only the unallocated portion reduces dashboard AR/AP on top of invoice remaining.
+        // Allocated return credit already lowered invoice paid_amount; refunded credit left via cash JE.
+        $gross = round((float) $ret->total, 2);
+        $settled = 0.0;
+        if ($ret instanceof SalesReturn) {
+            $settled = round((float) ($ret->applied_amount ?? 0) + (float) ($ret->refund_amount ?? 0), 2);
+        }
+        $total = round(max(0, $gross - $settled), 2);
 
-        if ($currencyFilter !== null || $total <= 0) {
+        if ($total <= 0) {
+            return 0.0;
+        }
+
+        if ($currencyFilter !== null) {
             return $total;
         }
 
@@ -491,8 +502,8 @@ class DashboardController extends Controller
             return $total;
         }
 
-        if ($ret->base_amount !== null && (float) $ret->base_amount > 0) {
-            return round((float) $ret->base_amount, 2);
+        if ($ret->base_amount !== null && (float) $ret->base_amount > 0 && $gross > 0) {
+            return round((float) $ret->base_amount * ($total / $gross), 2);
         }
 
         return round($total * (float) ($ret->exchange_rate ?: 1), 2);

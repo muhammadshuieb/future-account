@@ -324,7 +324,10 @@ class AccountingIntegrityAuditTest extends TestCase
         }
 
         $returnRow = collect($statement['rows'])->firstWhere('type', 'return');
-        $this->assertNull($returnRow['invoice']);
+        $this->assertIsArray($returnRow['invoice']);
+        $this->assertEqualsWithDelta(500, (float) $returnRow['invoice']['total'], 0.01);
+        $this->assertEqualsWithDelta(500, (float) $returnRow['invoice']['applied_amount'], 0.01);
+        $this->assertNotEmpty($returnRow['invoice']['lines']);
     }
 
     public function test_supplier_statement_is_reported_in_base_currency_and_includes_returns(): void
@@ -384,7 +387,9 @@ class AccountingIntegrityAuditTest extends TestCase
         }
 
         $returnRow = collect($statement['rows'])->firstWhere('type', 'return');
-        $this->assertNull($returnRow['invoice']);
+        $this->assertIsArray($returnRow['invoice']);
+        $this->assertEqualsWithDelta(200, (float) $returnRow['invoice']['total'], 0.01);
+        $this->assertNotEmpty($returnRow['invoice']['lines']);
     }
 
     public function test_tax_report_converts_document_tax_to_base_currency(): void
