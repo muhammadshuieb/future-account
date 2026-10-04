@@ -278,3 +278,87 @@ Artisan::command('syna:repair-purchase-return-credit {--supplier= : Supplier id 
 
     return 0;
 })->purpose('Allocate/refund posted purchase-return credit that never settled invoices or cash');
+
+Artisan::command('syna:repair-supplier-payment-allocation {--supplier= : Supplier id or name fragment} {--dry-run : Preview without writing}', function () {
+    $purchases = app(\App\Services\PurchaseService::class);
+    $dry = (bool) $this->option('dry-run');
+    $supplierOpt = $this->option('supplier');
+
+    $query = \App\Models\SupplierPayment::query()
+        ->with(['supplier', 'invoice'])
+        ->where('status', 'posted')
+        ->whereRaw('(amount - COALESCE(applied_amount, 0)) > 0.001');
+
+    if ($supplierOpt !== null && $supplierOpt !== '') {
+        if (ctype_digit((string) $supplierOpt)) {
+            $query->where('supplier_id', (int) $supplierOpt);
+        } else {
+            $query->whereHas('supplier', fn ($q) => $q->where('name', 'like', '%'.$supplierOpt.'%'));
+        }
+    }
+
+    $payments = $query->orderBy('id')->get();
+    if ($payments->isEmpty()) {
+        $this->info('No posted supplier payments with unallocated amount.');
+
+        return 0;
+    }
+
+    $rows = [];
+    foreach ($payments as $pay) {
+        $before = $pay->unallocatedAmount();
+        if ($dry) {
+            $rows[] = [$pay->id, $pay->payment_number, $pay->supplier?->name, $before, (float) $pay->applied_amount, 'dry-run'];
+            continue;
+        }
+        $fresh = $purchases->settlePaymentAllocation($pay);
+        $rows[] = [$pay->id, $pay->payment_number, $pay->supplier?->name, $before, (float) $fresh->applied_amount, 'settled'];
+    }
+
+    $this->info($dry ? 'Dry-run: unallocated supplier payments' : 'Repaired supplier-payment invoice allocation');
+    $this->table(['id', 'number', 'supplier', 'was_open', 'applied', 'action'], $rows);
+
+    return 0;
+})->purpose('FIFO-allocate posted supplier payments that never raised invoice paid_amount');
+
+Artisan::command('syna:repair-receipt-allocation {--customer= : Customer id or name fragment} {--dry-run : Preview without writing}', function () {
+    $sales = app(\App\Services\SalesService::class);
+    $dry = (bool) $this->option('dry-run');
+    $customerOpt = $this->option('customer');
+
+    $query = \App\Models\Receipt::query()
+        ->with(['customer', 'invoice'])
+        ->where('status', 'posted')
+        ->whereRaw('(amount - COALESCE(applied_amount, 0)) > 0.001');
+
+    if ($customerOpt !== null && $customerOpt !== '') {
+        if (ctype_digit((string) $customerOpt)) {
+            $query->where('customer_id', (int) $customerOpt);
+        } else {
+            $query->whereHas('customer', fn ($q) => $q->where('name', 'like', '%'.$customerOpt.'%'));
+        }
+    }
+
+    $receipts = $query->orderBy('id')->get();
+    if ($receipts->isEmpty()) {
+        $this->info('No posted receipts with unallocated amount.');
+
+        return 0;
+    }
+
+    $rows = [];
+    foreach ($receipts as $rc) {
+        $before = $rc->unallocatedAmount();
+        if ($dry) {
+            $rows[] = [$rc->id, $rc->receipt_number, $rc->customer?->name, $before, (float) $rc->applied_amount, 'dry-run'];
+            continue;
+        }
+        $fresh = $sales->settleReceiptAllocation($rc);
+        $rows[] = [$rc->id, $rc->receipt_number, $rc->customer?->name, $before, (float) $fresh->applied_amount, 'settled'];
+    }
+
+    $this->info($dry ? 'Dry-run: unallocated receipts' : 'Repaired receipt invoice allocation');
+    $this->table(['id', 'number', 'customer', 'was_open', 'applied', 'action'], $rows);
+
+    return 0;
+})->purpose('FIFO-allocate posted receipts that never raised invoice paid_amount');

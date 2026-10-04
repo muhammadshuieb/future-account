@@ -446,9 +446,11 @@ class DashboardController extends Controller
         ?int $branchId,
         ?string $currencyFilter
     ): float {
+        // Only the portion not yet applied to invoices still offsets dashboard AR/AP
+        // on top of invoice remaining (applied portion already raised paid_amount).
         return (float) $model::query()
             ->where('status', 'posted')
-            ->whereNull($invoiceForeignKey)
+            ->whereRaw('(amount - COALESCE(applied_amount, 0)) > 0.001')
             ->when(
                 $branchId !== null,
                 fn ($q) => $q->whereHas($partnerRelation, fn ($p) => $p->where('branch_id', $branchId))
@@ -460,7 +462,9 @@ class DashboardController extends Controller
 
     protected function settlementAmount(Receipt|SupplierPayment $doc, ?string $currencyFilter): float
     {
-        $total = round((float) $doc->amount, 2);
+        $gross = round((float) $doc->amount, 2);
+        $applied = round((float) ($doc->applied_amount ?? 0), 2);
+        $total = round(max(0, $gross - $applied), 2);
 
         if ($currencyFilter !== null || $total <= 0) {
             return $total;
@@ -471,8 +475,8 @@ class DashboardController extends Controller
             return $total;
         }
 
-        if ($doc->base_amount !== null && (float) $doc->base_amount > 0) {
-            return round((float) $doc->base_amount, 2);
+        if ($doc->base_amount !== null && (float) $doc->base_amount > 0 && $gross > 0) {
+            return round((float) $doc->base_amount * ($total / $gross), 2);
         }
 
         return round($total * (float) ($doc->exchange_rate ?: 1), 2);

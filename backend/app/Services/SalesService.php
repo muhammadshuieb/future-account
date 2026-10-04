@@ -12,6 +12,7 @@ use App\Models\SalesInvoiceLine;
 use App\Models\SalesOrder;
 use App\Models\PrintInvoice;
 use App\Models\SalesQuote;
+use App\Models\ReceiptAllocation;
 use App\Models\SalesReturn;
 use App\Models\SalesReturnAllocation;
 use App\Models\SalesReturnLine;
@@ -1118,15 +1119,143 @@ class SalesService
                 ['account_id' => $ar->id, 'debit' => 0, 'credit' => $baseAmount],
             ], $user);
 
-            if ($receipt->sales_invoice_id) {
-                $invoice = SalesInvoice::query()->findOrFail($receipt->sales_invoice_id);
-                $invoice->increment('paid_amount', $this->receiptAmountInInvoiceCurrency($receipt, $invoice));
-            }
-
             $receipt->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
-            return $receipt->fresh(['customer', 'invoice']);
+            // Apply to linked invoice, or FIFO across open invoices when unallocated.
+            $this->settleReceiptAllocation($receipt->fresh(['customer', 'invoice']));
+
+            return $receipt->fresh(['customer', 'invoice', 'allocations.invoice']);
         });
+    }
+
+    /**
+     * Apply posted receipt amount to open sales invoices.
+     * Linked invoice first (if set), otherwise oldest open invoices same currency (FIFO).
+     * Idempotent via applied_amount.
+     */
+    public function settleReceiptAllocation(Receipt $receipt): Receipt
+    {
+        if ($receipt->status !== 'posted') {
+            throw ValidationException::withMessages(['status' => ['يجب ترحيل سند القبض قبل توزيعه على الفواتير.']]);
+        }
+
+        return DB::transaction(function () use ($receipt) {
+            $receipt = Receipt::query()->lockForUpdate()->findOrFail($receipt->id);
+            $left = $receipt->unallocatedAmount();
+            if ($left <= 0.001) {
+                return $receipt->fresh(['customer', 'invoice', 'allocations.invoice']);
+            }
+
+            $applied = 0.0;
+            $invoiceIds = [];
+
+            if ($receipt->sales_invoice_id) {
+                $linked = SalesInvoice::query()->lockForUpdate()->find($receipt->sales_invoice_id);
+                if ($linked && (int) $linked->customer_id === (int) $receipt->customer_id && $linked->status === 'posted') {
+                    $slice = $this->applyReceiptToInvoice($receipt, $linked, $left);
+                    if ($slice > 0) {
+                        $applied += $slice;
+                        $left = round($left - $slice, 2);
+                        $invoiceIds[] = (int) $linked->id;
+                    }
+                }
+            }
+
+            if ($left > 0.001) {
+                $open = SalesInvoice::query()
+                    ->where('customer_id', $receipt->customer_id)
+                    ->where('status', 'posted')
+                    ->whereRaw('(total - paid_amount) > 0.001')
+                    ->when(
+                        $receipt->currency,
+                        fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [
+                            $this->currencies->baseCurrency(),
+                            strtoupper((string) $receipt->currency),
+                        ])
+                    )
+                    ->when($invoiceIds !== [], fn ($q) => $q->whereNotIn('id', $invoiceIds))
+                    ->orderBy('invoice_date')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($open as $invoice) {
+                    if ($left <= 0.001) {
+                        break;
+                    }
+                    $slice = $this->applyReceiptToInvoice($receipt, $invoice, $left);
+                    if ($slice <= 0) {
+                        continue;
+                    }
+                    $applied += $slice;
+                    $left = round($left - $slice, 2);
+                    $invoiceIds[] = (int) $invoice->id;
+                }
+            }
+
+            if ($applied > 0) {
+                $receipt->update([
+                    'applied_amount' => round((float) $receipt->applied_amount + $applied, 2),
+                    'sales_invoice_id' => $receipt->sales_invoice_id
+                        ?: (count($invoiceIds) === 1 ? $invoiceIds[0] : null),
+                ]);
+            }
+
+            return $receipt->fresh(['customer', 'invoice', 'allocations.invoice']);
+        });
+    }
+
+    protected function applyReceiptToInvoice(Receipt $receipt, SalesInvoice $invoice, float $creditLeft): float
+    {
+        $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0.001 || $creditLeft <= 0.001) {
+            return 0.0;
+        }
+
+        $applyOnInvoice = min($remaining, $this->receiptCreditInInvoiceCurrency($receipt, $invoice, $creditLeft));
+        if ($applyOnInvoice <= 0.001) {
+            return 0.0;
+        }
+
+        $invoice->increment('paid_amount', $applyOnInvoice);
+
+        ReceiptAllocation::query()->create([
+            'receipt_id' => $receipt->id,
+            'sales_invoice_id' => $invoice->id,
+            'amount' => $applyOnInvoice,
+        ]);
+
+        return $this->invoiceAmountInReceiptCurrency($receipt, $invoice, $applyOnInvoice);
+    }
+
+    protected function receiptCreditInInvoiceCurrency(Receipt $receipt, SalesInvoice $invoice, float $creditInReceiptCurrency): float
+    {
+        $rcCurrency = strtoupper((string) ($receipt->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($rcCurrency === $invCurrency) {
+            return round($creditInReceiptCurrency, 2);
+        }
+
+        $creditBase = round($creditInReceiptCurrency * (float) ($receipt->exchange_rate ?: 1), 2);
+        $invRate = (float) ($invoice->exchange_rate ?: 1);
+
+        return $invRate > 0 ? round($creditBase / $invRate, 2) : $creditBase;
+    }
+
+    protected function invoiceAmountInReceiptCurrency(Receipt $receipt, SalesInvoice $invoice, float $amountOnInvoice): float
+    {
+        $rcCurrency = strtoupper((string) ($receipt->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($rcCurrency === $invCurrency) {
+            return round($amountOnInvoice, 2);
+        }
+
+        $invBase = round($amountOnInvoice * (float) ($invoice->exchange_rate ?: 1), 2);
+        $rcRate = (float) ($receipt->exchange_rate ?: 1);
+
+        return $rcRate > 0 ? round($invBase / $rcRate, 2) : $invBase;
     }
 
     protected function receiptAmountInInvoiceCurrency(Receipt $receipt, SalesInvoice $invoice): float

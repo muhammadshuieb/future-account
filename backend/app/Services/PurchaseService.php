@@ -17,6 +17,7 @@ use App\Models\Setting;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Models\SupplierPaymentAllocation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -1137,15 +1138,148 @@ class PurchaseService
                 ['account_id' => $creditAccount->id, 'debit' => 0, 'credit' => $baseAmount],
             ], $user);
 
-            if ($payment->purchase_invoice_id) {
-                $invoice = PurchaseInvoice::query()->findOrFail($payment->purchase_invoice_id);
-                $invoice->increment('paid_amount', $this->paymentAmountInInvoiceCurrency($payment, $invoice));
-            }
-
             $payment->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
-            return $payment->fresh(['supplier', 'invoice']);
+            // Apply to linked invoice, or FIFO across open invoices when unallocated.
+            $this->settlePaymentAllocation($payment->fresh(['supplier', 'invoice']));
+
+            return $payment->fresh(['supplier', 'invoice', 'allocations.invoice']);
         });
+    }
+
+    /**
+     * Apply posted supplier-payment amount to open purchase invoices.
+     * Linked invoice first (if set), otherwise oldest open invoices same currency (FIFO).
+     * Idempotent via applied_amount.
+     */
+    public function settlePaymentAllocation(SupplierPayment $payment): SupplierPayment
+    {
+        if ($payment->status !== 'posted') {
+            throw ValidationException::withMessages(['status' => ['يجب ترحيل سند الصرف قبل توزيعه على الفواتير.']]);
+        }
+
+        return DB::transaction(function () use ($payment) {
+            $payment = SupplierPayment::query()->lockForUpdate()->findOrFail($payment->id);
+            $left = $payment->unallocatedAmount();
+            if ($left <= 0.001) {
+                return $payment->fresh(['supplier', 'invoice', 'allocations.invoice']);
+            }
+
+            $applied = 0.0;
+            $invoiceIds = [];
+
+            if ($payment->purchase_invoice_id) {
+                $linked = PurchaseInvoice::query()->lockForUpdate()->find($payment->purchase_invoice_id);
+                if ($linked && (int) $linked->supplier_id === (int) $payment->supplier_id && $linked->status === 'posted') {
+                    $slice = $this->applyPaymentToInvoice($payment, $linked, $left);
+                    if ($slice > 0) {
+                        $applied += $slice;
+                        $left = round($left - $slice, 2);
+                        $invoiceIds[] = (int) $linked->id;
+                    }
+                }
+            }
+
+            if ($left > 0.001) {
+                $open = PurchaseInvoice::query()
+                    ->where('supplier_id', $payment->supplier_id)
+                    ->where('status', 'posted')
+                    ->whereRaw('(total - paid_amount) > 0.001')
+                    ->when(
+                        $payment->currency,
+                        fn ($q) => $q->whereRaw('UPPER(COALESCE(currency, ?)) = ?', [
+                            $this->currencies->baseCurrency(),
+                            strtoupper((string) $payment->currency),
+                        ])
+                    )
+                    ->when($invoiceIds !== [], fn ($q) => $q->whereNotIn('id', $invoiceIds))
+                    ->orderBy('invoice_date')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($open as $invoice) {
+                    if ($left <= 0.001) {
+                        break;
+                    }
+                    $slice = $this->applyPaymentToInvoice($payment, $invoice, $left);
+                    if ($slice <= 0) {
+                        continue;
+                    }
+                    $applied += $slice;
+                    $left = round($left - $slice, 2);
+                    $invoiceIds[] = (int) $invoice->id;
+                }
+            }
+
+            if ($applied > 0) {
+                $payment->update([
+                    'applied_amount' => round((float) $payment->applied_amount + $applied, 2),
+                    // Keep a single linked invoice when the whole payment landed on one bill.
+                    'purchase_invoice_id' => $payment->purchase_invoice_id
+                        ?: (count($invoiceIds) === 1 ? $invoiceIds[0] : null),
+                ]);
+            }
+
+            return $payment->fresh(['supplier', 'invoice', 'allocations.invoice']);
+        });
+    }
+
+    /**
+     * Apply up to $creditLeft (payment currency) against one invoice remaining.
+     * Returns amount consumed from the payment (payment currency).
+     */
+    protected function applyPaymentToInvoice(SupplierPayment $payment, PurchaseInvoice $invoice, float $creditLeft): float
+    {
+        $remaining = round((float) $invoice->total - (float) $invoice->paid_amount, 2);
+        if ($remaining <= 0.001 || $creditLeft <= 0.001) {
+            return 0.0;
+        }
+
+        $applyOnInvoice = min($remaining, $this->paymentCreditInInvoiceCurrency($payment, $invoice, $creditLeft));
+        if ($applyOnInvoice <= 0.001) {
+            return 0.0;
+        }
+
+        $invoice->increment('paid_amount', $applyOnInvoice);
+
+        SupplierPaymentAllocation::query()->create([
+            'supplier_payment_id' => $payment->id,
+            'purchase_invoice_id' => $invoice->id,
+            'amount' => $applyOnInvoice,
+        ]);
+
+        return $this->invoiceAmountInPaymentCurrency($payment, $invoice, $applyOnInvoice);
+    }
+
+    protected function paymentCreditInInvoiceCurrency(SupplierPayment $payment, PurchaseInvoice $invoice, float $creditInPaymentCurrency): float
+    {
+        $payCurrency = strtoupper((string) ($payment->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($payCurrency === $invCurrency) {
+            return round($creditInPaymentCurrency, 2);
+        }
+
+        $creditBase = round($creditInPaymentCurrency * (float) ($payment->exchange_rate ?: 1), 2);
+        $invRate = (float) ($invoice->exchange_rate ?: 1);
+
+        return $invRate > 0 ? round($creditBase / $invRate, 2) : $creditBase;
+    }
+
+    protected function invoiceAmountInPaymentCurrency(SupplierPayment $payment, PurchaseInvoice $invoice, float $amountOnInvoice): float
+    {
+        $payCurrency = strtoupper((string) ($payment->currency ?: $this->currencies->baseCurrency()));
+        $invCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+
+        if ($payCurrency === $invCurrency) {
+            return round($amountOnInvoice, 2);
+        }
+
+        $invBase = round($amountOnInvoice * (float) ($invoice->exchange_rate ?: 1), 2);
+        $payRate = (float) ($payment->exchange_rate ?: 1);
+
+        return $payRate > 0 ? round($invBase / $payRate, 2) : $invBase;
     }
 
     protected function paymentAmountInInvoiceCurrency(SupplierPayment $payment, PurchaseInvoice $invoice): float
