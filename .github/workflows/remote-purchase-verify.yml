@@ -1,0 +1,22 @@
+﻿name: Remote purchase verify
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify HIKVISION purchase return numbers
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            echo "HEAD=$(git rev-parse --short HEAD)"
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='$s=\App\Models\Supplier::query()->where("name","like","%HIKVISION%")->first(); if(!$s){echo "NOT_FOUND".PHP_EOL; return;} echo "supplier={$s->id} {$s->name}".PHP_EOL; $st=app(\App\Services\PurchaseService::class)->supplierStatement($s); echo "closing={$st["closing_balance"]}".PHP_EOL; foreach(\App\Models\PurchaseReturn::query()->where("supplier_id",$s->id)->with("allocations.invoice")->get() as $r){ echo "PR {$r->return_number} total={$r->total} applied={$r->applied_amount} refund={$r->refund_amount}".PHP_EOL; foreach($r->allocations as $a){ $i=$a->invoice; $rem=round((float)$i->total-(float)$i->paid_amount,2); echo "  alloc {$a->amount} -> {$i->invoice_number} paid={$i->paid_amount} rem={$rem}".PHP_EOL; } } foreach(\App\Models\PurchaseInvoice::query()->where("supplier_id",$s->id)->where("status","posted")->orderBy("id")->get() as $i){ $rem=round((float)$i->total-(float)$i->paid_amount,2); echo "PI {$i->invoice_number} type={$i->payment_type} total={$i->total} paid={$i->paid_amount} rem={$rem}".PHP_EOL; }'
