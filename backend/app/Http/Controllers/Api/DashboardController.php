@@ -483,10 +483,9 @@ class DashboardController extends Controller
         // Only the unallocated portion reduces dashboard AR/AP on top of invoice remaining.
         // Allocated return credit already lowered invoice paid_amount; refunded credit left via cash JE.
         $gross = round((float) $ret->total, 2);
-        $settled = 0.0;
-        if ($ret instanceof SalesReturn) {
-            $settled = round((float) ($ret->applied_amount ?? 0) + (float) ($ret->refund_amount ?? 0), 2);
-        }
+        // Allocated/refunded return credit already moved invoice paid_amount or cash;
+        // only the unallocated remainder still offsets dashboard AR/AP.
+        $settled = round((float) ($ret->applied_amount ?? 0) + (float) ($ret->refund_amount ?? 0), 2);
         $total = round(max(0, $gross - $settled), 2);
 
         if ($total <= 0) {

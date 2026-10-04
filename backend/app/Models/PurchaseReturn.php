@@ -11,7 +11,8 @@ class PurchaseReturn extends Model
     protected $fillable = [
         'return_number', 'return_date', 'supplier_id', 'purchase_invoice_id',
         'warehouse_id', 'status', 'currency', 'exchange_rate', 'base_amount',
-        'total', 'journal_entry_id', 'created_by',
+        'total', 'applied_amount', 'refund_amount', 'cash_box_id',
+        'journal_entry_id', 'refund_journal_entry_id', 'created_by',
     ];
 
     protected function casts(): array
@@ -19,6 +20,8 @@ class PurchaseReturn extends Model
         return [
             'return_date' => 'date',
             'total' => 'decimal:2',
+            'applied_amount' => 'decimal:2',
+            'refund_amount' => 'decimal:2',
             'exchange_rate' => 'decimal:8',
             'base_amount' => 'decimal:2',
         ];
@@ -27,6 +30,15 @@ class PurchaseReturn extends Model
     public function supplier(): BelongsTo { return $this->belongsTo(Supplier::class); }
     public function invoice(): BelongsTo { return $this->belongsTo(PurchaseInvoice::class, 'purchase_invoice_id'); }
     public function warehouse(): BelongsTo { return $this->belongsTo(Warehouse::class); }
+    public function cashBox(): BelongsTo { return $this->belongsTo(CashBox::class); }
     public function lines(): HasMany { return $this->hasMany(PurchaseReturnLine::class); }
+    public function allocations(): HasMany { return $this->hasMany(PurchaseReturnAllocation::class); }
     public function journalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class); }
+    public function refundJournalEntry(): BelongsTo { return $this->belongsTo(JournalEntry::class, 'refund_journal_entry_id'); }
+
+    /** Portion of return credit not yet applied to invoices or refunded in cash. */
+    public function unallocatedAmount(): float
+    {
+        return round(max(0, (float) $this->total - (float) $this->applied_amount - (float) $this->refund_amount), 2);
+    }
 }

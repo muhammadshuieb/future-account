@@ -389,6 +389,7 @@ class AccountingIntegrityAuditTest extends TestCase
         $returnRow = collect($statement['rows'])->firstWhere('type', 'return');
         $this->assertIsArray($returnRow['invoice']);
         $this->assertEqualsWithDelta(200, (float) $returnRow['invoice']['total'], 0.01);
+        $this->assertEqualsWithDelta(200, (float) $returnRow['invoice']['applied_amount'], 0.01);
         $this->assertNotEmpty($returnRow['invoice']['lines']);
     }
 

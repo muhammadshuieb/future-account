@@ -204,3 +204,77 @@ Artisan::command('syna:repair-sales-return-credit {--customer= : Customer id or 
 
     return 0;
 })->purpose('Allocate/refund posted sales-return credit that never settled invoices or cash');
+
+Artisan::command('syna:repair-purchase-return-credit {--supplier= : Supplier id or name fragment} {--dry-run : Preview without writing}', function () {
+    $purchases = app(\App\Services\PurchaseService::class);
+    $dry = (bool) $this->option('dry-run');
+    $supplierOpt = $this->option('supplier');
+
+    $query = \App\Models\PurchaseReturn::query()
+        ->with(['supplier', 'invoice'])
+        ->where('status', 'posted')
+        ->whereRaw('(total - COALESCE(applied_amount, 0) - COALESCE(refund_amount, 0)) > 0.001');
+
+    if ($supplierOpt !== null && $supplierOpt !== '') {
+        if (ctype_digit((string) $supplierOpt)) {
+            $query->where('supplier_id', (int) $supplierOpt);
+        } else {
+            $query->whereHas('supplier', fn ($q) => $q->where('name', 'like', '%'.$supplierOpt.'%'));
+        }
+    }
+
+    $returns = $query->orderBy('id')->get();
+    if ($returns->isEmpty()) {
+        $this->info('No posted purchase returns with unsettled credit.');
+
+        return 0;
+    }
+
+    $user = \App\Models\User::query()->where('is_active', true)->orderBy('id')->first();
+    if (! $user) {
+        $this->error('No active user available to attribute settlement journals.');
+
+        return 1;
+    }
+
+    $rows = [];
+    foreach ($returns as $ret) {
+        $before = [
+            'applied' => (float) $ret->applied_amount,
+            'refund' => (float) $ret->refund_amount,
+            'open' => $ret->unallocatedAmount(),
+        ];
+
+        if ($dry) {
+            $rows[] = [
+                $ret->id,
+                $ret->return_number,
+                $ret->supplier?->name,
+                $before['open'],
+                $before['applied'],
+                $before['refund'],
+                'dry-run',
+            ];
+            continue;
+        }
+
+        $fresh = $purchases->settleReturnCredit($ret, $user);
+        $rows[] = [
+            $ret->id,
+            $ret->return_number,
+            $ret->supplier?->name,
+            $before['open'],
+            (float) $fresh->applied_amount,
+            (float) $fresh->refund_amount,
+            'settled',
+        ];
+    }
+
+    $this->info($dry ? 'Dry-run: unsettled purchase-return credit' : 'Repaired purchase-return credit settlement');
+    $this->table(
+        ['id', 'number', 'supplier', 'was_open', 'applied', 'refund', 'action'],
+        $rows
+    );
+
+    return 0;
+})->purpose('Allocate/refund posted purchase-return credit that never settled invoices or cash');
