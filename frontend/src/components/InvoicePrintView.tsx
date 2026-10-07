@@ -4,8 +4,7 @@ import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatMoney, formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime, todayYmd } from '@/lib/dates'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
-import { unitFromProduct } from '@/lib/productUnit'
+import { ProductIdentityCells } from '@/components/ProductIdentityCells'
 import { statementPaymentTypeLabel } from '@/components/StatementPrintView'
 
 export type SalesInvoicePrintData = {
@@ -505,95 +504,83 @@ function printLineProduct(item: NonNullable<PrintInvoicePrintData['items']>[numb
 
 export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintData }) {
   const { t } = useTranslation()
-  const lines = invoice.items || []
+  const lines = (invoice.items || []).map((l) => ({
+    product: printLineProduct(l),
+    quantity: l.quantity,
+    unit_price: l.unit_price,
+    line_total: l.line_total,
+  }))
+  const currency = invoice.currency || 'USD'
 
   return (
-    <div className="space-y-2 text-xs" dir="rtl">
+    <div className="statement-print" dir="rtl">
       <InvoiceBrandHeader
+        statementStyle
         documentLabel={t('printInvoices.documentTitle')}
         invoiceNumber={invoice.invoice_number}
         invoiceDate={invoice.invoice_date}
         createdAt={invoice.created_at}
       />
 
-      <div className="grid gap-1 sm:grid-cols-2">
+      <section className="statement-print__meta">
         <p>
-          <span className="text-black/55">{t('common.customer')}: </span>
-          {invoice.customer?.name || t('printInvoices.noCustomer')}
+          <span className="statement-print__label">{t('common.customer')}: </span>
+          <strong>{invoice.customer?.name || t('printInvoices.noCustomer')}</strong>
         </p>
+        {invoice.customer?.phone && (
+          <p>
+            <span className="statement-print__label">الهاتف: </span>
+            {invoice.customer.phone}
+          </p>
+        )}
         {invoice.customer?.tax_number && (
           <p>
-            <span className="text-black/55">{t('companies.taxNumber')}: </span>
+            <span className="statement-print__label">{t('companies.taxNumber')}: </span>
             {invoice.customer.tax_number}
           </p>
         )}
         {invoice.branch?.name && (
           <p>
-            <span className="text-black/55">{t('common.branch')}: </span>
+            <span className="statement-print__label">{t('common.branch')}: </span>
             {invoice.branch.name}
           </p>
         )}
         {invoice.warehouse?.name && (
           <p>
-            <span className="text-black/55">{t('common.warehouse')}: </span>
+            <span className="statement-print__label">{t('common.warehouse')}: </span>
             {invoice.warehouse.name}
           </p>
         )}
         <p>
-          <span className="text-black/55">{t('common.currency')}: </span>
-          {invoice.currency || 'USD'}
+          <span className="statement-print__label">{t('common.currency')}: </span>
+          {currency}
         </p>
-      </div>
+      </section>
 
       {invoice.notes ? (
-        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
-          <p className="text-[11px] font-semibold text-black/55">{t('common.notes')}</p>
-          <p className="mt-0.5 whitespace-pre-wrap">{invoice.notes}</p>
-        </div>
+        <p className="statement-invoice-detail__notes">ملاحظات: {invoice.notes}</p>
       ) : null}
 
-      <table className="data-table text-[11px]">
-        <thead>
-          <tr>
-            <ProductIdentityHeaders />
-            <th>{t('common.unit')}</th>
-            <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
-            <th>{t('common.price')}</th>
-            <th>{t('common.total')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l, i) => {
-            const product = printLineProduct(l)
-            return (
-            <tr key={i}>
-              <ProductIdentityCells product={product} />
-              <td>{unitFromProduct(product)}</td>
-              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
-              <td className="tabular-nums">{l.unit_price}</td>
-              <td className="tabular-nums">{l.line_total}</td>
-            </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="statement-invoice-detail">
+        <StatementStyleLinesTable lines={lines} currency={currency} />
+      </div>
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
+      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
         <p>
-          <span className="text-black/55">{t('common.subtotal')}: </span>
-          <span className="tabular-nums">{invoice.subtotal}</span>
+          فرعي:{' '}
+          <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
         </p>
         {Number(invoice.tax_amount) > 0 && (
           <p>
-            <span className="text-black/55">{t('common.tax')}: </span>
-            <span className="tabular-nums">{invoice.tax_amount}</span>
+            ضريبة:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
           </p>
         )}
-        <p className="text-sm font-bold">
-          {t('common.total')} ({invoice.currency || 'USD'}):{' '}
-          <span className="tabular-nums">{invoice.total}</span>
+        <p className="statement-print__closing-line">
+          الإجمالي:{' '}
+          <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
         </p>
-      </div>
+      </section>
     </div>
   )
 }
