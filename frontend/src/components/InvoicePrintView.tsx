@@ -382,103 +382,91 @@ function quoteLineProduct(item: NonNullable<SalesQuotePrintData['items']>[number
 
 export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
   const { t } = useTranslation()
-  const lines = quote.items || []
+  const lines = (quote.items || []).map((l) => ({
+    product: quoteLineProduct(l),
+    quantity: l.quantity,
+    unit_price: l.unit_price,
+    line_total: l.line_total,
+  }))
+  const currency = quote.currency || 'USD'
 
   return (
-    <div className="space-y-2 text-xs" dir="rtl">
+    <div className="statement-print" dir="rtl">
       <InvoiceBrandHeader
+        statementStyle
         documentLabel={t('quotes.documentTitle')}
         invoiceNumber={quote.quote_number}
         invoiceDate={quote.quote_date}
         createdAt={quote.created_at}
       />
 
-      <div className="grid gap-1 sm:grid-cols-2">
+      <section className="statement-print__meta">
         <p>
-          <span className="text-black/55">{t('common.customer')}: </span>
-          {quote.customer?.name || t('quotes.noCustomer')}
+          <span className="statement-print__label">{t('common.customer')}: </span>
+          <strong>{quote.customer?.name || t('quotes.noCustomer')}</strong>
         </p>
+        {quote.customer?.phone && (
+          <p>
+            <span className="statement-print__label">الهاتف: </span>
+            {quote.customer.phone}
+          </p>
+        )}
         {quote.customer?.tax_number && (
           <p>
-            <span className="text-black/55">{t('companies.taxNumber')}: </span>
+            <span className="statement-print__label">{t('companies.taxNumber')}: </span>
             {quote.customer.tax_number}
           </p>
         )}
         {quote.branch?.name && (
           <p>
-            <span className="text-black/55">{t('common.branch')}: </span>
+            <span className="statement-print__label">{t('common.branch')}: </span>
             {quote.branch.name}
           </p>
         )}
         {quote.warehouse?.name && (
           <p>
-            <span className="text-black/55">{t('common.warehouse')}: </span>
+            <span className="statement-print__label">{t('common.warehouse')}: </span>
             {quote.warehouse.name}
           </p>
         )}
         {quote.valid_until && (
           <p>
-            <span className="text-black/55">{t('common.validUntil')}: </span>
+            <span className="statement-print__label">{t('common.validUntil')}: </span>
             {String(quote.valid_until).slice(0, 10)}
           </p>
         )}
         <p>
-          <span className="text-black/55">{t('common.currency')}: </span>
-          {quote.currency || 'USD'}
+          <span className="statement-print__label">{t('common.currency')}: </span>
+          {currency}
         </p>
-      </div>
+      </section>
 
       {quote.notes ? (
-        <div className="rounded border border-black/10 bg-black/[0.02] p-2">
-          <p className="text-[11px] font-semibold text-black/55">{t('common.notes')}</p>
-          <p className="mt-0.5 whitespace-pre-wrap">{quote.notes}</p>
-        </div>
+        <p className="statement-invoice-detail__notes">ملاحظات: {quote.notes}</p>
       ) : null}
 
-      <table className="data-table text-[11px]">
-        <thead>
-          <tr>
-            <ProductIdentityHeaders />
-            <th>{t('common.unit')}</th>
-            <th title={t('common.quantityUnit')}>{t('common.quantity')}</th>
-            <th>{t('common.price')}</th>
-            <th>{t('common.total')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((l, i) => {
-            const product = quoteLineProduct(l)
-            return (
-            <tr key={i}>
-              <ProductIdentityCells product={product} />
-              <td>{unitFromProduct(product)}</td>
-              <td className="tabular-nums">{formatQuantity(l.quantity)}</td>
-              <td className="tabular-nums">{l.unit_price}</td>
-              <td className="tabular-nums">{l.line_total}</td>
-            </tr>
-            )
-          })}
-        </tbody>
-      </table>
+      <div className="statement-invoice-detail">
+        <StatementStyleLinesTable lines={lines} currency={currency} />
+      </div>
 
-      <div className="print-avoid-break ms-auto max-w-xs space-y-0.5 border-t border-black/10 pt-2 text-start">
+      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
         <p>
-          <span className="text-black/55">{t('common.subtotal')}: </span>
-          <span className="tabular-nums">{quote.subtotal}</span>
+          فرعي:{' '}
+          <strong className="tabular-nums">{formatMoney(Number(quote.subtotal) || 0, currency)}</strong>
         </p>
         {Number(quote.tax_amount) > 0 && (
           <p>
-            <span className="text-black/55">{t('common.tax')}: </span>
-            <span className="tabular-nums">{quote.tax_amount}</span>
+            ضريبة:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(quote.tax_amount) || 0, currency)}</strong>
           </p>
         )}
-        <p className="text-sm font-bold">
-          {t('common.total')} ({quote.currency || 'USD'}):{' '}
-          <span className="tabular-nums">{quote.total}</span>
+        <p className="statement-print__closing-line">
+          الإجمالي:{' '}
+          <strong className="tabular-nums">{formatMoney(Number(quote.total) || 0, currency)}</strong>
         </p>
-      </div>
+      </section>
 
-      <p className="mt-4 text-[10px] text-black/45">{t('quotes.printDisclaimer')}</p>
+      <p className="statement-print__muted">{t('quotes.printDisclaimer')}</p>
     </div>
   )
 }
