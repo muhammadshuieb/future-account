@@ -1,0 +1,27 @@
+name: Remote customer vs statement
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare customer invoice remainings to statement
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan syna:repair-receipt-allocation --dry-run || true
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod cp scripts/prod-customer-invoice-vs-statement.php backend:/var/www/html/prod-customer-invoice-vs-statement.php
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php /var/www/html/prod-customer-invoice-vs-statement.php
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend rm -f /var/www/html/prod-customer-invoice-vs-statement.php
