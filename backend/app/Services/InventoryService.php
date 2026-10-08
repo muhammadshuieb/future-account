@@ -738,7 +738,10 @@ class InventoryService
         $newQty = round((float) $level->quantity + $quantityDelta, 3);
         $allowNegative = Setting::allowNegativeStock() && ! empty($meta['allow_negative']);
 
-        if ($newQty < -0.0001 && ! $allowNegative) {
+        // Only block outbound reductions that would go (or stay) negative.
+        // Inbound (returns, purchases) must always be allowed to raise stock from a
+        // negative balance — even when the result is still negative.
+        if ($quantityDelta < 0 && $newQty < -0.0001 && ! $allowNegative) {
             throw $this->insufficientStockException(
                 $product,
                 $warehouseId,

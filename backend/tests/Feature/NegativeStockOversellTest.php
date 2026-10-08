@@ -256,6 +256,48 @@ class NegativeStockOversellTest extends TestCase
         ])->assertStatus(422);
     }
 
+    public function test_sales_return_raises_stock_while_balance_still_negative(): void
+    {
+        Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');
+
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+        $product->update(['cost_price' => 0, 'track_batch' => false]);
+        StockLevel::query()->where('product_id', $product->id)->delete();
+
+        $sales = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 8, 'unit_price' => 100, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $this->assertSame(-8.0, (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity'));
+
+        $invoiceId = (int) $sales->json('data.id');
+
+        // Partial return: stock stays negative (-8 + 3 = -5) but must still post.
+        $this->postJson('/api/sales-returns', [
+            'return_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'sales_invoice_id' => $invoiceId,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 100, 'tax_rate' => 0]],
+        ])->assertCreated()->assertJsonPath('data.status', 'posted');
+
+        $this->assertSame(-5.0, (float) StockLevel::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('product_id', $product->id)
+            ->sum('quantity'));
+    }
+
     protected function assertJournalBalanced(int $journalEntryId): void
     {
         $entry = JournalEntry::query()->with('details')->findOrFail($journalEntryId);
