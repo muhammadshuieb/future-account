@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   Receipt,
+  Cable,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -53,6 +54,7 @@ export const navGroups: NavGroup[] = [
       { to: '/accounts', key: 'accounts', icon: BookOpen, permission: 'accounts.view' },
       { to: '/journal-entries', key: 'journal', icon: FileText, permission: 'journals.view' },
       { to: '/reports', key: 'reports', icon: BarChart3, permission: 'reports.view' },
+      { to: '/ftth-daily-report', key: 'ftthDailyReport', icon: Cable, permission: 'ftth.view' },
     ],
   },
   {

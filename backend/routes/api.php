@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\FtthDailyReportController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
@@ -257,6 +258,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('product-movement/{product}', [ReportController::class, 'productMovement']);
         Route::get('branch-complete', [ReportController::class, 'branchComplete']);
     });
+
+    // FTTH project daily civil-works reports
+    Route::get('ftth/daily-reports/defaults', [FtthDailyReportController::class, 'defaults']);
+    Route::get('ftth/daily-reports', [FtthDailyReportController::class, 'index']);
+    Route::post('ftth/daily-reports', [FtthDailyReportController::class, 'store']);
+    Route::get('ftth/daily-reports/{ftthDailyReport}', [FtthDailyReportController::class, 'show']);
+    Route::put('ftth/daily-reports/{ftthDailyReport}', [FtthDailyReportController::class, 'update']);
+    Route::delete('ftth/daily-reports/{ftthDailyReport}', [FtthDailyReportController::class, 'destroy']);
+    Route::get('ftth/sectors', [FtthDailyReportController::class, 'sectors']);
+    Route::put('ftth/sectors', [FtthDailyReportController::class, 'saveSectors']);
 
     // Phase 5 — HR
     Route::apiResource('employees', EmployeeController::class)->except(['show']);

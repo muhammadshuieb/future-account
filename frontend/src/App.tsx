@@ -25,6 +25,7 @@ const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
 const CashBanksPage = lazy(() => import('@/pages/CashBanksPage'))
 const HrPage = lazy(() => import('@/pages/HrPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
+const FtthDailyReportPage = lazy(() => import('@/pages/FtthDailyReportPage'))
 const BarcodeLabelsPage = lazy(() => import('@/pages/BarcodeLabelsPage'))
 const AuditLogPage = lazy(() => import('@/pages/AuditLogPage'))
 const CompaniesPage = lazy(() => import('@/pages/CompaniesPage'))
@@ -33,6 +34,7 @@ const SalesQuotePrintPage = lazy(() => import('@/pages/SalesQuotePrintPage'))
 const PrintInvoicePrintPage = lazy(() => import('@/pages/PrintInvoicePrintPage'))
 const PurchaseInvoicePrintPage = lazy(() => import('@/pages/PurchaseInvoicePrintPage'))
 const PartnerStatementPrintPage = lazy(() => import('@/pages/PartnerStatementPrintPage'))
+const FtthDailyReportPrintPage = lazy(() => import('@/pages/FtthDailyReportPrintPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +97,7 @@ export default function App() {
               <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />
               <Route path="/print/customers/:id/statement" element={<PartnerStatementPrintPage kind="customers" />} />
               <Route path="/print/suppliers/:id/statement" element={<PartnerStatementPrintPage kind="suppliers" />} />
+              <Route path="/print/ftth-daily-reports/:id" element={<FtthDailyReportPrintPage />} />
               <Route element={<AppLayout />}>
                 <Route index element={<HomeRoute />} />
                 <Route
@@ -118,6 +121,7 @@ export default function App() {
                 <Route path="cash-banks" element={<CashBanksPage />} />
                 <Route path="hr" element={<HrPage />} />
                 <Route path="reports" element={<ReportsPage />} />
+                <Route path="ftth-daily-report" element={<FtthDailyReportPage />} />
                 <Route path="barcodes" element={<BarcodeLabelsPage />} />
                 <Route path="audit-log" element={<AuditLogPage />} />
                 <Route path="companies" element={<CompaniesPage />} />

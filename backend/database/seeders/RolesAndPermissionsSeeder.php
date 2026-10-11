@@ -53,6 +53,8 @@ class RolesAndPermissionsSeeder extends Seeder
             // Sensitive financials — not implied by reports.view or elevated “admin-like” custom roles.
             'reports.profits.view',
             'reports.capital.view',
+            'ftth.view',
+            'ftth.manage',
             'users.manage',
         ];
 
@@ -76,6 +78,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'reports.view',
             'reports.profits.view',
             'reports.capital.view',
+            'ftth.view',
+            'ftth.manage',
             'customers.view',
             'suppliers.view',
             'cash.view',
@@ -89,6 +93,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'warehouse.view',
             'warehouse.manage',
             'reports.view',
+            'ftth.view',
+            'ftth.manage',
         ]);
 
         $warehouseManager = Role::findOrCreate('warehouse_manager');
@@ -117,6 +123,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'warehouse.view',
             'cash.view',
             'reports.view',
+            'ftth.view',
+            'ftth.manage',
         ]);
 
         $purchasing = Role::findOrCreate('purchasing');
