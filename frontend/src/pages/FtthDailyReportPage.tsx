@@ -6,6 +6,7 @@ import api from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { openPrintPopup } from '@/lib/printPopup'
 import { todayYmd } from '@/lib/dates'
+import SelectOrAdd from '@/components/SelectOrAdd'
 import FtthReportView, {
   type FtthDailyReport,
   type FtthMaterialRow,
@@ -13,6 +14,19 @@ import FtthReportView, {
   type FtthResourceRow,
   type FtthWorkRow,
 } from '@/components/FtthReportView'
+import {
+  FTTH_ACTIVITIES,
+  FTTH_MATERIALS,
+  FTTH_RESOURCES,
+  FTTH_TEAMS,
+  FTTH_UNITS,
+  FTTH_WEATHER,
+  FTTH_WORK_TYPES,
+  presetForActivity,
+  unitForMaterial,
+  unitForResource,
+  unitForWorkType,
+} from '@/lib/ftthCatalog'
 import {
   Button,
   Field,
@@ -122,7 +136,7 @@ export default function FtthDailyReportPage() {
   const sectorsQ = useQuery({
     queryKey: ['ftth-sectors'],
     queryFn: async () => (await api.get('/ftth/sectors')).data.data as SectorRow[],
-    enabled: hasPermission('ftth.view') && tab === 'sectors',
+    enabled: hasPermission('ftth.view'),
   })
 
   useEffect(() => {
@@ -132,6 +146,38 @@ export default function FtthDailyReportPage() {
   useEffect(() => {
     if (sectorsQ.data) setSectors(sectorsQ.data)
   }, [sectorsQ.data])
+
+  const areaOptions = useMemo(() => {
+    const names = (sectorsQ.data || [])
+      .map((s) => (s.name || '').trim())
+      .filter(Boolean)
+    return Array.from(new Set(names))
+  }, [sectorsQ.data])
+
+  const workTypeOptions = useMemo(() => {
+    const fromForm = (form.works || []).map((w) => w.type).filter(Boolean)
+    return Array.from(new Set([...FTTH_WORK_TYPES.map((w) => w.type), ...fromForm]))
+  }, [form.works])
+
+  const materialOptions = useMemo(() => {
+    const fromForm = (form.materials || []).map((m) => m.item).filter(Boolean)
+    return Array.from(new Set([...FTTH_MATERIALS.map((m) => m.item), ...fromForm]))
+  }, [form.materials])
+
+  const activityOptions = useMemo(() => {
+    const fromForm = (form.next_day_plan || []).map((p) => p.activity).filter(Boolean)
+    return Array.from(new Set([...FTTH_ACTIVITIES.map((a) => a.activity), ...fromForm]))
+  }, [form.next_day_plan])
+
+  const teamOptions = useMemo(() => {
+    const fromForm = (form.next_day_plan || []).map((p) => p.team || '').filter(Boolean)
+    return Array.from(new Set([...FTTH_TEAMS, ...fromForm]))
+  }, [form.next_day_plan])
+
+  const resourceOptions = useMemo(() => {
+    const fromForm = (form.next_day_resources || []).map((r) => r.item).filter(Boolean)
+    return Array.from(new Set([...FTTH_RESOURCES.map((r) => r.item), ...fromForm]))
+  }, [form.next_day_resources])
 
   const summary = useMemo(() => {
     const works = form.works || []
@@ -222,10 +268,10 @@ export default function FtthDailyReportPage() {
       ...emptyReport(),
       project_name: d?.project_name || emptyReport().project_name,
       phase: d?.phase || emptyReport().phase,
-      works: d?.works || [],
-      materials: d?.materials || [],
-      next_day_plan: d?.next_day_plan || [],
-      next_day_resources: d?.next_day_resources || [],
+      works: [],
+      materials: [],
+      next_day_plan: [],
+      next_day_resources: [],
     })
     setTab('daily')
   }
@@ -238,7 +284,11 @@ export default function FtthDailyReportPage() {
   function patchWork(i: number, key: keyof FtthWorkRow, value: string | number) {
     setForm((prev) => {
       const works = [...(prev.works || [])]
-      works[i] = { ...works[i], [key]: value }
+      const row = { ...works[i], [key]: value }
+      if (key === 'type' && typeof value === 'string') {
+        row.unit = unitForWorkType(value) || row.unit || 'متر'
+      }
+      works[i] = row
       return { ...prev, works }
     })
   }
@@ -246,7 +296,11 @@ export default function FtthDailyReportPage() {
   function patchMaterial(i: number, key: keyof FtthMaterialRow, value: string | number) {
     setForm((prev) => {
       const materials = [...(prev.materials || [])]
-      materials[i] = { ...materials[i], [key]: value }
+      const row = { ...materials[i], [key]: value }
+      if (key === 'item' && typeof value === 'string') {
+        row.unit = unitForMaterial(value) || row.unit || 'عدد'
+      }
+      materials[i] = row
       return { ...prev, materials }
     })
   }
@@ -254,7 +308,16 @@ export default function FtthDailyReportPage() {
   function patchPlan(i: number, key: keyof FtthNextDayRow, value: string | number) {
     setForm((prev) => {
       const next_day_plan = [...(prev.next_day_plan || [])]
-      next_day_plan[i] = { ...next_day_plan[i], [key]: value }
+      const row = { ...next_day_plan[i], [key]: value }
+      if (key === 'activity' && typeof value === 'string') {
+        const preset = presetForActivity(value)
+        if (preset) {
+          row.unit = preset.unit
+          if (!row.team) row.team = preset.team
+          if (!row.resources) row.resources = preset.resources
+        }
+      }
+      next_day_plan[i] = row
       return { ...prev, next_day_plan }
     })
   }
@@ -262,9 +325,71 @@ export default function FtthDailyReportPage() {
   function patchResource(i: number, key: keyof FtthResourceRow, value: string) {
     setForm((prev) => {
       const next_day_resources = [...(prev.next_day_resources || [])]
-      next_day_resources[i] = { ...next_day_resources[i], [key]: value }
+      const row = { ...next_day_resources[i], [key]: value }
+      if (key === 'item') row.unit = unitForResource(value) || row.unit || 'عدد'
+      next_day_resources[i] = row
       return { ...prev, next_day_resources }
     })
+  }
+
+  function addWork(type?: string) {
+    const picked = type || FTTH_WORK_TYPES[0]?.type || 'أعمال أخرى'
+    setForm((prev) => ({
+      ...prev,
+      works: [
+        ...(prev.works || []),
+        { type: picked, location: '', unit: unitForWorkType(picked), planned: 0, actual: 0, notes: '' },
+      ],
+    }))
+  }
+
+  function addMaterial(item?: string) {
+    const picked = item || FTTH_MATERIALS[0]?.item || 'بند جديد'
+    setForm((prev) => ({
+      ...prev,
+      materials: [
+        ...(prev.materials || []),
+        { item: picked, unit: unitForMaterial(picked), opening: 0, received: 0, used: 0, notes: '' },
+      ],
+    }))
+  }
+
+  function addPlan(activity?: string) {
+    const picked = activity || FTTH_ACTIVITIES[0]?.activity || 'أعمال أخرى'
+    const preset = presetForActivity(picked)
+    setForm((prev) => ({
+      ...prev,
+      next_day_plan: [
+        ...(prev.next_day_plan || []),
+        {
+          activity: picked,
+          location: '',
+          unit: preset?.unit || 'متر',
+          target: 0,
+          team: preset?.team || '',
+          resources: preset?.resources || '',
+          notes: '',
+        },
+      ],
+    }))
+  }
+
+  function addResource(item?: string) {
+    const picked = item || FTTH_RESOURCES[0]?.item || 'بند جديد'
+    setForm((prev) => ({
+      ...prev,
+      next_day_resources: [
+        ...(prev.next_day_resources || []),
+        { item: picked, quantity: '', unit: unitForResource(picked), location: '', needed_at: '', owner: '', notes: '' },
+      ],
+    }))
+  }
+
+  function removeAt<K extends 'works' | 'materials' | 'next_day_plan' | 'next_day_resources'>(key: K, index: number) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: ((prev[key] as unknown[]) || []).filter((_, i) => i !== index),
+    }))
   }
 
   const tabs = [
@@ -392,8 +517,26 @@ export default function FtthDailyReportPage() {
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <Field label={t('ftth.projectName')}><input className={inputClass} value={form.project_name || ''} onChange={(e) => setForm({ ...form, project_name: e.target.value })} disabled={!canManage} /></Field>
               <Field label={t('common.date')}><input type="date" className={inputClass} value={form.report_date || ''} onChange={(e) => setForm({ ...form, report_date: e.target.value })} disabled={!canManage} /></Field>
-              <Field label={t('ftth.weather')}><input className={inputClass} value={form.weather || ''} onChange={(e) => setForm({ ...form, weather: e.target.value })} disabled={!canManage} /></Field>
-              <Field label={t('ftth.area')}><input className={inputClass} value={form.area_sector || ''} onChange={(e) => setForm({ ...form, area_sector: e.target.value })} disabled={!canManage} /></Field>
+              <Field label={t('ftth.weather')}>
+                <SelectOrAdd
+                  value={form.weather || ''}
+                  options={[...FTTH_WEATHER]}
+                  onChange={(v) => setForm({ ...form, weather: v })}
+                  disabled={!canManage}
+                  placeholder={t('ftth.selectItem')}
+                  customLabel={t('ftth.addCustom')}
+                />
+              </Field>
+              <Field label={t('ftth.area')}>
+                <SelectOrAdd
+                  value={form.area_sector || ''}
+                  options={areaOptions}
+                  onChange={(v) => setForm({ ...form, area_sector: v })}
+                  disabled={!canManage}
+                  placeholder={t('ftth.selectItem')}
+                  customLabel={t('ftth.addCustom')}
+                />
+              </Field>
               <Field label={t('ftth.supervisor')}><input className={inputClass} value={form.supervisor || ''} onChange={(e) => setForm({ ...form, supervisor: e.target.value })} disabled={!canManage} /></Field>
               <Field label={t('ftth.contractor')}><input className={inputClass} value={form.contractor_team || ''} onChange={(e) => setForm({ ...form, contractor_team: e.target.value })} disabled={!canManage} /></Field>
               <Field label={t('ftth.workers')}><NumericInput className={inputClass} value={String(form.workers_count ?? 0)} onChange={(v) => setForm({ ...form, workers_count: n(v) })} disabled={!canManage} /></Field>
@@ -411,7 +554,14 @@ export default function FtthDailyReportPage() {
           </Panel>
 
           <Panel>
-            <h3 className="mb-3 text-sm font-bold text-[#064e51]">{t('ftth.worksToday')}</h3>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-[#064e51]">{t('ftth.worksToday')}</h3>
+              {canManage && (
+                <Button variant="secondary" onClick={() => addWork()}>
+                  <Plus size={14} /> {t('ftth.addWork')}
+                </Button>
+              )}
+            </div>
             <div className="table-wrap">
               <table className="data-table text-sm">
                 <thead>
@@ -423,27 +573,63 @@ export default function FtthDailyReportPage() {
                     <th>{t('ftth.planned')}</th>
                     <th>{t('ftth.actual')}</th>
                     <th>{t('common.notes')}</th>
+                    {canManage ? <th></th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {(form.works || []).map((w, i) => (
                     <tr key={i}>
                       <td>{i + 1}</td>
-                      <td className="min-w-[8rem] font-medium">{w.type}</td>
+                      <td className="min-w-[10rem]">
+                        <SelectOrAdd
+                          value={w.type || ''}
+                          options={workTypeOptions}
+                          onChange={(v) => patchWork(i, 'type', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><input className={inputClass} value={w.location || ''} onChange={(e) => patchWork(i, 'location', e.target.value)} disabled={!canManage} /></td>
-                      <td className="whitespace-nowrap text-xs">{w.unit || '—'}</td>
+                      <td>
+                        <SelectOrAdd
+                          value={w.unit || ''}
+                          options={[...FTTH_UNITS]}
+                          onChange={(v) => patchWork(i, 'unit', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><NumericInput className={inputClass} value={String(w.planned ?? 0)} onChange={(v) => patchWork(i, 'planned', n(v))} disabled={!canManage} /></td>
                       <td><NumericInput className={inputClass} value={String(w.actual ?? 0)} onChange={(v) => patchWork(i, 'actual', n(v))} disabled={!canManage} /></td>
                       <td><input className={inputClass} value={w.notes || ''} onChange={(e) => patchWork(i, 'notes', e.target.value)} disabled={!canManage} /></td>
+                      {canManage ? (
+                        <td>
+                          <button type="button" className="text-rose-600" onClick={() => removeAt('works', i)} aria-label={t('common.delete')}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
+                  {!form.works?.length ? (
+                    <tr><td colSpan={canManage ? 8 : 7} className="py-6 text-center text-black/40">{t('ftth.emptyRows')}</td></tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
           </Panel>
 
           <Panel>
-            <h3 className="mb-3 text-sm font-bold text-[#064e51]">{t('ftth.materials')}</h3>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-[#064e51]">{t('ftth.materials')}</h3>
+              {canManage && (
+                <Button variant="secondary" onClick={() => addMaterial()}>
+                  <Plus size={14} /> {t('ftth.addMaterial')}
+                </Button>
+              )}
+            </div>
             <div className="table-wrap">
               <table className="data-table text-sm">
                 <thead>
@@ -456,6 +642,7 @@ export default function FtthDailyReportPage() {
                     <th>{t('ftth.used')}</th>
                     <th>{t('ftth.closing')}</th>
                     <th>{t('common.notes')}</th>
+                    {canManage ? <th></th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -464,16 +651,44 @@ export default function FtthDailyReportPage() {
                     return (
                       <tr key={i}>
                         <td>{i + 1}</td>
-                        <td className="min-w-[8rem] font-medium">{m.item}</td>
-                        <td className="text-xs">{m.unit || '—'}</td>
+                        <td className="min-w-[10rem]">
+                          <SelectOrAdd
+                            value={m.item || ''}
+                            options={materialOptions}
+                            onChange={(v) => patchMaterial(i, 'item', v)}
+                            disabled={!canManage}
+                            placeholder={t('ftth.selectItem')}
+                            customLabel={t('ftth.addCustom')}
+                          />
+                        </td>
+                        <td>
+                          <SelectOrAdd
+                            value={m.unit || ''}
+                            options={[...FTTH_UNITS]}
+                            onChange={(v) => patchMaterial(i, 'unit', v)}
+                            disabled={!canManage}
+                            placeholder={t('ftth.selectItem')}
+                            customLabel={t('ftth.addCustom')}
+                          />
+                        </td>
                         <td><NumericInput className={inputClass} value={String(m.opening ?? 0)} onChange={(v) => patchMaterial(i, 'opening', n(v))} disabled={!canManage} /></td>
                         <td><NumericInput className={inputClass} value={String(m.received ?? 0)} onChange={(v) => patchMaterial(i, 'received', n(v))} disabled={!canManage} /></td>
                         <td><NumericInput className={inputClass} value={String(m.used ?? 0)} onChange={(v) => patchMaterial(i, 'used', n(v))} disabled={!canManage} /></td>
                         <td className="tabular-nums font-medium">{formatQuantity(closing)}</td>
                         <td><input className={inputClass} value={m.notes || ''} onChange={(e) => patchMaterial(i, 'notes', e.target.value)} disabled={!canManage} /></td>
+                        {canManage ? (
+                          <td>
+                            <button type="button" className="text-rose-600" onClick={() => removeAt('materials', i)} aria-label={t('common.delete')}>
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        ) : null}
                       </tr>
                     )
                   })}
+                  {!form.materials?.length ? (
+                    <tr><td colSpan={canManage ? 9 : 8} className="py-6 text-center text-black/40">{t('ftth.emptyRows')}</td></tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -497,7 +712,14 @@ export default function FtthDailyReportPage() {
       {tab === 'plan' && (
         <div className="space-y-4">
           <Panel>
-            <h3 className="mb-3 text-sm font-bold text-[#064e51]">{t('ftth.nextDayWorks')}</h3>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-[#064e51]">{t('ftth.nextDayWorks')}</h3>
+              {canManage && (
+                <Button variant="secondary" onClick={() => addPlan()}>
+                  <Plus size={14} /> {t('ftth.addActivity')}
+                </Button>
+              )}
+            </div>
             <div className="table-wrap">
               <table className="data-table text-sm">
                 <thead>
@@ -509,26 +731,62 @@ export default function FtthDailyReportPage() {
                     <th>{t('ftth.team')}</th>
                     <th>{t('ftth.resources')}</th>
                     <th>{t('common.notes')}</th>
+                    {canManage ? <th></th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {(form.next_day_plan || []).map((p, i) => (
                     <tr key={i}>
                       <td>{i + 1}</td>
-                      <td className="font-medium">{p.activity}</td>
+                      <td className="min-w-[10rem]">
+                        <SelectOrAdd
+                          value={p.activity || ''}
+                          options={activityOptions}
+                          onChange={(v) => patchPlan(i, 'activity', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><input className={inputClass} value={p.location || ''} onChange={(e) => patchPlan(i, 'location', e.target.value)} disabled={!canManage} /></td>
                       <td><NumericInput className={inputClass} value={String(p.target ?? 0)} onChange={(v) => patchPlan(i, 'target', n(v))} disabled={!canManage} /></td>
-                      <td><input className={inputClass} value={p.team || ''} onChange={(e) => patchPlan(i, 'team', e.target.value)} disabled={!canManage} /></td>
+                      <td className="min-w-[8rem]">
+                        <SelectOrAdd
+                          value={p.team || ''}
+                          options={teamOptions}
+                          onChange={(v) => patchPlan(i, 'team', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><input className={inputClass} value={p.resources || ''} onChange={(e) => patchPlan(i, 'resources', e.target.value)} disabled={!canManage} /></td>
                       <td><input className={inputClass} value={p.notes || ''} onChange={(e) => patchPlan(i, 'notes', e.target.value)} disabled={!canManage} /></td>
+                      {canManage ? (
+                        <td>
+                          <button type="button" className="text-rose-600" onClick={() => removeAt('next_day_plan', i)} aria-label={t('common.delete')}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
+                  {!form.next_day_plan?.length ? (
+                    <tr><td colSpan={canManage ? 8 : 7} className="py-6 text-center text-black/40">{t('ftth.emptyRows')}</td></tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
           </Panel>
           <Panel>
-            <h3 className="mb-3 text-sm font-bold text-[#064e51]">{t('ftth.nextDayResources')}</h3>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold text-[#064e51]">{t('ftth.nextDayResources')}</h3>
+              {canManage && (
+                <Button variant="secondary" onClick={() => addResource()}>
+                  <Plus size={14} /> {t('ftth.addResource')}
+                </Button>
+              )}
+            </div>
             <div className="table-wrap">
               <table className="data-table text-sm">
                 <thead>
@@ -536,24 +794,55 @@ export default function FtthDailyReportPage() {
                     <th>م</th>
                     <th>{t('ftth.materialItem')}</th>
                     <th>{t('common.quantity')}</th>
+                    <th>{t('common.unit')}</th>
                     <th>{t('ftth.location')}</th>
                     <th>{t('ftth.neededAt')}</th>
                     <th>{t('ftth.owner')}</th>
                     <th>{t('common.notes')}</th>
+                    {canManage ? <th></th> : null}
                   </tr>
                 </thead>
                 <tbody>
                   {(form.next_day_resources || []).map((r, i) => (
                     <tr key={i}>
                       <td>{i + 1}</td>
-                      <td className="font-medium">{r.item}</td>
+                      <td className="min-w-[10rem]">
+                        <SelectOrAdd
+                          value={r.item || ''}
+                          options={resourceOptions}
+                          onChange={(v) => patchResource(i, 'item', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><input className={inputClass} value={r.quantity || ''} onChange={(e) => patchResource(i, 'quantity', e.target.value)} disabled={!canManage} /></td>
+                      <td>
+                        <SelectOrAdd
+                          value={r.unit || ''}
+                          options={[...FTTH_UNITS]}
+                          onChange={(v) => patchResource(i, 'unit', v)}
+                          disabled={!canManage}
+                          placeholder={t('ftth.selectItem')}
+                          customLabel={t('ftth.addCustom')}
+                        />
+                      </td>
                       <td><input className={inputClass} value={r.location || ''} onChange={(e) => patchResource(i, 'location', e.target.value)} disabled={!canManage} /></td>
                       <td><input className={inputClass} value={r.needed_at || ''} onChange={(e) => patchResource(i, 'needed_at', e.target.value)} disabled={!canManage} /></td>
                       <td><input className={inputClass} value={r.owner || ''} onChange={(e) => patchResource(i, 'owner', e.target.value)} disabled={!canManage} /></td>
                       <td><input className={inputClass} value={r.notes || ''} onChange={(e) => patchResource(i, 'notes', e.target.value)} disabled={!canManage} /></td>
+                      {canManage ? (
+                        <td>
+                          <button type="button" className="text-rose-600" onClick={() => removeAt('next_day_resources', i)} aria-label={t('common.delete')}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
+                  {!form.next_day_resources?.length ? (
+                    <tr><td colSpan={canManage ? 9 : 8} className="py-6 text-center text-black/40">{t('ftth.emptyRows')}</td></tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
