@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
 import { Button } from '@/components/ui'
-import CompanyStamp from '@/components/CompanyStamp'
+import { StampPrintContext } from '@/components/PrintStamp'
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 type WhatsAppProps = {
@@ -54,6 +54,16 @@ export default function PrintDocumentShell({ hint, fileName, children, whatsapp 
     setWithStamp(true)
   }
 
+  const stampCtx = useMemo(
+    () => ({
+      enabled: withStamp,
+      onLoad: () => {
+        stampImgReady.current = true
+      },
+    }),
+    [withStamp],
+  )
+
   return (
     <div className="print-document min-h-0 p-4 text-black" dir="rtl">
       <div className="print-hide mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-white p-3">
@@ -90,12 +100,11 @@ export default function PrintDocumentShell({ hint, fileName, children, whatsapp 
         <p className="text-xs text-black/45">{hint}</p>
       </div>
       <div className="print-sheet">
-        <div className="print-area" data-print-ready="1">
-          {children}
-          {withStamp ? (
-            <CompanyStamp onLoad={() => { stampImgReady.current = true }} />
-          ) : null}
-        </div>
+        <StampPrintContext.Provider value={stampCtx}>
+          <div className="print-area" data-print-ready="1">
+            {children}
+          </div>
+        </StampPrintContext.Provider>
       </div>
     </div>
   )

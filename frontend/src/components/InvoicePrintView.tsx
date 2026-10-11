@@ -5,6 +5,7 @@ import { LOGO } from '@/lib/brand'
 import { formatMoney, formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime, todayYmd } from '@/lib/dates'
 import { ProductIdentityCells } from '@/components/ProductIdentityCells'
+import PrintStamp from '@/components/PrintStamp'
 import { statementPaymentTypeLabel } from '@/components/StatementPrintView'
 
 export type SalesInvoicePrintData = {
@@ -342,6 +343,7 @@ export function SalesInvoicePrintView({
           <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
         </p>
       </section>
+      <PrintStamp />
     </div>
   )
 }
@@ -464,6 +466,7 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
           <strong className="tabular-nums">{formatMoney(Number(quote.total) || 0, currency)}</strong>
         </p>
       </section>
+      <PrintStamp />
 
       <p className="statement-print__muted">{t('quotes.printDisclaimer')}</p>
     </div>
@@ -581,6 +584,7 @@ export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintD
           <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
         </p>
       </section>
+      <PrintStamp />
     </div>
   )
 }
@@ -691,6 +695,7 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
           <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
         </p>
       </section>
+      <PrintStamp />
     </div>
   )
 }

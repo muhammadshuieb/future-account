@@ -667,11 +667,14 @@ body {
 }
 
 /* Optional company stamp — ink impression on paper (not a photo card) */
+/* Visual left under totals (RTL: flex-end = left) */
 .company-stamp {
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
   align-items: flex-end;
-  margin-top: 0.35rem;
+  width: 100%;
+  margin-top: 0.55rem;
+  margin-bottom: 0.15rem;
   padding: 0;
   pointer-events: none;
 }
