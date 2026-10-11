@@ -1,5 +1,6 @@
 import { LOGO } from '@/lib/brand'
 import { formatQuantity } from '@/components/ui'
+import PrintStamp from '@/components/PrintStamp'
 
 export type FtthWorkRow = {
   type: string
@@ -340,6 +341,7 @@ export default function FtthReportView({
           <strong>{report.approved_by || '________________'}</strong>
         </div>
       </footer>
+      <PrintStamp />
     </div>
   )
 }

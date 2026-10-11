@@ -2,12 +2,10 @@ import { useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Printer } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import FtthReportView, { type FtthDailyReport } from '@/components/FtthReportView'
-import PdfExportButton from '@/components/PdfExportButton'
-import { Button } from '@/components/ui'
+import PrintDocumentShell from '@/components/PrintDocumentShell'
 
 export default function FtthDailyReportPrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -45,22 +43,11 @@ export default function FtthDailyReportPrintPage() {
   }
 
   return (
-    <div className="print-document min-h-0 p-4 text-black" dir="rtl">
-      <div className="print-hide mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-white p-3">
-        <Button variant="primary" onClick={() => window.print()}>
-          <Printer size={16} /> {t('common.print')}
-        </Button>
-        <PdfExportButton fileName={`FTTH-${report.data.report_number}`} />
-        <Button variant="secondary" onClick={() => window.close()}>
-          {t('common.close')}
-        </Button>
-        <p className="text-xs text-black/45">{t('ftth.printPreviewHint')}</p>
-      </div>
-      <div className="print-sheet">
-        <div className="print-area" data-print-ready="1">
-          <FtthReportView report={report.data} />
-        </div>
-      </div>
-    </div>
+    <PrintDocumentShell
+      hint={t('ftth.printPreviewHint')}
+      fileName={`FTTH-${report.data.report_number}`}
+    >
+      <FtthReportView report={report.data} />
+    </PrintDocumentShell>
   )
 }
