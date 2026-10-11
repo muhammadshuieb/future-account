@@ -17,5 +17,7 @@ export const LOGO = {
   mark: '/logo-mark.png',
   /** White gear mark — legacy; prefer chip + mark */
   markOnDark: '/logo-mark-on-dark.png',
+  /** Official circular company stamp (optional on invoice print) */
+  stamp: '/company-stamp.png',
   svg: '/logo.svg',
 } as const

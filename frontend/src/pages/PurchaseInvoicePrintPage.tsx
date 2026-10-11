@@ -2,15 +2,12 @@ import { useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Printer } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { PurchaseInvoicePrintView, type PurchaseInvoicePrintData } from '@/components/InvoicePrintView'
-import WhatsAppSendButton from '@/components/WhatsAppSendButton'
-import PdfExportButton from '@/components/PdfExportButton'
+import PrintDocumentShell from '@/components/PrintDocumentShell'
 import { buildDocumentBaseName } from '@/lib/documentFileName'
 import { invoiceMessageDetails } from '@/lib/whatsappDraft'
-import { Button } from '@/components/ui'
 
 export default function PurchaseInvoicePrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -52,34 +49,20 @@ export default function PurchaseInvoicePrintPage() {
   }
 
   return (
-    <div className="print-document min-h-0 p-4 text-black" dir="rtl">
-      <div className="print-hide mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-white p-3">
-        <Button variant="primary" onClick={() => window.print()}>
-          <Printer size={16} /> {t('common.print')}
-        </Button>
-        <PdfExportButton
-          fileName={fileBaseName}
-        />
-        <WhatsAppSendButton
-          defaultPhone={invoice.data.supplier?.phone}
-          fileName={fileBaseName}
-          documentLabel={t('documents.purchaseInvoice')}
-          messageDetails={invoiceMessageDetails(t, {
-            partnerName: invoice.data.supplier?.name,
-            partnerKind: 'supplier',
-            documentNumber: invoice.data.invoice_number,
-          })}
-        />
-        <Button variant="secondary" onClick={() => window.close()}>
-          {t('common.close')}
-        </Button>
-        <p className="text-xs text-black/45">معاينة A4 — نافذة طباعة فاتورة المشتريات</p>
-      </div>
-      <div className="print-sheet">
-        <div className="print-area" data-print-ready="1">
-          <PurchaseInvoicePrintView invoice={invoice.data} />
-        </div>
-      </div>
-    </div>
+    <PrintDocumentShell
+      hint="معاينة A4 — نافذة طباعة فاتورة المشتريات"
+      fileName={fileBaseName}
+      whatsapp={{
+        defaultPhone: invoice.data.supplier?.phone,
+        documentLabel: t('documents.purchaseInvoice'),
+        messageDetails: invoiceMessageDetails(t, {
+          partnerName: invoice.data.supplier?.name,
+          partnerKind: 'supplier',
+          documentNumber: invoice.data.invoice_number,
+        }),
+      }}
+    >
+      <PurchaseInvoicePrintView invoice={invoice.data} />
+    </PrintDocumentShell>
   )
 }

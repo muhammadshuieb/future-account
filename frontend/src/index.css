@@ -422,6 +422,23 @@ body {
   color: rgba(12, 26, 34, 0.45);
 }
 
+/* Optional company stamp at foot of invoice print */
+.company-stamp {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 1.25rem;
+  padding-top: 0.25rem;
+}
+
+.company-stamp__img {
+  width: 38mm;
+  height: auto;
+  max-width: 42mm;
+  object-fit: contain;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
 .statement-print__detail-row > td,
 .statement-panel__detail-row > td {
   padding: 0.35rem 0.35rem 0.85rem !important;
@@ -1278,6 +1295,19 @@ textarea {
     height: auto !important;
     object-fit: contain !important;
     flex-shrink: 0 !important;
+  }
+
+  .print-area img.company-stamp__img,
+  .print-document img.company-stamp__img,
+  .print-sheet img.company-stamp__img,
+  img.company-stamp__img {
+    width: 38mm !important;
+    max-width: 42mm !important;
+    max-height: 42mm !important;
+    height: auto !important;
+    object-fit: contain !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Statement: keep section rhythm; nested invoice tables must not collapse */

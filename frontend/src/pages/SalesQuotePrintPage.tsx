@@ -2,15 +2,12 @@ import { useEffect } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Printer } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import api from '@/lib/api'
 import { SalesQuotePrintView, type SalesQuotePrintData } from '@/components/InvoicePrintView'
-import WhatsAppSendButton from '@/components/WhatsAppSendButton'
-import PdfExportButton from '@/components/PdfExportButton'
+import PrintDocumentShell from '@/components/PrintDocumentShell'
 import { buildDocumentBaseName } from '@/lib/documentFileName'
 import { invoiceMessageDetails } from '@/lib/whatsappDraft'
-import { Button } from '@/components/ui'
 
 export default function SalesQuotePrintPage() {
   const { id } = useParams<{ id: string }>()
@@ -55,33 +52,21 @@ export default function SalesQuotePrintPage() {
   }
 
   return (
-    <div className="print-document min-h-0 p-4 text-black" dir="rtl">
-      <div className="print-hide mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-black/10 bg-white p-3">
-        <Button variant="primary" onClick={() => window.print()}>
-          <Printer size={16} /> {t('common.print')}
-        </Button>
-        <PdfExportButton fileName={fileBaseName} />
-        <WhatsAppSendButton
-          defaultPhone={quote.data.customer?.phone}
-          fileName={fileBaseName}
-          documentLabel={t('documents.priceQuote')}
-          messageDetails={invoiceMessageDetails(t, {
-            partnerName: quote.data.customer?.name,
-            partnerKind: 'customer',
-            documentNumber: quote.data.quote_number,
-            numberLabel: t('whatsapp.quoteNumber'),
-          })}
-        />
-        <Button variant="secondary" onClick={() => window.close()}>
-          {t('common.close')}
-        </Button>
-        <p className="text-xs text-black/45">{t('quotes.printPreviewHint')}</p>
-      </div>
-      <div className="print-sheet">
-        <div className="print-area" data-print-ready="1">
-          <SalesQuotePrintView quote={quote.data} />
-        </div>
-      </div>
-    </div>
+    <PrintDocumentShell
+      hint={t('quotes.printPreviewHint')}
+      fileName={fileBaseName}
+      whatsapp={{
+        defaultPhone: quote.data.customer?.phone,
+        documentLabel: t('documents.priceQuote'),
+        messageDetails: invoiceMessageDetails(t, {
+          partnerName: quote.data.customer?.name,
+          partnerKind: 'customer',
+          documentNumber: quote.data.quote_number,
+          numberLabel: t('whatsapp.quoteNumber'),
+        }),
+      }}
+    >
+      <SalesQuotePrintView quote={quote.data} />
+    </PrintDocumentShell>
   )
 }
