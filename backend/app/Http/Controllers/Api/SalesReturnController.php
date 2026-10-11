@@ -18,6 +18,7 @@ class SalesReturnController extends ApiController
         $query = SalesReturn::query()->with(['customer', 'warehouse'])->latest('id');
         ListSearch::apply($query, $request, ['return_number', 'notes', 'currency', 'total', 'status'], [
             'customer' => ['name', 'code'],
+            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
 
         return $this->ok($query->get());

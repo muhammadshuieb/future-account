@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\SalesInvoice;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\Warehouse;
 use Database\Seeders\ChartOfAccountsSeeder;
@@ -75,6 +76,51 @@ class ListSearchAndBranchReportTest extends TestCase
 
         $miss = $this->getJson('/api/sales-invoices?q=NO-SUCH-INVOICE-XYZ');
         $miss->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_sales_invoice_and_return_search_by_product(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product->update([
+            'name' => 'Unique Search Widget Alpha',
+            'brand' => 'BrandSearchX',
+            'model' => 'ModelSearchY',
+            'track_batch' => false,
+        ]);
+
+        Setting::setValue('allow_negative_stock', '1', 'warehouse', 'boolean', 'allow negative');
+
+        $invoice = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'payment_type' => 'credit',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 50, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $return = $this->postJson('/api/sales-returns', [
+            'return_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'sales_invoice_id' => $invoice['id'],
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $byName = $this->getJson('/api/sales-invoices?q=Unique%20Search%20Widget');
+        $byName->assertOk();
+        $this->assertTrue(collect($byName->json('data'))->contains(fn ($r) => $r['id'] === $invoice['id']));
+
+        $byBrand = $this->getJson('/api/sales-returns?q=BrandSearchX');
+        $byBrand->assertOk();
+        $this->assertTrue(collect($byBrand->json('data'))->contains(fn ($r) => $r['id'] === $return['id']));
+
+        $byModel = $this->getJson('/api/sales-returns?q=ModelSearchY');
+        $byModel->assertOk();
+        $this->assertTrue(collect($byModel->json('data'))->contains(fn ($r) => $r['id'] === $return['id']));
     }
 
     public function test_sales_report_branch_filter_changes_totals(): void

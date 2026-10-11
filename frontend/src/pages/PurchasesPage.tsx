@@ -98,7 +98,7 @@ export default function PurchasesPage() {
   const returns = useQuery({
     queryKey: ['purchase-returns', search.debouncedQ],
     queryFn: async () => (await api.get('/purchase-returns', { params: search.params })).data.data,
-    enabled: tab === 'returns',
+    enabled: tab === 'returns' || !!search.debouncedQ,
   })
   const payments = useQuery({
     queryKey: ['supplier-payments', search.debouncedQ],
@@ -918,7 +918,11 @@ export default function PurchasesPage() {
         subtitle={t('purchases.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ListSearchInput value={search.q} onChange={search.setQ} />
+            <ListSearchInput
+              value={search.q}
+              onChange={search.setQ}
+              placeholder={t('common.searchDocsPlaceholder')}
+            />
             {tab === 'invoices' && (
               <select
                 className={`${inputClass} w-auto min-w-[10rem]`}
@@ -1001,6 +1005,7 @@ export default function PurchasesPage() {
       )}
 
       {tab === 'invoices' && (
+        <>
         <Panel>
             <table className="data-table text-sm">
               <thead><tr><th>{t('common.number')}</th><th>{t('common.dateTime')}</th><th>{t('common.supplier')}</th><th>ملاحظات</th><th>{t('common.paymentType')}</th><th>{t('common.currency')}</th><th>{t('common.discount')}</th><th>{t('common.total')}</th>{taxEnabled && <th>{t('common.tax')}</th>}<th>{t('common.paidAmount')}</th><th>{t('common.status')}</th><th></th></tr></thead>
@@ -1069,6 +1074,29 @@ export default function PurchasesPage() {
               </tbody>
             </table>
         </Panel>
+        {!!search.debouncedQ && (returns.data || []).length > 0 && (
+          <Panel>
+            <p className="mb-2 text-xs font-semibold text-teal">{t('common.matchingReturns')}</p>
+            <table className="data-table text-sm">
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.supplier')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <tbody>
+                {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; currency?: string; supplier?: { name: string } }) => (
+                  <tr key={r.id} className="cursor-pointer" onClick={() => { setTab('returns'); openRow(r) }}>
+                    <td className="font-mono text-xs">{r.return_number}</td>
+                    <td>{r.supplier?.name}</td>
+                    <td>{r.currency || 'USD'}</td>
+                    <td>{r.total}</td>
+                    <td>{documentStatusLabel(r.status)}</td>
+                    <td>
+                      <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); setTab('returns'); openRow(r) }}>{t('common.view')}</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        )}
+        </>
       )}
 
       {tab === 'returns' && (

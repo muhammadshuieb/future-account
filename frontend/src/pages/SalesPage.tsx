@@ -131,7 +131,8 @@ export default function SalesPage() {
   const returns = useQuery({
     queryKey: ['sales-returns', search.debouncedQ],
     queryFn: async () => (await api.get('/sales-returns', { params: search.params })).data.data,
-    enabled: tab === 'returns',
+    // Fetch on returns tab, and also while searching so matches appear under invoices.
+    enabled: tab === 'returns' || !!search.debouncedQ,
   })
   const receipts = useQuery({
     queryKey: ['receipts', search.debouncedQ],
@@ -1189,7 +1190,11 @@ export default function SalesPage() {
         subtitle={t('sales.subtitle')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <ListSearchInput value={search.q} onChange={search.setQ} />
+            <ListSearchInput
+              value={search.q}
+              onChange={search.setQ}
+              placeholder={t('common.searchDocsPlaceholder')}
+            />
             {tab === 'invoices' && (
               <select
                 className={`${inputClass} w-auto min-w-[10rem]`}
@@ -1220,7 +1225,7 @@ export default function SalesPage() {
       {search.debouncedQ && !(
         (tab === 'quotes' && (quotes.data || []).length) ||
         (tab === 'orders' && (orders.data || []).length) ||
-        (tab === 'invoices' && (invoices.data || []).length) ||
+        (tab === 'invoices' && ((invoices.data || []).length || (returns.data || []).length)) ||
         (tab === 'returns' && (returns.data || []).length) ||
         (tab === 'receipts' && (receipts.data || []).length)
       ) && !quotes.isLoading && !orders.isLoading && !invoices.isLoading && !returns.isLoading && !receipts.isLoading ? (
@@ -1285,6 +1290,7 @@ export default function SalesPage() {
       )}
 
       {tab === 'invoices' && (
+        <>
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
@@ -1355,6 +1361,31 @@ export default function SalesPage() {
             </table>
             </div>
         </Panel>
+        {!!search.debouncedQ && (returns.data || []).length > 0 && (
+          <Panel>
+            <p className="mb-2 text-xs font-semibold text-teal">{t('common.matchingReturns')}</p>
+            <div className="table-wrap">
+              <table className="data-table text-sm">
+                <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+                <tbody>
+                  {(returns.data || []).map((r: { id: number; return_number: string; total: number; status: string; currency?: string; customer?: { name: string } }) => (
+                    <tr key={r.id} className="cursor-pointer" onClick={() => { setTab('returns'); openRow(r) }}>
+                      <td className="font-mono text-xs">{r.return_number}</td>
+                      <td>{r.customer?.name}</td>
+                      <td>{r.currency || 'USD'}</td>
+                      <td>{r.total}</td>
+                      <td>{documentStatusLabel(r.status)}</td>
+                      <td>
+                        <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); setTab('returns'); openRow(r) }}>{t('common.view')}</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        )}
+        </>
       )}
 
       {tab === 'returns' && (

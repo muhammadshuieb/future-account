@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/ProductIdentityCells'
@@ -12,7 +12,25 @@ import {
   type StatementInvoiceLine,
   type StatementRow,
 } from '@/components/StatementPrintView'
-import { Button, Modal, StatTile, formatMoney, formatQuantity } from '@/components/ui'
+import { Button, ListSearchInput, Modal, StatTile, formatMoney, formatQuantity } from '@/components/ui'
+
+function statementRowMatchesProduct(row: StatementRow, rawTerm: string): boolean {
+  const term = rawTerm.trim().toLowerCase()
+  if (!term) return true
+  if (!isStatementDetailRow(row.type) || !row.invoice) return false
+  const parts: string[] = [row.number, row.notes || '']
+  for (const line of row.invoice.lines || []) {
+    parts.push(
+      line.product?.name || '',
+      line.product?.sku || '',
+      line.product?.brand || '',
+      line.product?.model || '',
+      line.serial_no || '',
+      line.batch_no || '',
+    )
+  }
+  return parts.join(' ').toLowerCase().includes(term)
+}
 
 export function partnerBalanceLabel(
   balance: number,
@@ -155,14 +173,24 @@ export default function PartnerStatementPanel({
   const { t, i18n } = useTranslation()
   const [selected, setSelected] = useState<StatementRow | null>(null)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
-  const rows = data.rows || []
+  const [productQ, setProductQ] = useState('')
+  const allRows = data.rows || []
+  const filtering = productQ.trim().length > 0
+  const rows = useMemo(
+    () => (filtering ? allRows.filter((r) => statementRowMatchesProduct(r, productQ)) : allRows),
+    [allRows, filtering, productQ],
+  )
   const opening = Number(data.opening_balance ?? 0)
   const closing = Number(data.closing_balance ?? data.balance ?? 0)
   const totalDebit = Number(
-    data.total_debit ?? rows.reduce((s, r) => s + (Number(r.debit) || 0), 0),
+    filtering
+      ? rows.reduce((s, r) => s + (Number(r.debit) || 0), 0)
+      : (data.total_debit ?? allRows.reduce((s, r) => s + (Number(r.debit) || 0), 0)),
   )
   const totalCredit = Number(
-    data.total_credit ?? rows.reduce((s, r) => s + (Number(r.credit) || 0), 0),
+    filtering
+      ? rows.reduce((s, r) => s + (Number(r.credit) || 0), 0)
+      : (data.total_credit ?? allRows.reduce((s, r) => s + (Number(r.credit) || 0), 0)),
   )
   const labels = {
     owedByThem: t('common.owedByThem'),
@@ -181,8 +209,27 @@ export default function PartnerStatementPanel({
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
+  useEffect(() => {
+    if (!filtering) return
+    const next: Record<string, boolean> = {}
+    rows.forEach((r, idx) => {
+      if (isStatementDetailRow(r.type) && r.invoice) next[rowKey(r, idx)] = true
+    })
+    setExpanded(next)
+  }, [filtering, productQ, rows])
+
   return (
     <>
+      <div className={`print-hide mb-3 flex flex-wrap items-center gap-2 ${dense ? '' : 'px-1'}`}>
+        <ListSearchInput
+          value={productQ}
+          onChange={setProductQ}
+          placeholder={t('common.searchProductPlaceholder')}
+        />
+        {filtering ? (
+          <p className="text-xs text-teal">{t('common.statementProductFilterHint')}</p>
+        ) : null}
+      </div>
       <div className={dense ? '' : 'px-1 pb-2'}>
       <table className={`statement-panel__movements w-full text-sm ${dense ? 'data-table' : ''}`}>
         <thead className={dense ? undefined : 'bg-mist text-right text-black/60'}>
@@ -200,7 +247,7 @@ export default function PartnerStatementPanel({
           {rows.length === 0 ? (
             <tr>
               <td colSpan={colCount} className={`${pad} text-center text-black/45`}>
-                {t('common.noStatementRows')}
+                {filtering ? t('common.noSearchResults') : t('common.noStatementRows')}
               </td>
             </tr>
           ) : (

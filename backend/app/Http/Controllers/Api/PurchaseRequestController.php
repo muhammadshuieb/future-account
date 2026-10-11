@@ -18,6 +18,7 @@ class PurchaseRequestController extends ApiController
         $query = PurchaseRequest::query()->with(['supplier', 'warehouse'])->latest('id');
         ListSearch::apply($query, $request, ['request_number', 'notes', 'currency', 'total', 'status'], [
             'supplier' => ['name', 'code'],
+            'items.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
 
         return $this->ok($query->get());

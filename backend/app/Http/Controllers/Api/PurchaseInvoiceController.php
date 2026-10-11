@@ -18,6 +18,7 @@ class PurchaseInvoiceController extends ApiController
         $query = PurchaseInvoice::query()->with(['supplier', 'warehouse'])->withCount('attachments')->latest('id');
         ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
             'supplier' => ['name', 'code'],
+            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
         ListSearch::applyUnsettledInvoiceFilter($query, $request);
 

@@ -19,6 +19,7 @@ class SalesInvoiceController extends ApiController
         ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
             'customer' => ['name', 'code'],
             'branch' => ['name', 'code'],
+            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
         ListSearch::applyUnsettledInvoiceFilter($query, $request);
 

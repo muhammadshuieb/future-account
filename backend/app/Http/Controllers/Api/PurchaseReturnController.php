@@ -18,6 +18,7 @@ class PurchaseReturnController extends ApiController
         $query = PurchaseReturn::query()->with(['supplier', 'warehouse'])->latest('id');
         ListSearch::apply($query, $request, ['return_number', 'notes', 'currency', 'total', 'status'], [
             'supplier' => ['name', 'code'],
+            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
 
         return $this->ok($query->get());

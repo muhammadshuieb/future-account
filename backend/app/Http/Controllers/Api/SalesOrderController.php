@@ -18,6 +18,7 @@ class SalesOrderController extends ApiController
         $query = SalesOrder::query()->with(['customer', 'warehouse', 'quote'])->latest('id');
         ListSearch::apply($query, $request, ['order_number', 'notes', 'currency', 'total', 'status'], [
             'customer' => ['name', 'code'],
+            'items.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
         ]);
 
         return $this->ok($query->get());
