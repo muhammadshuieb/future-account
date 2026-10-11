@@ -1,6 +1,6 @@
 import { LOGO } from '@/lib/brand'
 
-/** Official circular company stamp for optional invoice print. */
+/** Official circular company stamp — ink-only PNG with transparent ground. */
 export default function CompanyStamp({
   className = '',
   onLoad,

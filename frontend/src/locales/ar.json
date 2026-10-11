@@ -79,6 +79,8 @@
     "printPlain": "طباعة عادية",
     "printWithStamp": "طباعة مع ختم",
     "includeStamp": "تضمين الختم",
+    "stampOn": "الختم: ظاهر",
+    "stampOff": "الختم: مخفي",
     "whatsapp": "واتساب",
     "exportExcel": "تصدير Excel",
     "exportPdf": "تصدير PDF",

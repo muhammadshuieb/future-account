@@ -79,6 +79,8 @@
     "printPlain": "Yazdır (kaşesiz)",
     "printWithStamp": "Kaşeli yazdır",
     "includeStamp": "Kaşe ekle",
+    "stampOn": "Kaşe: açık",
+    "stampOff": "Kaşe: kapalı",
     "whatsapp": "WhatsApp",
     "exportExcel": "Excel dışa aktar",
     "exportPdf": "PDF dışa aktar",

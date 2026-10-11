@@ -60,18 +60,21 @@ export default function PrintDocumentShell({ hint, fileName, children, whatsapp 
         <Button variant="primary" onClick={printPlain}>
           <Printer size={16} /> {t('common.printPlain')}
         </Button>
-        <Button variant="secondary" onClick={printWithStamp}>
+        <Button variant={withStamp ? 'primary' : 'secondary'} onClick={printWithStamp}>
           <Printer size={16} /> {t('common.printWithStamp')}
         </Button>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-black/10 px-2.5 py-1.5 text-xs text-black/70">
-          <input
-            type="checkbox"
-            className="accent-teal"
-            checked={withStamp}
-            onChange={(e) => setWithStamp(e.target.checked)}
-          />
-          {t('common.includeStamp')}
-        </label>
+        <button
+          type="button"
+          className={`rounded-md border px-2.5 py-1.5 text-xs transition ${
+            withStamp
+              ? 'border-teal/40 bg-teal/10 font-semibold text-teal'
+              : 'border-black/10 text-black/60 hover:border-black/20'
+          }`}
+          onClick={() => setWithStamp((v) => !v)}
+          aria-pressed={withStamp}
+        >
+          {withStamp ? t('common.stampOn') : t('common.stampOff')}
+        </button>
         <PdfExportButton fileName={fileName} />
         {whatsapp ? (
           <WhatsAppSendButton

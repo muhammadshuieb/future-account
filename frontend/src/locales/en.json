@@ -79,6 +79,8 @@
     "printPlain": "Print (no stamp)",
     "printWithStamp": "Print with stamp",
     "includeStamp": "Include stamp",
+    "stampOn": "Stamp: on",
+    "stampOff": "Stamp: off",
     "whatsapp": "WhatsApp",
     "exportExcel": "Export Excel",
     "exportPdf": "Export PDF",

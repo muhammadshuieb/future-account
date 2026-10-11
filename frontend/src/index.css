@@ -666,19 +666,27 @@ body {
   }
 }
 
-/* Optional company stamp at foot of invoice print */
+/* Optional company stamp — ink impression on paper (not a photo card) */
 .company-stamp {
   display: flex;
   justify-content: flex-start;
-  margin-top: 1.25rem;
-  padding-top: 0.25rem;
+  align-items: flex-end;
+  margin-top: 0.35rem;
+  padding: 0;
+  pointer-events: none;
 }
 
 .company-stamp__img {
-  width: 38mm;
+  width: 36mm;
   height: auto;
-  max-width: 42mm;
+  max-width: 40mm;
   object-fit: contain;
+  background: transparent !important;
+  /* Multiply blends blue ink into the page like a real rubber stamp */
+  mix-blend-mode: multiply;
+  opacity: 0.92;
+  transform: rotate(-4deg);
+  filter: contrast(1.08) saturate(1.05);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -1545,11 +1553,15 @@ textarea {
   .print-document img.company-stamp__img,
   .print-sheet img.company-stamp__img,
   img.company-stamp__img {
-    width: 38mm !important;
-    max-width: 42mm !important;
-    max-height: 42mm !important;
+    width: 36mm !important;
+    max-width: 40mm !important;
+    max-height: 40mm !important;
     height: auto !important;
     object-fit: contain !important;
+    background: transparent !important;
+    mix-blend-mode: multiply !important;
+    opacity: 0.92 !important;
+    transform: rotate(-4deg) !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
