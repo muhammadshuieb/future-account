@@ -663,6 +663,7 @@
     "restoreSqlOnly": "الاستعادة متاحة لملفات SQL/Dump فقط.",
     "backupKindSql": "نسخة قاعدة البيانات",
     "backupKindExcel": "أرشيف Excel",
+    "backupKindSource": "كود البرمجة وطريقة التثبيت",
     "restoreConfirm": "استعادة هذه النسخة ستستبدل قاعدة البيانات الحالية. هل أنت متأكد؟",
     "restoreFromFile": "استعادة من ملف",
     "restoringFromFile": "جاري الاستعادة…",

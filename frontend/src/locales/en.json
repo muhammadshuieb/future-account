@@ -660,6 +660,7 @@
     "restoreSqlOnly": "Restore is available for SQL/Dump files only.",
     "backupKindSql": "Database backup",
     "backupKindExcel": "Excel archive",
+    "backupKindSource": "Source code + install guide",
     "restoreConfirm": "Restoring this backup will replace the current database. Are you sure?",
     "restoreFromFile": "Restore from file",
     "restoringFromFile": "Restoring…",

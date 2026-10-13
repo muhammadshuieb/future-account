@@ -54,9 +54,24 @@ class BackupController extends ApiController
         ]);
 
         $meta = $this->backups->create($data['label'] ?? null);
-        $meta['distribution'] = $this->distribution->distribute($meta['path'], $meta['filename']);
+        $meta['distribution'] = $this->distribution->distribute(
+            $meta['path'],
+            $meta['filename'],
+            $meta['caption'] ?? \App\Services\BackupService::CAPTION_DB,
+        );
         if (! empty($meta['excel_path']) && ! empty($meta['excel_filename'])) {
-            $meta['excel_distribution'] = $this->distribution->distribute($meta['excel_path'], $meta['excel_filename']);
+            $meta['excel_distribution'] = $this->distribution->distribute(
+                $meta['excel_path'],
+                $meta['excel_filename'],
+                $meta['excel_caption'] ?? \App\Services\BackupService::CAPTION_EXCEL,
+            );
+        }
+        if (! empty($meta['code_path']) && ! empty($meta['code_filename'])) {
+            $meta['code_distribution'] = $this->distribution->distribute(
+                $meta['code_path'],
+                $meta['code_filename'],
+                $meta['code_caption'] ?? \App\Services\SourceCodeArchiveService::TELEGRAM_CAPTION,
+            );
         }
 
         if (! $this->distribution->googleDriveConfigured()) {
@@ -70,6 +85,7 @@ class BackupController extends ApiController
 
         $failed = collect($meta['distribution'] ?? [])
             ->merge($meta['excel_distribution'] ?? [])
+            ->merge($meta['code_distribution'] ?? [])
             ->filter(fn ($r) => ! ($r['skipped'] ?? false) && ! ($r['ok'] ?? false));
 
         if ($failed->isNotEmpty()) {

@@ -42,7 +42,7 @@ class BackupDistributionService
     /**
      * @return array{google_drive: array<string, mixed>, telegram: array<string, mixed>}
      */
-    public function distribute(string $path, string $filename): array
+    public function distribute(string $path, string $filename, ?string $caption = null): array
     {
         $results = [
             'google_drive' => ['ok' => false, 'skipped' => true],
@@ -64,7 +64,7 @@ class BackupDistributionService
 
         if ($this->telegramConfigured()) {
             try {
-                $messageId = $this->sendToTelegram($path, $filename);
+                $messageId = $this->sendToTelegram($path, $filename, $caption);
                 $results['telegram'] = ['ok' => true, 'message_id' => $messageId];
                 $this->recordSuccess('telegram');
             } catch (\Throwable $e) {
@@ -490,15 +490,19 @@ class BackupDistributionService
         }
     }
 
-    protected function sendToTelegram(string $path, string $filename): int
+    protected function sendToTelegram(string $path, string $filename, ?string $caption = null): int
     {
         $token = $this->telegramBotToken();
         $chatId = $this->telegramChatId();
+        $caption = trim((string) ($caption ?: 'نسخة SynaAcc — '.now()->format('Y-m-d H:i')));
+        if (mb_strlen($caption) > 900) {
+            $caption = mb_substr($caption, 0, 900);
+        }
 
         $response = Http::attach('document', file_get_contents($path), $filename)
             ->post("https://api.telegram.org/bot{$token}/sendDocument", [
                 'chat_id' => $chatId,
-                'caption' => 'Syna Co backup — '.now()->format('Y-m-d H:i'),
+                'caption' => $caption,
             ]);
 
         if (! $response->successful()) {

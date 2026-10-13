@@ -129,4 +129,25 @@ else
   log "WARN: Frontend check failed on port ${FRONTEND_PORT}."
 fi
 
+# Retained source zip (code + install guide) — rebuilt every deploy, kept in backups volume, sent to Telegram.
+SOURCE_ZIP_NAME='03_كود-البرمجة-وطريقة-التثبيت_SynaAcc.zip'
+if [[ -x "$SCRIPT_DIR/build-source-archive.sh" ]] || [[ -f "$SCRIPT_DIR/build-source-archive.sh" ]]; then
+  log "Building retained source-code archive..."
+  chmod +x "$SCRIPT_DIR/build-source-archive.sh" 2>/dev/null || true
+  SOURCE_ZIP_HOST="$(mktemp /tmp/syna-source-XXXXXX.zip)"
+  if bash "$SCRIPT_DIR/build-source-archive.sh" "$SOURCE_ZIP_HOST"; then
+    "${COMPOSE[@]}" cp "$SOURCE_ZIP_HOST" "backend:/var/www/html/storage/app/backups/${SOURCE_ZIP_NAME}"
+    rm -f "$SOURCE_ZIP_HOST"
+    log "Source archive installed in backups volume."
+    if [[ "${DEPLOY_SEND_SOURCE_ARCHIVE:-1}" == "1" ]]; then
+      log "Sending source archive to backup destinations..."
+      "${COMPOSE[@]}" exec -T backend php artisan syna:send-source-archive --no-ansi \
+        || log "WARN: Could not send source archive (Telegram/Drive may be unconfigured)."
+    fi
+  else
+    rm -f "$SOURCE_ZIP_HOST"
+    log "WARN: Source archive build failed (continuing deploy)."
+  fi
+fi
+
 log "Deploy finished successfully."

@@ -32,35 +32,49 @@ Artisan::command('syna:backup', function () {
         return 1;
     }
 
-    $results = $distribution->distribute($meta['path'], $meta['filename']);
     $hadFailure = false;
-
-    foreach ($results as $dest => $result) {
-        if ($result['skipped'] ?? false) {
-            $this->comment("{$dest}: skipped (not configured)");
-        } elseif ($result['ok'] ?? false) {
-            $this->info("{$dest}: uploaded");
-        } else {
-            $hadFailure = true;
-            $this->warn("{$dest}: failed — ".($result['error'] ?? 'unknown'));
-        }
-    }
-
-    if (! empty($meta['excel_path']) && ! empty($meta['excel_filename'])) {
-        $this->info('Excel companion: '.$meta['excel_filename']);
-        $excelResults = $distribution->distribute($meta['excel_path'], $meta['excel_filename']);
-        foreach ($excelResults as $dest => $result) {
+    $allDist = [];
+    $cmd = $this;
+    $reportDist = function (string $label, array $results) use (&$hadFailure, &$allDist, $cmd): void {
+        $allDist[$label] = $results;
+        foreach ($results as $dest => $result) {
             if ($result['skipped'] ?? false) {
-                $this->comment("excel/{$dest}: skipped");
+                $cmd->comment("{$label}/{$dest}: skipped (not configured)");
             } elseif ($result['ok'] ?? false) {
-                $this->info("excel/{$dest}: uploaded");
+                $cmd->info("{$label}/{$dest}: uploaded");
             } else {
                 $hadFailure = true;
-                $this->warn("excel/{$dest}: failed — ".($result['error'] ?? 'unknown'));
+                $cmd->warn("{$label}/{$dest}: failed — ".($result['error'] ?? 'unknown'));
             }
         }
+    };
+
+    $reportDist('db', $distribution->distribute(
+        $meta['path'],
+        $meta['filename'],
+        $meta['caption'] ?? BackupService::CAPTION_DB,
+    ));
+
+    if (! empty($meta['excel_path']) && ! empty($meta['excel_filename'])) {
+        $this->info('Excel: '.$meta['excel_filename']);
+        $reportDist('excel', $distribution->distribute(
+            $meta['excel_path'],
+            $meta['excel_filename'],
+            $meta['excel_caption'] ?? BackupService::CAPTION_EXCEL,
+        ));
     } elseif (! empty($meta['excel_error'])) {
         $this->warn('Excel companion failed: '.$meta['excel_error']);
+    }
+
+    if (! empty($meta['code_path']) && ! empty($meta['code_filename'])) {
+        $this->info('Source code: '.$meta['code_filename']);
+        $reportDist('code', $distribution->distribute(
+            $meta['code_path'],
+            $meta['code_filename'],
+            $meta['code_caption'] ?? \App\Services\SourceCodeArchiveService::TELEGRAM_CAPTION,
+        ));
+    } elseif (! empty($meta['code_error'])) {
+        $this->warn('Source archive missing: '.$meta['code_error']);
     }
 
     if (! $distribution->googleDriveConfigured()) {
@@ -89,16 +103,17 @@ Artisan::command('syna:backup', function () {
     }
 
     if ($hadFailure) {
-        $errors = collect($results)
-            ->filter(fn ($r) => ! ($r['skipped'] ?? false) && ! ($r['ok'] ?? false))
-            ->map(fn ($r, $dest) => $dest.': '.($r['error'] ?? 'unknown'))
+        $errors = collect($allDist)
+            ->flatMap(fn ($results, $label) => collect($results)
+                ->filter(fn ($r) => ! ($r['skipped'] ?? false) && ! ($r['ok'] ?? false))
+                ->map(fn ($r, $dest) => "{$label}/{$dest}: ".($r['error'] ?? 'unknown')))
             ->implode(' | ');
 
         $notify->notifyAdmins(
             'backup_failed',
             'فشل رفع النسخة الاحتياطية',
             'تم إنشاء النسخة محلياً لكن فشل الرفع: '.$errors,
-            ['filename' => $meta['filename'], 'distribution' => $results],
+            ['filename' => $meta['filename'], 'distribution' => $allDist],
         );
 
         return 1;
@@ -106,6 +121,46 @@ Artisan::command('syna:backup', function () {
 
     return 0;
 })->purpose('Create scheduled Syna Co database backup');
+
+Artisan::command('syna:send-source-archive', function () {
+    $archive = app(\App\Services\SourceCodeArchiveService::class);
+    $distribution = app(BackupDistributionService::class);
+
+    try {
+        $meta = $archive->ensureLatest(env('SOURCE_ARCHIVE_ROOT') ?: null);
+        $this->info('Source archive ready: '.$meta['filename'].' ('.$meta['size_human'].')');
+    } catch (\Throwable $e) {
+        $this->error($e->getMessage());
+
+        return 1;
+    }
+
+    if (! $distribution->telegramConfigured() && ! $distribution->googleDriveConfigured()) {
+        $this->comment('No remote destinations configured — archive kept locally only.');
+
+        return 0;
+    }
+
+    $results = $distribution->distribute(
+        $meta['path'],
+        $meta['filename'],
+        \App\Services\SourceCodeArchiveService::TELEGRAM_CAPTION.' — '.now()->format('Y-m-d H:i'),
+    );
+
+    foreach ($results as $dest => $result) {
+        if ($result['skipped'] ?? false) {
+            $this->comment("{$dest}: skipped");
+        } elseif ($result['ok'] ?? false) {
+            $this->info("{$dest}: uploaded");
+        } else {
+            $this->warn("{$dest}: failed — ".($result['error'] ?? 'unknown'));
+
+            return 1;
+        }
+    }
+
+    return 0;
+})->purpose('Ensure retained source zip exists and send it to backup destinations');
 
 Artisan::command('syna:backfill-cash-box-gl {--dry-run : Preview links without saving}', function () {
     $gl = app(\App\Services\CashBoxGlService::class);

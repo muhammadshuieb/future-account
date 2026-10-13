@@ -16,7 +16,16 @@ class BackupService
 {
     public const ALLOWED_EXTENSIONS = ['sql', 'dump', 'backup', 'gz'];
 
-    public const LIST_EXTENSIONS = ['sql', 'dump', 'backup', 'gz', 'xlsx'];
+    public const LIST_EXTENSIONS = ['sql', 'dump', 'backup', 'gz', 'xlsx', 'zip'];
+
+    /** Clear Telegram / UI labels for the three backup artifacts. */
+    public const CAPTION_DB = 'نسخة احتياطية لقاعدة البيانات — SynaAcc';
+
+    public const CAPTION_EXCEL = 'ملف Excel ببيانات النظام — SynaAcc';
+
+    public const DUMP_PREFIX = '01_نسخة-احتياطية-قاعدة-بيانات_SynaAcc_';
+
+    public const EXCEL_PREFIX = '02_بيانات-Excel_SynaAcc_';
 
     /** Max upload size in kilobytes (512 MB). */
     public const MAX_UPLOAD_KB = 524288;
@@ -56,24 +65,35 @@ class BackupService
     public function list(): array
     {
         $files = collect(File::files($this->directory()))
-            ->filter(fn ($f) => Str::endsWith($f->getFilename(), ['.dump', '.sql', '.backup', '.gz', '.xlsx']))
+            ->filter(fn ($f) => Str::endsWith($f->getFilename(), ['.dump', '.sql', '.backup', '.gz', '.xlsx', '.zip']))
             ->sortByDesc(fn ($f) => $f->getMTime())
             ->values();
 
-        return $files->map(fn ($f) => [
-            'filename' => $f->getFilename(),
-            'size' => $f->getSize(),
-            'size_human' => $this->humanSize($f->getSize()),
-            'created_at' => date('c', $f->getMTime()),
-            'kind' => Str::endsWith(strtolower($f->getFilename()), '.xlsx') ? 'excel' : 'sql',
-        ])->all();
+        return $files->map(function ($f) {
+            $name = $f->getFilename();
+            $lower = strtolower($name);
+
+            return [
+                'filename' => $name,
+                'size' => $f->getSize(),
+                'size_human' => $this->humanSize($f->getSize()),
+                'created_at' => date('c', $f->getMTime()),
+                'kind' => match (true) {
+                    Str::endsWith($lower, '.xlsx') => 'excel',
+                    Str::endsWith($lower, '.zip') => 'source',
+                    default => 'sql',
+                },
+                'label_ar' => $this->labelForFilename($name),
+            ];
+        })->all();
     }
 
     public function create(?string $label = null): array
     {
         $stamp = now()->format('Ymd_His');
         $safe = $label ? Str::slug($label, '_') : 'manual';
-        $filename = "future_account_{$safe}_{$stamp}.dump";
+        $filename = self::DUMP_PREFIX."{$safe}_{$stamp}.dump";
+        $excelFilename = self::EXCEL_PREFIX."{$safe}_{$stamp}.xlsx";
         $path = $this->directory().DIRECTORY_SEPARATOR.$filename;
 
         $env = $this->pgEnv();
@@ -101,14 +121,22 @@ class BackupService
             'created_at' => now()->toIso8601String(),
             'path' => $path,
             'kind' => 'sql',
+            'caption' => self::CAPTION_DB.' — '.now()->format('Y-m-d H:i'),
+            'label_ar' => 'نسخة احتياطية لقاعدة البيانات',
         ];
 
         try {
-            $excel = app(ExcelExportService::class)->saveFullArchiveBeside($filename, $this->directory());
+            $excel = app(ExcelExportService::class)->saveFullArchiveBeside(
+                $filename,
+                $this->directory(),
+                $excelFilename,
+            );
             $meta['excel_filename'] = $excel['filename'];
             $meta['excel_path'] = $excel['path'];
             $meta['excel_size'] = $excel['size'];
             $meta['excel_size_human'] = $excel['size_human'];
+            $meta['excel_caption'] = self::CAPTION_EXCEL.' — '.now()->format('Y-m-d H:i');
+            $meta['excel_label_ar'] = 'ملف Excel ببيانات النظام';
         } catch (\Throwable $e) {
             Log::warning('Backup Excel companion failed: '.$e->getMessage(), [
                 'dump' => $filename,
@@ -116,7 +144,55 @@ class BackupService
             $meta['excel_error'] = $e->getMessage();
         }
 
+        try {
+            $code = app(SourceCodeArchiveService::class)->ensureLatest();
+            $meta['code_filename'] = $code['filename'];
+            $meta['code_path'] = $code['path'];
+            $meta['code_size'] = $code['size'];
+            $meta['code_size_human'] = $code['size_human'];
+            $meta['code_caption'] = SourceCodeArchiveService::TELEGRAM_CAPTION.' — '.now()->format('Y-m-d H:i');
+            $meta['code_label_ar'] = 'كود البرمجة مع طريقة التثبيت';
+        } catch (\Throwable $e) {
+            Log::warning('Backup source archive missing: '.$e->getMessage(), [
+                'dump' => $filename,
+            ]);
+            $meta['code_error'] = $e->getMessage();
+        }
+
         return $meta;
+    }
+
+    public function labelForFilename(string $filename): string
+    {
+        $name = basename($filename);
+        $lower = strtolower($name);
+        if (Str::endsWith($lower, '.zip') || Str::startsWith($name, '03_كود')) {
+            return 'كود البرمجة مع طريقة التثبيت';
+        }
+        if (Str::endsWith($lower, '.xlsx') || Str::startsWith($name, self::EXCEL_PREFIX)) {
+            return 'ملف Excel ببيانات النظام';
+        }
+        if (Str::endsWith($lower, ['.dump', '.sql', '.backup', '.gz']) || Str::startsWith($name, self::DUMP_PREFIX)) {
+            return 'نسخة احتياطية لقاعدة البيانات';
+        }
+
+        return $name;
+    }
+
+    public function excelCompanionPath(string $dumpFilename): string
+    {
+        $base = pathinfo(basename($dumpFilename), PATHINFO_FILENAME);
+        if (Str::startsWith($base, '01_نسخة-احتياطية-قاعدة-بيانات_SynaAcc_')) {
+            $excelBase = str_replace(
+                '01_نسخة-احتياطية-قاعدة-بيانات_SynaAcc_',
+                '02_بيانات-Excel_SynaAcc_',
+                $base,
+            );
+
+            return $this->directory().DIRECTORY_SEPARATOR.$excelBase.'.xlsx';
+        }
+
+        return $this->directory().DIRECTORY_SEPARATOR.$base.'.xlsx';
     }
 
     public function pathFor(string $filename): string
@@ -184,13 +260,22 @@ class BackupService
         File::delete($path);
 
         // When removing a SQL dump, also remove the companion Excel archive.
+        // Never delete the retained source-code zip.
         $lower = strtolower(basename($filename));
         if (Str::endsWith($lower, ['.dump', '.sql', '.backup', '.gz'])) {
-            $excelCompanion = $this->directory().DIRECTORY_SEPARATOR.pathinfo(basename($filename), PATHINFO_FILENAME).'.xlsx';
+            $excelCompanion = $this->excelCompanionPath($filename);
             if (File::exists($excelCompanion)) {
                 File::delete($excelCompanion);
             }
         }
+    }
+
+    public function isRetainedFilename(string $filename): bool
+    {
+        $name = basename($filename);
+
+        return $name === SourceCodeArchiveService::LATEST_FILENAME
+            || Str::startsWith($name, '03_كود-البرمجة');
     }
 
     /**
@@ -252,18 +337,21 @@ class BackupService
 
         $deleted = [];
         foreach ($files as $file) {
-            if (in_array($file->getFilename(), $protectedNames, true)) {
+            $name = $file->getFilename();
+            if ($this->isRetainedFilename($name)) {
+                continue;
+            }
+            if (in_array($name, $protectedNames, true)) {
                 continue;
             }
             if ($file->getMTime() >= $cutoff) {
                 continue;
             }
-            $name = $file->getFilename();
             File::delete($file->getPathname());
             $deleted[] = $name;
 
-            $excelCompanion = $this->directory().DIRECTORY_SEPARATOR.pathinfo($name, PATHINFO_FILENAME).'.xlsx';
-            if (File::exists($excelCompanion)) {
+            $excelCompanion = $this->excelCompanionPath($name);
+            if (File::exists($excelCompanion) && ! $this->isRetainedFilename(basename($excelCompanion))) {
                 File::delete($excelCompanion);
                 $deleted[] = basename($excelCompanion);
             }

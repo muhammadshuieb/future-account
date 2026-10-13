@@ -654,6 +654,7 @@
     "restoreSqlOnly": "Geri yükleme yalnızca SQL/Dump dosyaları için geçerlidir.",
     "backupKindSql": "Veritabanı yedeği",
     "backupKindExcel": "Excel arşivi",
+    "backupKindSource": "Kaynak kod + kurulum kılavuzu",
     "restoreConfirm": "Bu yedeği geri yüklemek mevcut veritabanını değiştirir. Emin misiniz?",
     "restoreFromFile": "Dosyadan geri yükle",
     "restoringFromFile": "Geri yükleniyor…",

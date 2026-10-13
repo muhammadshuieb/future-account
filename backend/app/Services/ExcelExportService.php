@@ -128,10 +128,9 @@ class ExcelExportService
      *
      * @return array{filename: string, path: string, size: int, size_human: string}
      */
-    public function saveFullArchiveBeside(string $dumpFilename, string $directory): array
+    public function saveFullArchiveBeside(string $dumpFilename, string $directory, ?string $excelFilename = null): array
     {
-        $base = pathinfo($dumpFilename, PATHINFO_FILENAME);
-        $filename = $base.'.xlsx';
+        $filename = $excelFilename ?: (pathinfo($dumpFilename, PATHINFO_FILENAME).'.xlsx');
         $path = rtrim($directory, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$filename;
         $book = $this->buildFullArchive();
         $book->save($path);

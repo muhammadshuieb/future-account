@@ -35,7 +35,8 @@ type BackupRow = {
   filename: string
   size_human: string
   created_at: string
-  kind?: 'sql' | 'excel' | string
+  kind?: 'sql' | 'excel' | 'source' | string
+  label_ar?: string
 }
 
 const HIDDEN_GENERAL_KEYS = new Set([
@@ -987,19 +988,26 @@ export default function SettingsPage() {
             <ul className="divide-y divide-[var(--color-line)]">
               {(backups.data || []).map((b) => {
                 const isExcel = b.kind === 'excel' || b.filename.toLowerCase().endsWith('.xlsx')
+                const isSource = b.kind === 'source' || b.filename.toLowerCase().endsWith('.zip')
+                const kindLabel = isSource
+                  ? t('settings.backupKindSource')
+                  : isExcel
+                    ? t('settings.backupKindExcel')
+                    : t('settings.backupKindSql')
                 return (
                 <li key={b.filename} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
                   <div>
-                    <p className="font-mono text-xs sm:text-sm">{b.filename}</p>
+                    <p className="text-sm font-medium text-black/85">{b.label_ar || kindLabel}</p>
+                    <p className="font-mono text-[11px] text-black/45 sm:text-xs">{b.filename}</p>
                     <p className="text-xs text-black/45">
-                      {isExcel ? t('settings.backupKindExcel') : t('settings.backupKindSql')}
+                      {kindLabel}
                       {' · '}
                       {b.size_human} · {formatDateTimeLocal(b.created_at)}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => void downloadBackup(b.filename)}>{t('settings.download')}</Button>
-                    {!isExcel && (
+                    {!isExcel && !isSource && (
                       <Button
                         variant="danger"
                         onClick={() => {
