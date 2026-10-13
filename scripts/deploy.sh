@@ -69,6 +69,12 @@ git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
+# Re-exec once after pull so the remainder of this script is the freshly pulled version.
+if [[ "${DEPLOY_REEXEC:-0}" != "1" ]]; then
+  export DEPLOY_REEXEC=1
+  exec bash "$SCRIPT_DIR/deploy.sh"
+fi
+
 log "Ensuring Google Drive OAuth env placeholders..."
 ensure_google_drive_oauth_placeholders
 
