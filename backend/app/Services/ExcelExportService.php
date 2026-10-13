@@ -199,16 +199,17 @@ class ExcelExportService
                 $w->id, $w->name, $w->code, $w->branch?->name, $w->is_active ? '1' : '0',
             ])->all());
 
-        $book->addSheet('الأصناف', ['المعرف', 'الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
-            Product::query()->with(['category', 'unit'])->orderBy('id')->get()->map(fn (Product $p) => [
+        $book->addSheet('الأصناف', ['المعرف', 'الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'الكمية المتبقية', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
+            Product::query()->with(['category', 'unit'])->withSum('stockLevels as on_hand', 'quantity')->orderBy('id')->get()->map(fn (Product $p) => [
                 $p->id, $p->sku, $p->name, $p->brand, $p->model, $p->category?->name, $p->unit?->name,
+                round((float) ($p->on_hand ?? 0), 3),
                 $p->sale_price, $p->cost_price, $p->barcode, $p->is_active ? '1' : '0',
             ])->all());
 
-        $book->addSheet('أرصدة المخزون', ['المعرف', 'الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية', 'رقم الدفعة'],
+        $book->addSheet('أرصدة المخزون', ['المعرف', 'الكود', 'الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية المتبقية', 'رقم الدفعة'],
             StockLevel::query()->with(['product', 'warehouse'])->orderBy('id')->get()->map(fn (StockLevel $s) => [
-                $s->id, $s->product?->name, $s->product?->brand, $s->product?->model,
-                $s->warehouse?->name, $s->quantity, $s->batch_no,
+                $s->id, $s->product?->sku, $s->product?->name, $s->product?->brand, $s->product?->model,
+                $s->warehouse?->name, round((float) ($s->quantity ?? 0), 3), $s->batch_no,
             ])->all());
 
         $book->addSheet('فواتير المبيعات', [
@@ -565,12 +566,24 @@ class ExcelExportService
 
     protected function sheetProducts(ExcelWorkbook $book, Request $request): void
     {
-        $q = Product::query()->with(['category', 'unit'])->orderBy('id');
-        if (auth()->user() && WarehouseAccess::isScoped(auth()->user())) {
-            $q->whereHas('stockLevels', fn ($query) => $query->whereIn(
-                'warehouse_id',
-                WarehouseAccess::warehouseIds(auth()->user()),
-            ));
+        $user = auth()->user();
+        $warehouseIds = $user ? WarehouseAccess::warehouseIds($user) : [];
+        $filterWarehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+
+        $stockScope = function ($query) use ($user, $warehouseIds, $filterWarehouseId) {
+            if ($filterWarehouseId) {
+                $query->where('warehouse_id', $filterWarehouseId);
+            } elseif ($user && WarehouseAccess::isScoped($user)) {
+                $query->whereIn('warehouse_id', $warehouseIds);
+            }
+        };
+
+        $q = Product::query()
+            ->with(['category', 'unit'])
+            ->withSum(['stockLevels as on_hand' => $stockScope], 'quantity')
+            ->orderBy('id');
+        if ($user && WarehouseAccess::isScoped($user)) {
+            $q->whereHas('stockLevels', fn ($query) => $query->whereIn('warehouse_id', $warehouseIds));
         }
         if ($request->filled('q')) {
             $term = '%'.$request->query('q').'%';
@@ -581,11 +594,15 @@ class ExcelExportService
                 ->orWhere('brand', 'ilike', $term)
                 ->orWhere('model', 'ilike', $term));
         }
-        $book->addSheet('الأصناف', ['الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
+        $book->addSheet(
+            'الأصناف',
+            ['الكود', 'الاسم', 'الماركة', 'الموديل', 'التصنيف', 'الوحدة', 'الكمية المتبقية', 'سعر البيع', 'التكلفة', 'باركود', 'نشط'],
             $q->get()->map(fn ($p) => [
                 $p->sku, $p->name, $p->brand, $p->model, $p->category?->name, $p->unit?->name,
+                round((float) ($p->on_hand ?? 0), 3),
                 $p->sale_price, $p->cost_price, $p->barcode, $p->is_active ? '1' : '0',
-            ])->all());
+            ])->all()
+        );
     }
 
     protected function sheetStockLevels(ExcelWorkbook $book, Request $request): void
@@ -597,11 +614,14 @@ class ExcelExportService
         if ($request->filled('warehouse_id')) {
             $q->where('warehouse_id', $request->query('warehouse_id'));
         }
-        $book->addSheet('أرصدة المخزون', ['الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية', 'رقم الدفعة'],
+        $book->addSheet(
+            'أرصدة المخزون',
+            ['الكود', 'الصنف', 'الماركة', 'الموديل', 'المستودع', 'الكمية المتبقية', 'رقم الدفعة'],
             $q->get()->map(fn ($s) => [
-                $s->product?->name, $s->product?->brand, $s->product?->model,
-                $s->warehouse?->name, $s->quantity, $s->batch_no,
-            ])->all());
+                $s->product?->sku, $s->product?->name, $s->product?->brand, $s->product?->model,
+                $s->warehouse?->name, round((float) ($s->quantity ?? 0), 3), $s->batch_no,
+            ])->all()
+        );
     }
 
     protected function sheetStockMovements(ExcelWorkbook $book, Request $request): void

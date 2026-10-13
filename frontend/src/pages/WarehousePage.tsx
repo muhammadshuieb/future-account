@@ -476,7 +476,7 @@ export default function WarehousePage() {
             {['alerts', 'counts'].includes(tab) ? null : (
               <ExcelExportButton
                 path={`/exports/${excelModuleForWarehouseTab(tab)}`}
-                params={filterWarehouseId && ['stock', 'movements'].includes(tab) ? { warehouse_id: filterWarehouseId } : undefined}
+                params={filterWarehouseId && ['products', 'stock', 'movements'].includes(tab) ? { warehouse_id: filterWarehouseId } : undefined}
               />
             )}
             {tab === 'products' && canManageDirectly ? (
