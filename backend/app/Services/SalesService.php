@@ -115,7 +115,7 @@ class SalesService
             throw ValidationException::withMessages(['status' => ['الفاتورة مرحّلة مسبقاً.']]);
         }
 
-        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
+        $posted = DB::transaction(function () use ($invoice, $user, $intendedPaidOverride) {
             $invoice->load(['lines.product.unit', 'customer']);
 
             if ($invoice->lines->isEmpty()) {
@@ -309,6 +309,10 @@ class SalesService
 
             return $invoice->fresh(['lines.product.unit', 'customer', 'warehouse', 'branch', 'cashBox', 'journalEntry', 'attachments']);
         });
+
+        BackupTrigger::requestAfterInvoice('sales_invoice');
+
+        return $posted;
     }
 
     /**

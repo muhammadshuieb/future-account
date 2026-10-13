@@ -15,17 +15,17 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule): void {
-        // Runs every minute; executes only when clock matches backup_time_1 / backup_time_2 settings.
+        // Every minute: once-daily at backup_time_1, or soon after a posted invoice.
         $schedule->command('syna:backup')
             ->everyMinute()
             ->when(function (): bool {
                 $now = now()->format('H:i');
-                [$t1, $t2] = Setting::backupTimes();
+                $daily = Setting::backupDailyTime();
 
-                return $now === $t1 || $now === $t2;
+                return $now === $daily || \App\Services\BackupTrigger::isPending();
             })
             ->name('syna-auto-backup')
-            ->withoutOverlapping();
+            ->withoutOverlapping(30);
 
         $schedule->command('syna:check-backup-health')
             ->dailyAt('08:00')

@@ -20,7 +20,7 @@ if ! command -v cron >/dev/null 2>&1 && ! systemctl list-unit-files 2>/dev/null 
 fi
 
 cat > "$CRON_FILE" <<'EOF'
-# syna-scheduler — Syna Co Laravel schedule:run (twice-daily backup + health checks)
+# syna-scheduler — Syna Co Laravel schedule:run (daily backup + after-invoice + health)
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 * * * * * root cd /opt/future-account && /usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan schedule:run >> /var/log/syna-scheduler.log 2>&1

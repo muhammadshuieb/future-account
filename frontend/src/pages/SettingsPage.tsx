@@ -673,14 +673,6 @@ export default function SettingsPage() {
                   onChange={(e) => setValue('backup_time_1', e.target.value)}
                 />
               </Field>
-              <Field label={t('settings.backupTime2')}>
-                <input
-                  type="time"
-                  className={inputClass}
-                  value={values.backup_time_2 || '14:00'}
-                  onChange={(e) => setValue('backup_time_2', e.target.value)}
-                />
-              </Field>
             </div>
             <Button type="button" variant="primary" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               {t('settings.saveSchedule')}

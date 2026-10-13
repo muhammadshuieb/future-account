@@ -105,7 +105,7 @@ class PurchaseService
             throw ValidationException::withMessages(['status' => ['فاتورة المشتريات مرحّلة مسبقاً.']]);
         }
 
-        return DB::transaction(function () use ($invoice, $user, $intendedPaidOverride, $applyStock) {
+        $posted = DB::transaction(function () use ($invoice, $user, $intendedPaidOverride, $applyStock) {
             $invoice->load(['lines.product.unit', 'supplier']);
 
             if (! $invoice->warehouse_id) {
@@ -270,6 +270,10 @@ class PurchaseService
 
             return $invoice->fresh(['lines.product.unit', 'supplier', 'warehouse', 'cashBox', 'journalEntry', 'attachments']);
         });
+
+        BackupTrigger::requestAfterInvoice('purchase_invoice');
+
+        return $posted;
     }
 
     /**

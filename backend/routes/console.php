@@ -16,9 +16,14 @@ Artisan::command('syna:backup', function () {
     $notify = app(AppNotificationService::class);
     $distribution = app(BackupDistributionService::class);
     $backups = app(BackupService::class);
+    $pendingInvoice = \App\Services\BackupTrigger::consume();
+    if ($pendingInvoice) {
+        $this->comment('Trigger: after invoice ('.$pendingInvoice['reason'].')');
+    }
 
     try {
-        $meta = $backups->create('auto');
+        $label = $pendingInvoice ? 'invoice' : 'auto';
+        $meta = $backups->create($label);
         $this->info('Backup created: '.$meta['filename']);
     } catch (\Throwable $e) {
         $this->error('Backup failed: '.$e->getMessage());

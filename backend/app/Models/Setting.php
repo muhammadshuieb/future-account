@@ -133,10 +133,20 @@ class Setting extends Model
         return in_array($locale, ['ar', 'en', 'tr'], true) ? $locale : 'ar';
     }
 
-    /** @return array{0: string, 1: string} */
+    /** Once-daily scheduled backup time (Asia/Damascus). */
+    public static function backupDailyTime(): string
+    {
+        return static::normalizeTime((string) (static::getValue('backup_time_1', '02:00') ?? '02:00'), '02:00');
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     *
+     * @deprecated Prefer backupDailyTime(); kept for older callers.
+     */
     public static function backupTimes(): array
     {
-        $t1 = static::normalizeTime((string) (static::getValue('backup_time_1', '02:00') ?? '02:00'), '02:00');
+        $t1 = static::backupDailyTime();
         $t2 = static::normalizeTime((string) (static::getValue('backup_time_2', '14:00') ?? '14:00'), '14:00');
 
         return [$t1, $t2];
