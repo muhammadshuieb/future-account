@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Account;
 use App\Models\CashBox;
 use App\Models\Customer;
+use App\Models\JournalDetail;
 use App\Models\Product;
 use App\Models\Receipt;
 use App\Models\SalesInvoice;
@@ -188,5 +190,64 @@ class SalesInvoiceMultiCurrencyPaymentTest extends TestCase
             'base_amount' => 200,
             'cash_box_id' => $sypBox->id,
         ])->assertStatus(422);
+    }
+
+    public function test_collect_posts_fx_loss_when_payment_rate_weaker_than_invoice(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $sypBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'SYP',
+            'exchange_rate' => round(1 / 15000, 8),
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_cost' => 100000, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        // Invoice 1,500,000 SYP booked at 1/15000 → AR base 100
+        $invoiceRate = round(1 / 15000, 8);
+        $invoice = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'SYP',
+            'exchange_rate' => $invoiceRate,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1500000, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $this->assertEqualsWithDelta(100, (float) $invoice['base_amount'], 0.05);
+
+        // Collect full amount at weaker rate 1/20000 → cash base 75 → FX loss 25
+        $payRate = round(1 / 20000, 8);
+        $res = $this->postJson("/api/sales-invoices/{$invoice['id']}/collect", [
+            'amount' => 1500000,
+            'currency' => 'SYP',
+            'exchange_rate' => $payRate,
+            'base_amount' => 75,
+            'cash_box_id' => $sypBox->id,
+            'method' => 'cash',
+        ])->assertCreated()->json('data');
+
+        $receipt = Receipt::query()->findOrFail($res['receipt']['id']);
+        $this->assertNotNull($receipt->journal_entry_id);
+
+        $lossId = Account::query()->where('code', '5105')->value('id');
+        $lossDebit = (float) JournalDetail::query()
+            ->where('journal_entry_id', $receipt->journal_entry_id)
+            ->where('account_id', $lossId)
+            ->sum('debit');
+        $this->assertEqualsWithDelta(25, $lossDebit, 0.05);
+
+        $inv = SalesInvoice::query()->findOrFail($invoice['id']);
+        $this->assertEqualsWithDelta(1500000, (float) $inv->paid_amount, 0.01);
     }
 }

@@ -1411,12 +1411,16 @@ class SalesService
                 ? Account::query()->findOrFail($receipt->customer->account_id)
                 : Account::query()->where('code', '1103')->firstOrFail();
 
-            $baseAmount = $this->baseValue($receipt->base_amount, $receipt->amount, $receipt->exchange_rate);
-            if ($baseAmount <= 0) {
+            $cashBase = $this->baseValue($receipt->base_amount, $receipt->amount, $receipt->exchange_rate);
+            if ($cashBase <= 0) {
                 throw ValidationException::withMessages([
                     'amount' => ['لا يمكن ترحيل سند قبض بمبلغ صفر.'],
                 ]);
             }
+
+            // Clear AR at the invoice's historical base; any gap vs cash at payment-time
+            // rate is FX gain (4103) / loss (5105). Unlinked FIFO receipts keep cash=AR base.
+            $arBase = $cashBase;
 
             if ($receipt->sales_invoice_id) {
                 $invoice = SalesInvoice::query()->lockForUpdate()->findOrFail($receipt->sales_invoice_id);
@@ -1437,6 +1441,41 @@ class SalesService
                         'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
                     ]);
                 }
+
+                $invRate = (float) ($invoice->exchange_rate ?: 1);
+                if ($invRate <= 0) {
+                    $invRate = 1.0;
+                }
+                $arBase = round($applied * $invRate, 2);
+                if ($arBase <= 0) {
+                    $arBase = $cashBase;
+                }
+            }
+
+            $glLines = [
+                ['account_id' => $debitAccount->id, 'debit' => $cashBase, 'credit' => 0],
+                ['account_id' => $ar->id, 'debit' => 0, 'credit' => $arBase],
+            ];
+
+            $fxDiff = round($cashBase - $arBase, 2);
+            if (abs($fxDiff) >= 0.01) {
+                if ($fxDiff > 0) {
+                    $gain = Account::query()->where('code', '4103')->firstOrFail();
+                    $glLines[] = [
+                        'account_id' => $gain->id,
+                        'debit' => 0,
+                        'credit' => $fxDiff,
+                        'memo' => 'ربح فرق صرف تحصيل',
+                    ];
+                } else {
+                    $loss = Account::query()->where('code', '5105')->firstOrFail();
+                    $glLines[] = [
+                        'account_id' => $loss->id,
+                        'debit' => abs($fxDiff),
+                        'credit' => 0,
+                        'memo' => 'خسارة فرق صرف تحصيل',
+                    ];
+                }
             }
 
             $entry = $this->journals->create([
@@ -1445,10 +1484,7 @@ class SalesService
                 'description' => 'سند قبض '.$receipt->receipt_number,
                 'reference' => $receipt->receipt_number,
                 'status' => 'posted',
-            ], [
-                ['account_id' => $debitAccount->id, 'debit' => $baseAmount, 'credit' => 0],
-                ['account_id' => $ar->id, 'debit' => 0, 'credit' => $baseAmount],
-            ], $user);
+            ], $glLines, $user);
 
             $receipt->update(['status' => 'posted', 'journal_entry_id' => $entry->id]);
 
