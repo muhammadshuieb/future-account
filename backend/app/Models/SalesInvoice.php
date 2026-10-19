@@ -13,7 +13,7 @@ class SalesInvoice extends Model
 
     protected $fillable = [
         'invoice_number', 'e_invoice_uuid', 'invoice_date', 'customer_id', 'warehouse_id', 'cash_box_id', 'branch_id',
-        'sales_order_id', 'status', 'payment_type', 'currency', 'exchange_rate', 'base_amount',
+        'payment_splits', 'sales_order_id', 'status', 'payment_type', 'currency', 'exchange_rate', 'base_amount',
         'subtotal', 'discount_amount', 'tax_amount', 'total', 'paid_amount', 'notes',
         'journal_entry_id', 'created_by', 'posted_at',
     ];
@@ -24,6 +24,7 @@ class SalesInvoice extends Model
             // Y-m-d avoids UTC midnight JSON shift (Asia/Damascus → previous calendar day).
             'invoice_date' => 'date:Y-m-d',
             'posted_at' => 'datetime',
+            'payment_splits' => 'array',
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',

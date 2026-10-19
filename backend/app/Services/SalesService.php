@@ -51,7 +51,13 @@ class SalesService
                 $data['invoice_date'] ?? null,
             );
 
-            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total, $fx['currency']);
+            [$paymentType, $intendedPaid, $cashBoxId, $paymentSplits] = $this->normalizePaymentTerms(
+                $data,
+                $total,
+                $fx['currency'],
+                (float) $fx['exchange_rate'],
+                $data['invoice_date'] ?? null,
+            );
 
             if (($data['status'] ?? 'draft') === 'posted') {
                 // Credit limit applies to the unpaid remainder, expressed in base currency.
@@ -76,6 +82,7 @@ class SalesService
                 'customer_id' => $data['customer_id'],
                 'warehouse_id' => $warehouseId,
                 'cash_box_id' => $cashBoxId,
+                'payment_splits' => $paymentSplits !== [] ? $paymentSplits : null,
                 'branch_id' => $branchId,
                 'sales_order_id' => $data['sales_order_id'] ?? null,
                 'status' => 'draft',
@@ -274,35 +281,7 @@ class SalesService
             ]);
 
             if ($intendedPaid > 0) {
-                $cashBoxId = $invoice->cash_box_id
-                    ? (int) $invoice->cash_box_id
-                    : $this->cash->resolveDefaultCashBoxId(null, $invoice->currency);
-
-                if (! $cashBoxId) {
-                    throw ValidationException::withMessages([
-                        'cash_box_id' => ['يجب تحديد صندوق بعملة '.$invoice->currency.' عند الدفع نقداً أو بدفعة جزئية.'],
-                    ]);
-                }
-
-                $this->cash->assertCashBoxCurrency($cashBoxId, $invoice->currency);
-
-                if (! $invoice->cash_box_id) {
-                    $invoice->update(['cash_box_id' => $cashBoxId]);
-                }
-
-                $this->createReceipt([
-                    'receipt_date' => $invoice->invoice_date->toDateString(),
-                    'customer_id' => $invoice->customer_id,
-                    'sales_invoice_id' => $invoice->id,
-                    'branch_id' => $invoice->branch_id,
-                    'cash_box_id' => $cashBoxId,
-                    'method' => 'cash',
-                    'amount' => $intendedPaid,
-                    'currency' => $invoice->currency,
-                    'exchange_rate' => $invoice->exchange_rate,
-                    'status' => 'posted',
-                    'notes' => 'تحصيل تلقائي لفاتورة '.$invoice->invoice_number,
-                ], $user);
+                $this->createAutoReceiptsForInvoice($invoice, $user, $intendedPaid);
             }
 
             $this->audit->log($user, 'sales_invoice.posted', $invoice);
@@ -346,7 +325,13 @@ class SalesService
                 $data['invoice_date'] ?? $invoice->invoice_date?->toDateString(),
             );
 
-            [$paymentType, $intendedPaid, $cashBoxId] = $this->normalizePaymentTerms($data, $total, $fx['currency']);
+            [$paymentType, $intendedPaid, $cashBoxId, $paymentSplits] = $this->normalizePaymentTerms(
+                $data,
+                $total,
+                $fx['currency'],
+                (float) $fx['exchange_rate'],
+                $data['invoice_date'] ?? $invoice->invoice_date?->toDateString(),
+            );
 
             $wantPosted = ($data['status'] ?? ($wasPosted ? 'posted' : 'draft')) === 'posted';
             if ($wantPosted) {
@@ -376,6 +361,7 @@ class SalesService
                 'customer_id' => $customerId,
                 'warehouse_id' => $warehouseId,
                 'cash_box_id' => $cashBoxId,
+                'payment_splits' => $paymentSplits !== [] ? $paymentSplits : null,
                 'branch_id' => $branchId,
                 'payment_type' => $paymentType,
                 'currency' => $fx['currency'],
@@ -486,25 +472,45 @@ class SalesService
     }
 
     /**
-     * @return array{0: string, 1: float, 2: ?int}
+     * @return array{0: string, 1: float, 2: ?int, 3: list<array<string, mixed>>}
      */
-    protected function normalizePaymentTerms(array $data, float $total, ?string $currency = null): array
-    {
+    protected function normalizePaymentTerms(
+        array $data,
+        float $total,
+        ?string $currency = null,
+        ?float $invoiceExchangeRate = null,
+        ?string $asOf = null,
+    ): array {
         $paymentType = strtolower((string) ($data['payment_type'] ?? 'credit'));
         if (! in_array($paymentType, ['cash', 'credit', 'partial'], true)) {
             throw ValidationException::withMessages(['payment_type' => ['نوع الدفع غير صالح.']]);
         }
 
-        $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
-            ? (int) $data['cash_box_id']
-            : null;
-
-        // Credit (آجل) never touches cash: ignore any cash_box_id / paid_amount from the client.
+        // Credit (آجل) never touches cash: ignore cash_box / paid_amount / payments.
         if ($paymentType === 'credit') {
-            return ['credit', 0.0, null];
+            return ['credit', 0.0, null, []];
         }
 
         $docCurrency = strtoupper((string) ($currency ?: ($data['currency'] ?? $this->currencies->baseCurrency())));
+        $invRate = $invoiceExchangeRate !== null && $invoiceExchangeRate > 0
+            ? (float) $invoiceExchangeRate
+            : ($docCurrency === $this->currencies->baseCurrency() ? 1.0 : (float) ($data['exchange_rate'] ?? 0));
+
+        $rawPayments = $data['payments'] ?? null;
+        if (is_array($rawPayments) && $rawPayments !== []) {
+            return $this->normalizeMultiCurrencyPayments(
+                $rawPayments,
+                $paymentType,
+                $total,
+                $docCurrency,
+                $invRate,
+                $asOf,
+            );
+        }
+
+        $cashBoxId = isset($data['cash_box_id']) && $data['cash_box_id'] !== '' && $data['cash_box_id'] !== null
+            ? (int) $data['cash_box_id']
+            : null;
 
         if (in_array($paymentType, ['cash', 'partial'], true) && ! $cashBoxId) {
             $cashBoxId = $this->cash->resolveDefaultCashBoxId(null, $docCurrency);
@@ -534,7 +540,216 @@ class SalesService
             $this->cash->assertCashBoxCurrency($cashBoxId, $docCurrency);
         }
 
-        return [$paymentType, $intendedPaid, $cashBoxId];
+        return [$paymentType, $intendedPaid, $cashBoxId, []];
+    }
+
+    /**
+     * Multi-currency payment lines on one invoice (e.g. USD + SYP with FX at payment time).
+     *
+     * @param  list<array<string, mixed>>  $rawPayments
+     * @return array{0: string, 1: float, 2: ?int, 3: list<array<string, mixed>>}
+     */
+    protected function normalizeMultiCurrencyPayments(
+        array $rawPayments,
+        string $paymentType,
+        float $total,
+        string $invoiceCurrency,
+        float $invoiceExchangeRate,
+        ?string $asOf,
+    ): array {
+        $splits = [];
+        $paidInInvoice = 0.0;
+
+        foreach (array_values($rawPayments) as $i => $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $amount = round((float) ($p['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $payCurrency = strtoupper((string) ($p['currency'] ?? $invoiceCurrency));
+            $payRate = isset($p['exchange_rate']) && (float) $p['exchange_rate'] > 0
+                ? (float) $p['exchange_rate']
+                : null;
+            $fx = $this->currencies->resolveDocumentFx($amount, $payCurrency, $payRate, $asOf);
+
+            if (isset($p['base_amount']) && (float) $p['base_amount'] > 0) {
+                $fx['base_amount'] = round((float) $p['base_amount'], 2);
+                if ($fx['currency'] !== $this->currencies->baseCurrency() && $amount > 0) {
+                    $fx['exchange_rate'] = round($fx['base_amount'] / $amount, 8);
+                }
+            }
+
+            $boxId = isset($p['cash_box_id']) && $p['cash_box_id'] !== '' && $p['cash_box_id'] !== null
+                ? (int) $p['cash_box_id']
+                : $this->cash->resolveDefaultCashBoxId(null, $fx['currency']);
+
+            if (! $boxId) {
+                throw ValidationException::withMessages([
+                    "payments.$i.cash_box_id" => ['يجب تحديد صندوق بعملة '.$fx['currency'].' لهذه الدفعة.'],
+                ]);
+            }
+
+            $this->cash->assertCashBoxCurrency($boxId, $fx['currency']);
+
+            $applied = $this->amountInInvoiceCurrency(
+                $amount,
+                $fx['currency'],
+                (float) $fx['exchange_rate'],
+                (float) $fx['base_amount'],
+                $invoiceCurrency,
+                $invoiceExchangeRate,
+            );
+
+            $paidInInvoice = round($paidInInvoice + $applied, 2);
+            $splits[] = [
+                'amount' => $amount,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'cash_box_id' => $boxId,
+                'applied_in_invoice' => $applied,
+            ];
+        }
+
+        if ($splits === []) {
+            throw ValidationException::withMessages([
+                'payments' => ['أضف دفعة واحدة على الأقل بمبلغ أكبر من صفر.'],
+            ]);
+        }
+
+        if ($paidInInvoice > $total + 0.001) {
+            throw ValidationException::withMessages([
+                'payments' => ['مجموع الدفعات ('.$paidInInvoice.' '.$invoiceCurrency.') يتجاوز إجمالي الفاتورة ('.$total.').'],
+            ]);
+        }
+
+        // Derive cash vs partial from the converted sum when multi-currency lines are present.
+        if ($paidInInvoice >= $total - 0.001) {
+            $resolvedType = 'cash';
+            $intendedPaid = $total;
+        } else {
+            $resolvedType = 'partial';
+            $intendedPaid = $paidInInvoice;
+            if ($intendedPaid <= 0) {
+                throw ValidationException::withMessages([
+                    'payments' => ['دفعة من المبلغ يجب أن تكون أكبر من صفر وأقل من إجمالي الفاتورة.'],
+                ]);
+            }
+        }
+
+        // Honor explicit partial when client asked for partial and sum covers full total → still cash.
+        if ($paymentType === 'partial' && $resolvedType === 'cash') {
+            // Full cover via splits is fine as cash.
+        }
+
+        return [$resolvedType, $intendedPaid, (int) $splits[0]['cash_box_id'], $splits];
+    }
+
+    protected function amountInInvoiceCurrency(
+        float $amount,
+        string $payCurrency,
+        float $payExchangeRate,
+        float $baseAmount,
+        string $invoiceCurrency,
+        float $invoiceExchangeRate,
+    ): float {
+        $payCurrency = strtoupper($payCurrency);
+        $invoiceCurrency = strtoupper($invoiceCurrency);
+
+        if ($payCurrency === $invoiceCurrency) {
+            return round($amount, 2);
+        }
+
+        $base = $baseAmount > 0
+            ? round($baseAmount, 2)
+            : round($amount * ($payExchangeRate > 0 ? $payExchangeRate : 1), 2);
+
+        return $invoiceExchangeRate > 0 ? round($base / $invoiceExchangeRate, 2) : $base;
+    }
+
+    /**
+     * Create one posted receipt per payment split (or a single legacy receipt).
+     */
+    protected function createAutoReceiptsForInvoice(SalesInvoice $invoice, User $user, float $intendedPaid): void
+    {
+        $splits = is_array($invoice->payment_splits) ? $invoice->payment_splits : [];
+        $date = $invoice->invoice_date->toDateString();
+        $note = 'تحصيل تلقائي لفاتورة '.$invoice->invoice_number;
+
+        if ($splits !== []) {
+            foreach ($splits as $i => $split) {
+                $amount = round((float) ($split['amount'] ?? 0), 2);
+                if ($amount <= 0) {
+                    continue;
+                }
+                $currency = strtoupper((string) ($split['currency'] ?? $invoice->currency));
+                $boxId = isset($split['cash_box_id']) ? (int) $split['cash_box_id'] : 0;
+                if (! $boxId) {
+                    $boxId = (int) ($this->cash->resolveDefaultCashBoxId(null, $currency) ?: 0);
+                }
+                if (! $boxId) {
+                    throw ValidationException::withMessages([
+                        "payments.$i.cash_box_id" => ['يجب تحديد صندوق بعملة '.$currency.' عند الدفع.'],
+                    ]);
+                }
+
+                $this->createReceipt([
+                    'receipt_date' => $date,
+                    'customer_id' => $invoice->customer_id,
+                    'sales_invoice_id' => $invoice->id,
+                    'branch_id' => $invoice->branch_id,
+                    'cash_box_id' => $boxId,
+                    'method' => 'cash',
+                    'amount' => $amount,
+                    'currency' => $currency,
+                    'exchange_rate' => isset($split['exchange_rate']) ? (float) $split['exchange_rate'] : null,
+                    'base_amount' => isset($split['base_amount']) ? (float) $split['base_amount'] : null,
+                    'status' => 'posted',
+                    'notes' => count($splits) > 1
+                        ? $note.' — دفعة '.($i + 1).' ('.$currency.')'
+                        : $note,
+                ], $user);
+            }
+
+            if (! $invoice->cash_box_id && isset($splits[0]['cash_box_id'])) {
+                $invoice->update(['cash_box_id' => (int) $splits[0]['cash_box_id']]);
+            }
+
+            return;
+        }
+
+        $cashBoxId = $invoice->cash_box_id
+            ? (int) $invoice->cash_box_id
+            : $this->cash->resolveDefaultCashBoxId(null, $invoice->currency);
+
+        if (! $cashBoxId) {
+            throw ValidationException::withMessages([
+                'cash_box_id' => ['يجب تحديد صندوق بعملة '.$invoice->currency.' عند الدفع نقداً أو بدفعة جزئية.'],
+            ]);
+        }
+
+        $this->cash->assertCashBoxCurrency($cashBoxId, $invoice->currency);
+
+        if (! $invoice->cash_box_id) {
+            $invoice->update(['cash_box_id' => $cashBoxId]);
+        }
+
+        $this->createReceipt([
+            'receipt_date' => $date,
+            'customer_id' => $invoice->customer_id,
+            'sales_invoice_id' => $invoice->id,
+            'branch_id' => $invoice->branch_id,
+            'cash_box_id' => $cashBoxId,
+            'method' => 'cash',
+            'amount' => $intendedPaid,
+            'currency' => $invoice->currency,
+            'exchange_rate' => $invoice->exchange_rate,
+            'status' => 'posted',
+            'notes' => $note,
+        ], $user);
     }
 
     public function customerBalance(Customer $customer): float
@@ -1016,17 +1231,53 @@ class SalesService
             throw ValidationException::withMessages(['amount' => ['لا يوجد مبلغ متبقّي على هذه الفاتورة.']]);
         }
 
+        // Multiple payment lines in one collect (e.g. SYP + USD against a USD invoice).
+        $rawPayments = $data['payments'] ?? null;
+        if (is_array($rawPayments) && $rawPayments !== []) {
+            return $this->collectRemainingMulti($invoice, $user, $rawPayments, $data, $remaining);
+        }
+
+        $payCurrency = strtoupper((string) ($data['currency'] ?? $invoice->currency ?: $this->currencies->baseCurrency()));
         $amount = array_key_exists('amount', $data) && $data['amount'] !== null && $data['amount'] !== ''
             ? round((float) $data['amount'], 2)
-            : $remaining;
+            : (
+                $payCurrency === strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()))
+                    ? $remaining
+                    : 0.0
+            );
 
         if ($amount <= 0) {
             throw ValidationException::withMessages(['amount' => ['المبلغ يجب أن يكون أكبر من صفر.']]);
         }
 
-        if ($amount > $remaining + 0.001) {
+        $payRate = isset($data['exchange_rate']) && (float) $data['exchange_rate'] > 0
+            ? (float) $data['exchange_rate']
+            : null;
+        $fx = $this->currencies->resolveDocumentFx(
+            $amount,
+            $payCurrency,
+            $payRate,
+            $data['receipt_date'] ?? now()->toDateString(),
+        );
+        if (isset($data['base_amount']) && (float) $data['base_amount'] > 0) {
+            $fx['base_amount'] = round((float) $data['base_amount'], 2);
+            if ($fx['currency'] !== $this->currencies->baseCurrency() && $amount > 0) {
+                $fx['exchange_rate'] = round($fx['base_amount'] / $amount, 8);
+            }
+        }
+
+        $applied = $this->amountInInvoiceCurrency(
+            $amount,
+            $fx['currency'],
+            (float) $fx['exchange_rate'],
+            (float) $fx['base_amount'],
+            strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency())),
+            (float) ($invoice->exchange_rate ?: 1),
+        );
+
+        if ($applied > $remaining + 0.001) {
             throw ValidationException::withMessages([
-                'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.').'],
+                'amount' => ['المبلغ يتجاوز المتبقي على الفاتورة ('.$remaining.' '.($invoice->currency ?: '').').'],
             ]);
         }
 
@@ -1038,14 +1289,90 @@ class SalesService
             'bank_id' => $data['bank_id'] ?? null,
             'method' => $data['method'] ?? 'cash',
             'amount' => $amount,
-            'currency' => $data['currency'] ?? $invoice->currency,
-            'exchange_rate' => isset($data['exchange_rate'])
-                ? (float) $data['exchange_rate']
-                : ($invoice->exchange_rate ? (float) $invoice->exchange_rate : null),
-            'base_amount' => $data['base_amount'] ?? null,
+            'currency' => $fx['currency'],
+            'exchange_rate' => $fx['exchange_rate'],
+            'base_amount' => $fx['base_amount'],
             'notes' => $data['notes'] ?? ('تحصيل باقي فاتورة '.$invoice->invoice_number),
             'status' => 'posted',
         ], $user);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rawPayments
+     */
+    protected function collectRemainingMulti(
+        SalesInvoice $invoice,
+        User $user,
+        array $rawPayments,
+        array $data,
+        float $remaining,
+    ): Receipt {
+        $invoiceCurrency = strtoupper((string) ($invoice->currency ?: $this->currencies->baseCurrency()));
+        $invoiceRate = (float) ($invoice->exchange_rate ?: 1);
+        $date = $data['receipt_date'] ?? now()->toDateString();
+        $last = null;
+        $appliedSum = 0.0;
+
+        foreach (array_values($rawPayments) as $i => $p) {
+            if (! is_array($p)) {
+                continue;
+            }
+            $amount = round((float) ($p['amount'] ?? 0), 2);
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $payCurrency = strtoupper((string) ($p['currency'] ?? $invoiceCurrency));
+            $payRate = isset($p['exchange_rate']) && (float) $p['exchange_rate'] > 0
+                ? (float) $p['exchange_rate']
+                : null;
+            $fx = $this->currencies->resolveDocumentFx($amount, $payCurrency, $payRate, $date);
+            if (isset($p['base_amount']) && (float) $p['base_amount'] > 0) {
+                $fx['base_amount'] = round((float) $p['base_amount'], 2);
+                if ($fx['currency'] !== $this->currencies->baseCurrency() && $amount > 0) {
+                    $fx['exchange_rate'] = round($fx['base_amount'] / $amount, 8);
+                }
+            }
+
+            $applied = $this->amountInInvoiceCurrency(
+                $amount,
+                $fx['currency'],
+                (float) $fx['exchange_rate'],
+                (float) $fx['base_amount'],
+                $invoiceCurrency,
+                $invoiceRate,
+            );
+            $appliedSum = round($appliedSum + $applied, 2);
+
+            if ($appliedSum > $remaining + 0.001) {
+                throw ValidationException::withMessages([
+                    'payments' => ['مجموع الدفعات يتجاوز المتبقي على الفاتورة ('.$remaining.' '.$invoiceCurrency.').'],
+                ]);
+            }
+
+            $last = $this->createReceipt([
+                'receipt_date' => $date,
+                'customer_id' => $invoice->customer_id,
+                'sales_invoice_id' => $invoice->id,
+                'cash_box_id' => $p['cash_box_id'] ?? $invoice->cash_box_id,
+                'bank_id' => $p['bank_id'] ?? $data['bank_id'] ?? null,
+                'method' => $p['method'] ?? $data['method'] ?? 'cash',
+                'amount' => $amount,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'notes' => $data['notes'] ?? ('تحصيل باقي فاتورة '.$invoice->invoice_number.' — دفعة '.($i + 1)),
+                'status' => 'posted',
+            ], $user);
+        }
+
+        if (! $last) {
+            throw ValidationException::withMessages([
+                'payments' => ['أضف دفعة واحدة على الأقل بمبلغ أكبر من صفر.'],
+            ]);
+        }
+
+        return $last;
     }
 
     public function postReceipt(Receipt $receipt, User $user): Receipt

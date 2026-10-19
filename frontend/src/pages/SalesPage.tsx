@@ -9,7 +9,11 @@ import { documentStatusLabel } from '@/lib/statusLabels'
 import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import { DocumentCurrencyFields, PaymentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
-import PaymentTypeFields, { defaultCashBoxId, paymentTypeLabel } from '@/components/PaymentTypeFields'
+import { defaultCashBoxId, paymentTypeLabel } from '@/components/PaymentTypeFields'
+import MultiCurrencyPaymentFields, {
+  splitInDocumentCurrency,
+  type PaymentSplitDraft,
+} from '@/components/MultiCurrencyPaymentFields'
 import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachment } from '@/components/AttachmentPanel'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
@@ -107,7 +111,10 @@ export default function SalesPage() {
   const [modal, setModal] = useState<'create' | 'view' | 'edit' | 'collect' | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedRow, setSelectedRow] = useState<Record<string, unknown> | null>(null)
-  const [collectForm, setCollectForm] = useState({ amount: '', cash_box_id: '', receipt_date: todayYmd() })
+  const [collectForm, setCollectForm] = useState({
+    receipt_date: todayYmd(),
+    payments: [] as PaymentSplitDraft[],
+  })
 
   const invoiceListParams = {
     ...search.params,
@@ -190,6 +197,7 @@ export default function SalesPage() {
     payment_type: 'credit',
     paid_amount: '',
     cash_box_id: '',
+    payments: [] as PaymentSplitDraft[],
     discount_amount: '',
     notes: '',
     customer_id: '',
@@ -391,7 +399,7 @@ export default function SalesPage() {
     setSelectedRow(null)
     setStockInfo(null)
     setPendingAttachment(null)
-    setCollectForm({ amount: '', cash_box_id: '', receipt_date: todayYmd() })
+    setCollectForm({ receipt_date: todayYmd(), payments: [] })
   }
 
   const invoiceRemaining = (invRow: { total?: number; paid_amount?: number }) =>
@@ -407,24 +415,37 @@ export default function SalesPage() {
     status?: string
     invoice_number?: string
     currency?: string
+    exchange_rate?: number | string
     customer?: { name?: string; phone?: string }
     cash_box_id?: number | null
   }) => {
     if (!canCollectInvoice(invRow)) return
     const boxes = cashBoxes.data || []
     const cur = (invRow.currency || baseCurrency || 'USD').toUpperCase()
+    const remaining = invoiceRemaining(invRow)
     const matched = boxes.filter((c) => (c.currency || 'USD').toUpperCase() === cur)
     const invoiceBoxOk = invRow.cash_box_id
       && matched.some((c) => Number(c.id) === Number(invRow.cash_box_id))
     const defaultBox = invoiceBoxOk
       ? String(invRow.cash_box_id)
       : defaultCashBoxId(matched, cur)
+    const rate = cur === (baseCurrency || 'USD').toUpperCase()
+      ? '1'
+      : String(invRow.exchange_rate && Number(invRow.exchange_rate) > 0 ? invRow.exchange_rate : '')
+    const baseAmt = cur === (baseCurrency || 'USD').toUpperCase()
+      ? remaining
+      : (Number(rate) > 0 ? Math.round(remaining * Number(rate) * 100) / 100 : 0)
     setSelectedId(invRow.id)
     setSelectedRow(invRow as unknown as Record<string, unknown>)
     setCollectForm({
-      amount: String(invoiceRemaining(invRow)),
-      cash_box_id: defaultBox,
       receipt_date: todayYmd(),
+      payments: [{
+        amount: String(remaining),
+        base_amount: baseAmt > 0 ? String(baseAmt) : '',
+        currency: cur,
+        exchange_rate: rate,
+        cash_box_id: defaultBox,
+      }],
     })
     setModal('collect')
   }
@@ -469,6 +490,7 @@ export default function SalesPage() {
       payment_type: 'credit',
       paid_amount: '',
       cash_box_id: '',
+      payments: [],
       discount_amount: '',
       notes: '',
       customer_id: '',
@@ -546,16 +568,30 @@ export default function SalesPage() {
       const discountAmt = Math.max(0, Number(inv.discount_amount) || 0)
       const taxAmt = taxEnabled ? round2(lineSub * defaultTaxRate / 100) : 0
       const estTotal = round2(lineSub - discountAmt + taxAmt)
+      const paymentLines = (inv.payment_type === 'cash' || inv.payment_type === 'partial')
+        ? inv.payments
+          .filter((p) => Number(p.amount) > 0)
+          .map((p) => ({
+            amount: Number(p.amount),
+            currency: p.currency,
+            exchange_rate: p.exchange_rate ? Number(p.exchange_rate) : undefined,
+            base_amount: p.base_amount ? Number(p.base_amount) : undefined,
+            cash_box_id: p.cash_box_id ? Number(p.cash_box_id) : undefined,
+          }))
+        : []
+      // Cash with a single same-currency line and empty amount → legacy full-total cash.
+      const usePayments = paymentLines.length > 0
       const body = {
         invoice_date: inv.invoice_date,
         customer_id: Number(inv.customer_id),
         warehouse_id: Number(inv.warehouse_id),
         branch_id: inv.branch_id ? Number(inv.branch_id) : null,
-        cash_box_id: inv.cash_box_id ? Number(inv.cash_box_id) : null,
+        cash_box_id: inv.cash_box_id ? Number(inv.cash_box_id) : (paymentLines[0]?.cash_box_id ?? null),
         currency: inv.currency,
         exchange_rate: inv.exchange_rate ? Number(inv.exchange_rate) : undefined,
         payment_type: inv.payment_type || 'credit',
-        paid_amount: inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
+        paid_amount: !usePayments && inv.payment_type === 'partial' ? Number(inv.paid_amount) : undefined,
+        payments: usePayments ? paymentLines : undefined,
         discount_amount: discountAmt > 0 ? discountAmt : 0,
         status: inv.status,
         notes: inv.notes || null,
@@ -636,13 +672,38 @@ export default function SalesPage() {
   })
 
   const collectRemaining = useMutation({
-    mutationFn: () => api.post(`/sales-invoices/${selectedId}/collect`, {
-      receipt_date: collectForm.receipt_date,
-      amount: Number(collectForm.amount),
-      cash_box_id: collectForm.cash_box_id ? Number(collectForm.cash_box_id) : undefined,
-      method: 'cash',
-      status: 'posted',
-    }),
+    mutationFn: () => {
+      const payments = collectForm.payments
+        .filter((p) => Number(p.amount) > 0)
+        .map((p) => ({
+          amount: Number(p.amount),
+          currency: p.currency,
+          exchange_rate: p.exchange_rate ? Number(p.exchange_rate) : undefined,
+          base_amount: p.base_amount ? Number(p.base_amount) : undefined,
+          cash_box_id: p.cash_box_id ? Number(p.cash_box_id) : undefined,
+        }))
+      if (payments.length === 0) {
+        throw { response: { data: { message: t('common.paidAmount') } } }
+      }
+      // Single payment → flat fields (keeps older clients/tests happy); multi → payments[].
+      if (payments.length === 1) {
+        const p = payments[0]
+        return api.post(`/sales-invoices/${selectedId}/collect`, {
+          receipt_date: collectForm.receipt_date,
+          amount: p.amount,
+          currency: p.currency,
+          exchange_rate: p.exchange_rate,
+          base_amount: p.base_amount,
+          cash_box_id: p.cash_box_id,
+          method: 'cash',
+        })
+      }
+      return api.post(`/sales-invoices/${selectedId}/collect`, {
+        receipt_date: collectForm.receipt_date,
+        method: 'cash',
+        payments,
+      })
+    },
     onSuccess: () => {
       msg.setMessage(t('sales.collectSaved'))
       invalidateSales()
@@ -743,19 +804,46 @@ export default function SalesPage() {
         batch_no?: string
         serial_no?: string
       }[]
+      const editCur = String(d.currency || baseCurrency || 'USD')
+      const editRate = String(d.exchange_rate || '1')
+      const splits = Array.isArray(d.payment_splits) ? d.payment_splits as {
+        amount?: number
+        base_amount?: number
+        currency?: string
+        exchange_rate?: number
+        cash_box_id?: number
+      }[] : []
+      const paymentDrafts: PaymentSplitDraft[] = splits.length
+        ? splits.map((s) => ({
+          amount: String(s.amount ?? ''),
+          base_amount: String(s.base_amount ?? ''),
+          currency: String(s.currency || editCur),
+          exchange_rate: String(s.exchange_rate ?? editRate),
+          cash_box_id: s.cash_box_id ? String(s.cash_box_id) : '',
+        }))
+        : (d.payment_type === 'cash' || d.payment_type === 'partial')
+          ? [{
+            amount: d.payment_type === 'partial' ? String(d.paid_amount ?? '') : '',
+            base_amount: '',
+            currency: editCur,
+            exchange_rate: editRate,
+            cash_box_id: d.cash_box_id ? String(d.cash_box_id) : '',
+          }]
+          : []
       setInv({
         invoice_date: String(d.invoice_date || '').slice(0, 10),
         status: String(d.status || 'posted'),
         payment_type: String(d.payment_type || 'credit'),
         paid_amount: d.payment_type === 'partial' ? String(d.paid_amount ?? '') : '',
         cash_box_id: d.cash_box_id ? String(d.cash_box_id) : '',
+        payments: paymentDrafts,
         discount_amount: d.discount_amount != null && Number(d.discount_amount) > 0 ? String(d.discount_amount) : '',
         notes: String(d.notes || ''),
         customer_id: String(d.customer_id || d.customer?.id || ''),
         warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
         branch_id: String(d.branch_id || d.branch?.id || ''),
-        currency: d.currency || baseCurrency,
-        exchange_rate: String(d.exchange_rate || '1'),
+        currency: editCur,
+        exchange_rate: editRate,
         lines: items.length
           ? items.map((line) => ({
               product_id: String(line.product_id || line.product?.id || ''),
@@ -1546,8 +1634,9 @@ export default function SalesPage() {
                 : null}
             </p>
             <p className="text-xs leading-relaxed text-black/55">{t('sales.collectHint')}</p>
+            <p className="text-xs leading-relaxed text-black/55">{t('common.collectMultiCurrencyHint')}</p>
             <div className="form-grid-2">
-              <Field label={t('common.remainingAmount')}>
+              <Field label={`${t('common.remainingAmount')} (${String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD')})`}>
                 <input
                   className={inputClass}
                   readOnly
@@ -1565,30 +1654,105 @@ export default function SalesPage() {
                   onChange={(e) => setCollectForm({ ...collectForm, receipt_date: e.target.value })}
                 />
               </Field>
-              <Field label={t('common.amount')}>
-                <NumericInput
-                  className={inputClass}
-                  value={collectForm.amount}
-                  onChange={(v) => setCollectForm({ ...collectForm, amount: v })}
-                />
-              </Field>
-              <Field label={t('common.cashBox')}>
-                <select
-                  className={inputClass}
-                  value={collectForm.cash_box_id}
-                  onChange={(e) => setCollectForm({ ...collectForm, cash_box_id: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {(cashBoxes.data || []).filter((c) => {
-                  const cur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD').toUpperCase()
-                  return (c.currency || 'USD').toUpperCase() === cur
-                }).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            </div>
+            <div className="space-y-3">
+              {collectForm.payments.map((split, index) => {
+                const boxes = (cashBoxes.data || []).filter(
+                  (c) => (c.currency || 'USD').toUpperCase() === split.currency.toUpperCase(),
+                )
+                const invCur = String((selectedRow as { currency?: string } | null)?.currency || baseCurrency || 'USD')
+                const invRate = Number((selectedRow as { exchange_rate?: number } | null)?.exchange_rate || 1)
+                return (
+                  <div key={index} className="rounded-lg border border-black/10 bg-black/[0.015] p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-black/70">{t('common.paymentLine', { n: index + 1 })}</p>
+                      {collectForm.payments.length > 1 && (
+                        <button
+                          type="button"
+                          className="text-xs text-red-700 hover:underline"
+                          onClick={() => setCollectForm({
+                            ...collectForm,
+                            payments: collectForm.payments.filter((_, i) => i !== index),
+                          })}
+                        >
+                          {t('common.delete')}
+                        </button>
+                      )}
+                    </div>
+                    <PaymentCurrencyFields
+                      state={split}
+                      setState={(next) => {
+                        const value = typeof next === 'function' ? next(split) : next
+                        const payments = collectForm.payments.map((p, i) => {
+                          if (i !== index) return p
+                          if (p.currency !== value.currency) {
+                            return { ...value, cash_box_id: defaultCashBoxId(cashBoxes.data || [], value.currency) }
+                          }
+                          return value
+                        })
+                        setCollectForm({ ...collectForm, payments })
+                      }}
+                      currencies={currencyList}
+                      baseCurrency={baseCurrency}
+                    />
+                    <Field label={t('common.cashBox')}>
+                      <select
+                        className={inputClass}
+                        value={split.cash_box_id}
+                        onChange={(e) => {
+                          const payments = collectForm.payments.map((p, i) =>
+                            i === index ? { ...p, cash_box_id: e.target.value } : p,
+                          )
+                          setCollectForm({ ...collectForm, payments })
+                        }}
+                        required
+                      >
+                        <option value="">—</option>
+                        {boxes.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}{c.currency ? ` (${c.currency})` : ''}{c.is_default ? ` — ${t('common.mainCashBox')}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    {invCur.toUpperCase() !== split.currency.toUpperCase() && Number(split.amount) > 0 && (
+                      <p className="text-xs text-black/55">
+                        {t('common.paidInInvoiceCurrency', {
+                          amount: splitInDocumentCurrency(split, invCur, invRate, baseCurrency).toLocaleString('ar-SY-u-nu-latn', { maximumFractionDigits: 2 }),
+                          currency: invCur,
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  const used = new Set(collectForm.payments.map((p) => p.currency.toUpperCase()))
+                  const alt = currencyList.find((c) => c.is_active && !used.has(c.code.toUpperCase()))
+                  const code = alt?.code || baseCurrency || 'USD'
+                  const rate = code.toUpperCase() === (baseCurrency || 'USD').toUpperCase()
+                    ? '1'
+                    : String(alt?.rate_to_base && alt.rate_to_base > 0 ? alt.rate_to_base : '')
+                  setCollectForm({
+                    ...collectForm,
+                    payments: [
+                      ...collectForm.payments,
+                      {
+                        amount: '',
+                        base_amount: '',
+                        currency: code,
+                        exchange_rate: rate,
+                        cash_box_id: defaultCashBoxId(cashBoxes.data || [], code),
+                      },
+                    ],
+                  })
+                }}
+              >
+                {t('common.addPaymentLine')}
+              </Button>
             </div>
           </form>
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
@@ -1641,7 +1805,17 @@ export default function SalesPage() {
                   <Field label={t('common.discount')}><input type="number" min={0} step="0.01" className={inputClass} value={inv.discount_amount} onChange={(e) => setInv({ ...inv, discount_amount: e.target.value })} placeholder="0" /></Field>
                   <Field label="ملاحظات"><textarea className={inputClass} rows={2} value={inv.notes} onChange={(e) => setInv({ ...inv, notes: e.target.value })} placeholder="ملاحظات اختيارية على الفاتورة" /></Field>
                 </div>
-                <PaymentTypeFields state={inv} setState={setInv} cashBoxes={cashBoxes.data || []} documentCurrency={inv.currency} estimatedTotal={invEstimatedTotal} partner="customer" />
+                <MultiCurrencyPaymentFields
+                  state={inv}
+                  setState={setInv}
+                  cashBoxes={cashBoxes.data || []}
+                  currencies={currencyList}
+                  documentCurrency={inv.currency}
+                  documentExchangeRate={inv.exchange_rate}
+                  baseCurrency={baseCurrency}
+                  estimatedTotal={invEstimatedTotal}
+                  partner="customer"
+                />
                 <PendingAttachmentField file={pendingAttachment} onChange={setPendingAttachment} />
               </FormStack>
             )}
