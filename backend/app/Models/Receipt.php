@@ -20,7 +20,8 @@ class Receipt extends Model
     protected function casts(): array
     {
         return [
-            'receipt_date' => 'date',
+            // Y-m-d avoids UTC midnight JSON/date shift (Asia/Damascus → previous calendar day).
+            'receipt_date' => 'date:Y-m-d',
             'amount' => 'decimal:2',
             'applied_amount' => 'decimal:2',
             'exchange_rate' => 'decimal:8',

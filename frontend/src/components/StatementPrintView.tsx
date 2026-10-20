@@ -15,6 +15,15 @@ export type StatementInvoiceLine = {
   product?: { name?: string; sku?: string; brand?: string; model?: string } | null
 }
 
+export type StatementPaymentSplit = {
+  amount?: number
+  currency?: string
+  exchange_rate?: number | null
+  base_amount?: number | null
+  applied_in_invoice?: number | null
+  receipt_number?: string
+}
+
 export type StatementInvoiceDetail = {
   payment_type?: string | null
   subtotal?: number
@@ -25,6 +34,8 @@ export type StatementInvoiceDetail = {
   paid_amount?: number | null
   currency?: string
   notes?: string | null
+  /** Multi-currency tenders on this invoice (USD + SYP, etc.). */
+  payments?: StatementPaymentSplit[]
   lines?: StatementInvoiceLine[]
 }
 
@@ -33,8 +44,11 @@ export type StatementRow = {
   type: string
   number: string
   document_id?: number
+  linked_invoice_id?: number | null
   currency?: string
   document_amount?: number
+  /** e.g. "42,000.00 SYP ← SI-2026-00027" for payment rows */
+  document_label?: string | null
   notes?: string | null
   debit: number
   credit: number
@@ -151,6 +165,17 @@ function InvoiceDetailBlock({
           </span>
         )}
       </div>
+      {(invoice.payments || []).length > 0 ? (
+        <p className="statement-invoice-detail__notes">
+          الدفعات:{' '}
+          {(invoice.payments || []).map((p, i) => (
+            <strong key={i} className="tabular-nums">
+              {i > 0 ? ' + ' : ''}
+              {formatMoney(Number(p.amount) || 0, p.currency || docCurrency)}
+            </strong>
+          ))}
+        </p>
+      ) : null}
       {invoice.notes ? (
         <p className="statement-invoice-detail__notes">ملاحظات: {invoice.notes}</p>
       ) : null}
@@ -278,7 +303,15 @@ export function StatementPrintView({
               <Fragment key={`${r.number}-${i}`}>
                 <tr className={isStatementPaymentRow(r.type) ? 'statement-row--payment' : undefined}>
                   <td>{r.date}</td>
-                  <td>{statementTypeLabel(r.type)}</td>
+                  <td>
+                    <div>{statementTypeLabel(r.type)}</div>
+                    {(r.document_label || (r.currency && Number(r.document_amount) > 0)) ? (
+                      <div className="statement-print__doc-amount">
+                        {r.document_label
+                          || formatMoney(Number(r.document_amount) || 0, r.currency || currency)}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="font-mono text-xs">{r.number}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.debit) || 0, currency)}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.credit) || 0, currency)}</td>

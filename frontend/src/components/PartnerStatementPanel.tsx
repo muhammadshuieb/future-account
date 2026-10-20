@@ -14,9 +14,7 @@ import {
 } from '@/components/StatementPrintView'
 import { Button, ListSearchInput, Modal, StatTile, formatMoney, formatQuantity } from '@/components/ui'
 
-function statementRowMatchesProduct(row: StatementRow, rawTerm: string): boolean {
-  const term = rawTerm.trim().toLowerCase()
-  if (!term) return true
+function statementInvoiceMatchesProduct(row: StatementRow, term: string): boolean {
   if (!isStatementDetailRow(row.type) || !row.invoice) return false
   const parts: string[] = [row.number, row.notes || '']
   for (const line of row.invoice.lines || []) {
@@ -29,7 +27,29 @@ function statementRowMatchesProduct(row: StatementRow, rawTerm: string): boolean
       line.batch_no || '',
     )
   }
+  for (const p of row.invoice.payments || []) {
+    parts.push(p.currency || '', String(p.amount ?? ''), p.receipt_number || '')
+  }
   return parts.join(' ').toLowerCase().includes(term)
+}
+
+function statementRowMatchesProduct(row: StatementRow, rawTerm: string, allRows: StatementRow[] = []): boolean {
+  const term = rawTerm.trim().toLowerCase()
+  if (!term) return true
+  if (isStatementDetailRow(row.type)) return statementInvoiceMatchesProduct(row, term)
+  if (isStatementPaymentRow(row.type)) {
+    const hay = [row.number, row.notes || '', row.document_label || '', row.currency || '', String(row.document_amount ?? '')]
+      .join(' ')
+      .toLowerCase()
+    if (hay.includes(term)) return true
+    if (row.linked_invoice_id) {
+      const inv = allRows.find(
+        (r) => isStatementDetailRow(r.type) && Number(r.document_id) === Number(row.linked_invoice_id),
+      )
+      if (inv && statementInvoiceMatchesProduct(inv, term)) return true
+    }
+  }
+  return false
 }
 
 export function partnerBalanceLabel(
@@ -106,6 +126,17 @@ function InvoiceMeta({
           value={formatMoney(Number(invoice.paid_amount) || 0, docCurrency)}
         />
       )}
+      {(invoice.payments || []).length > 0 && (
+        <DetailRow
+          label={t('common.paymentLinesLabel')}
+          value={(invoice.payments || []).map((p, i) => (
+            <span key={i} className="tabular-nums">
+              {i > 0 ? ' + ' : ''}
+              {formatMoney(Number(p.amount) || 0, p.currency || docCurrency)}
+            </span>
+          ))}
+        />
+      )}
       {invoice.notes ? <DetailRow label={t('common.notes')} value={invoice.notes} /> : null}
     </dl>
   )
@@ -177,7 +208,7 @@ export default function PartnerStatementPanel({
   const allRows = data.rows || []
   const filtering = productQ.trim().length > 0
   const rows = useMemo(
-    () => (filtering ? allRows.filter((r) => statementRowMatchesProduct(r, productQ)) : allRows),
+    () => (filtering ? allRows.filter((r) => statementRowMatchesProduct(r, productQ, allRows)) : allRows),
     [allRows, filtering, productQ],
   )
   const opening = Number(data.opening_balance ?? 0)
@@ -299,7 +330,15 @@ export default function PartnerStatementPanel({
                       ) : null}
                     </td>
                     <td className={pad}>{r.date}</td>
-                    <td className={pad}>{statementTypeLabel(r.type)}</td>
+                    <td className={pad}>
+                      <div>{statementTypeLabel(r.type)}</div>
+                      {isPayment && (r.document_label || (r.currency && Number(r.document_amount) > 0)) ? (
+                        <div className="mt-0.5 text-[11px] font-medium text-teal-dark">
+                          {r.document_label
+                            || formatMoney(Number(r.document_amount) || 0, r.currency || currency)}
+                        </div>
+                      ) : null}
+                    </td>
                     <td className={`${pad} font-mono text-xs`}>{r.number}</td>
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.debit) || 0, currency)}</td>
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.credit) || 0, currency)}</td>

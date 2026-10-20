@@ -1995,7 +1995,12 @@ class SalesService
 
         // Every event is expressed in the system base currency, otherwise a foreign-currency
         // receipt would be summed against base-currency invoices.
-        foreach ($customer->invoices()->where('status', 'posted')->with(['lines.product'])->get() as $inv) {
+        foreach (
+            $customer->invoices()
+                ->where('status', 'posted')
+                ->with(['lines.product', 'receipts' => fn ($q) => $q->where('status', 'posted')->orderBy('id')])
+                ->get() as $inv
+        ) {
             $events[] = [
                 'date' => $inv->invoice_date->toDateString(),
                 'type' => 'invoice',
@@ -2010,17 +2015,31 @@ class SalesService
             ];
         }
 
-        foreach ($customer->receipts()->where('status', 'posted')->get() as $rc) {
+        foreach ($customer->receipts()->where('status', 'posted')->with('invoice')->get() as $rc) {
+            $creditBase = $this->baseValue($rc->base_amount, $rc->amount, $rc->exchange_rate);
+            $invoiceNo = $rc->invoice?->invoice_number;
+            $notes = $rc->notes;
+            if (! $notes && $invoiceNo) {
+                $notes = 'تحصيل فاتورة '.$invoiceNo;
+            }
+            // Make multi-currency payments unmistakable on the statement (e.g. 42,000 SYP).
+            $docLabel = trim(number_format((float) $rc->amount, 2, '.', ',').' '.strtoupper((string) ($rc->currency ?: $this->currencies->baseCurrency())));
+            if ($invoiceNo) {
+                $docLabel .= ' ← '.$invoiceNo;
+            }
+
             $events[] = [
                 'date' => $rc->receipt_date->toDateString(),
                 'type' => 'receipt',
                 'number' => $rc->receipt_number,
                 'document_id' => (int) $rc->id,
+                'linked_invoice_id' => $rc->sales_invoice_id ? (int) $rc->sales_invoice_id : null,
                 'currency' => $rc->currency,
                 'document_amount' => (float) $rc->amount,
-                'notes' => $rc->notes,
+                'document_label' => $docLabel,
+                'notes' => $notes,
                 'debit' => 0.0,
-                'credit' => $this->baseValue($rc->base_amount, $rc->amount, $rc->exchange_rate),
+                'credit' => $creditBase,
                 'invoice' => null,
             ];
         }
@@ -2079,8 +2098,10 @@ class SalesService
                 'type' => $event['type'],
                 'number' => $event['number'],
                 'document_id' => $event['document_id'],
+                'linked_invoice_id' => $event['linked_invoice_id'] ?? null,
                 'currency' => $event['currency'],
                 'document_amount' => $event['document_amount'],
+                'document_label' => $event['document_label'] ?? null,
                 'notes' => $event['notes'],
                 'debit' => $event['debit'],
                 'credit' => $event['credit'],
@@ -2149,6 +2170,32 @@ class SalesService
      */
     protected function statementInvoiceDetail(SalesInvoice $invoice): array
     {
+        $payments = [];
+        if (is_array($invoice->payment_splits) && $invoice->payment_splits !== []) {
+            foreach ($invoice->payment_splits as $split) {
+                if (! is_array($split)) {
+                    continue;
+                }
+                $payments[] = [
+                    'amount' => (float) ($split['amount'] ?? 0),
+                    'currency' => strtoupper((string) ($split['currency'] ?? $invoice->currency)),
+                    'exchange_rate' => isset($split['exchange_rate']) ? (float) $split['exchange_rate'] : null,
+                    'base_amount' => isset($split['base_amount']) ? (float) $split['base_amount'] : null,
+                    'applied_in_invoice' => isset($split['applied_in_invoice']) ? (float) $split['applied_in_invoice'] : null,
+                ];
+            }
+        } elseif ($invoice->relationLoaded('receipts')) {
+            foreach ($invoice->receipts as $rc) {
+                $payments[] = [
+                    'amount' => (float) $rc->amount,
+                    'currency' => strtoupper((string) ($rc->currency ?: $invoice->currency)),
+                    'exchange_rate' => $rc->exchange_rate !== null ? (float) $rc->exchange_rate : null,
+                    'base_amount' => $rc->base_amount !== null ? (float) $rc->base_amount : null,
+                    'receipt_number' => $rc->receipt_number,
+                ];
+            }
+        }
+
         return [
             'payment_type' => $invoice->payment_type,
             'subtotal' => (float) $invoice->subtotal,
@@ -2158,6 +2205,7 @@ class SalesService
             'paid_amount' => (float) $invoice->paid_amount,
             'currency' => $invoice->currency,
             'notes' => $invoice->notes,
+            'payments' => $payments,
             'lines' => $invoice->lines->map(static function (SalesInvoiceLine $line): array {
                 $product = $line->product;
 

@@ -154,6 +154,7 @@
     "remainingAmount": "Kalan",
     "addPaymentLine": "Başka para biriminde ödeme ekle",
     "paymentLine": "Ödeme {{n}}",
+    "paymentLinesLabel": "Ödemeler",
     "multiCurrencyPaymentHint": "Aynı faturada birden fazla para birimi (ör. USD + SYP) alınabilir; kur ödeme anında belirlenir.",
     "paidInInvoiceCurrency": "Fatura para birimi karşılığı: {{amount}} {{currency}}",
     "collectMultiCurrencyHint": "Farklı para biriminde kur ile tahsil edin veya ödemeyi bölün (USD + SYP).",

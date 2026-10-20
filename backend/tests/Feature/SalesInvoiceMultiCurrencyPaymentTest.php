@@ -250,4 +250,66 @@ class SalesInvoiceMultiCurrencyPaymentTest extends TestCase
         $inv = SalesInvoice::query()->findOrFail($invoice['id']);
         $this->assertEqualsWithDelta(1500000, (float) $inv->paid_amount, 0.01);
     }
+
+    public function test_customer_statement_shows_syp_receipt_document_amount(): void
+    {
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $supplier = Supplier::query()->where('code', 'SUP-001')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $usdBox = CashBox::query()->where('code', 'CASH-USD')->firstOrFail();
+        $sypBox = CashBox::query()->where('code', 'CASH-01')->firstOrFail();
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => $supplier->id,
+            'warehouse_id' => $warehouse->id,
+            'payment_type' => 'credit',
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 5, 'unit_cost' => 40, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $sypRateToUsd = round(1 / 15000, 8);
+        $invoice = $this->postJson('/api/sales-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'USD',
+            'payment_type' => 'cash',
+            'status' => 'posted',
+            'payments' => [
+                [
+                    'amount' => 100,
+                    'currency' => 'USD',
+                    'exchange_rate' => 1,
+                    'base_amount' => 100,
+                    'cash_box_id' => $usdBox->id,
+                ],
+                [
+                    'amount' => 1500000,
+                    'currency' => 'SYP',
+                    'exchange_rate' => $sypRateToUsd,
+                    'base_amount' => 100,
+                    'cash_box_id' => $sypBox->id,
+                ],
+            ],
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 200, 'tax_rate' => 0]],
+        ])->assertCreated()->json('data');
+
+        $statement = $this->getJson("/api/customers/{$customer->id}/statement")->assertOk()->json('data');
+        $sypRow = collect($statement['rows'])->first(
+            fn ($r) => ($r['type'] ?? '') === 'receipt' && strtoupper((string) ($r['currency'] ?? '')) === 'SYP'
+        );
+        $this->assertNotNull($sypRow, 'SYP receipt must appear on customer statement');
+        $this->assertEqualsWithDelta(1500000, (float) $sypRow['document_amount'], 0.01);
+        $this->assertEqualsWithDelta(100, (float) $sypRow['credit'], 0.05);
+        $this->assertStringContainsString('SYP', (string) ($sypRow['document_label'] ?? ''));
+        $this->assertStringContainsString($invoice['invoice_number'], (string) ($sypRow['document_label'] ?? ''));
+
+        $invRow = collect($statement['rows'])->first(
+            fn ($r) => ($r['type'] ?? '') === 'invoice' && ($r['document_id'] ?? null) == $invoice['id']
+        );
+        $this->assertNotNull($invRow);
+        $this->assertGreaterThanOrEqual(2, count($invRow['invoice']['payments'] ?? []));
+    }
 }

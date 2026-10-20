@@ -156,6 +156,7 @@
     "remainingAmount": "Remaining",
     "addPaymentLine": "Add payment in another currency",
     "paymentLine": "Payment {{n}}",
+    "paymentLinesLabel": "Payments",
     "multiCurrencyPaymentHint": "You can receive more than one currency on the same invoice (e.g. USD + SYP) with the FX rate at payment time.",
     "paidInInvoiceCurrency": "Invoice-currency equivalent: {{amount}} {{currency}}",
     "collectMultiCurrencyHint": "Collect in a different currency with FX, or split into multiple payments (USD + SYP).",
