@@ -231,7 +231,7 @@ export default function PartnerStatementPanel({
 
   const pad = dense ? 'px-2.5 py-2.5' : 'px-4 py-3.5'
   const theadPad = dense ? 'px-2.5 py-2.5' : 'px-4 py-3.5'
-  const colCount = 7
+  const colCount = 8
 
   const rowKey = (r: StatementRow, idx: number) =>
     `${r.type}-${r.document_id ?? r.number}-${idx}`
@@ -269,6 +269,7 @@ export default function PartnerStatementPanel({
             <th className={theadPad}>{t('common.date')}</th>
             <th className={theadPad}>{t('common.type')}</th>
             <th className={theadPad}>{t('common.number')}</th>
+            <th className={theadPad}>{t('common.documentAmount')}</th>
             <th className={theadPad}>{t('common.owedByThem')}</th>
             <th className={theadPad}>{t('common.owedToThem')}</th>
             <th className={theadPad}>{t('common.balance')}</th>
@@ -330,16 +331,18 @@ export default function PartnerStatementPanel({
                       ) : null}
                     </td>
                     <td className={pad}>{r.date}</td>
-                    <td className={pad}>
-                      <div>{statementTypeLabel(r.type)}</div>
-                      {isPayment && (r.document_label || (r.currency && Number(r.document_amount) > 0)) ? (
-                        <div className="mt-0.5 text-[11px] font-medium text-teal-dark">
-                          {r.document_label
-                            || formatMoney(Number(r.document_amount) || 0, r.currency || currency)}
-                        </div>
-                      ) : null}
-                    </td>
+                    <td className={pad}>{statementTypeLabel(r.type)}</td>
                     <td className={`${pad} font-mono text-xs`}>{r.number}</td>
+                    <td className={`${pad} tabular-nums text-[12px] font-semibold text-[#8a5a00]`}>
+                      {isPayment
+                        ? (r.document_label
+                          || (Number(r.document_amount) > 0
+                            ? formatMoney(Number(r.document_amount) || 0, r.currency || currency)
+                            : '—'))
+                        : (Number(r.document_amount) > 0
+                          ? formatMoney(Number(r.document_amount) || 0, r.currency || currency)
+                          : '—')}
+                    </td>
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.debit) || 0, currency)}</td>
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.credit) || 0, currency)}</td>
                     <td className={`${pad} tabular-nums`}>{formatMoney(Number(r.balance) || 0, currency)}</td>
@@ -374,7 +377,7 @@ export default function PartnerStatementPanel({
         {rows.length > 0 && (
           <tfoot>
             <tr className="font-semibold">
-              <td className={pad} colSpan={4}>{t('common.total')}</td>
+              <td className={pad} colSpan={5}>{t('common.total')}</td>
               <td className={`${pad} tabular-nums`}>{formatMoney(totalDebit, currency)}</td>
               <td className={`${pad} tabular-nums`}>{formatMoney(totalCredit, currency)}</td>
               <td className={pad} />

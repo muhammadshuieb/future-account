@@ -912,7 +912,7 @@ class ExcelExportService
         }
 
         $headers = [
-            'التاريخ', 'النوع', 'المرجع', 'مدين', 'دائن', 'الرصيد', 'العملة',
+            'التاريخ', 'النوع', 'المرجع', 'مبلغ المستند', 'مدين', 'دائن', 'الرصيد', 'العملة',
             'الصنف', 'الماركة', 'الموديل', 'كمية', 'سعر', 'إجمالي السطر',
         ];
         $baseCurrency = (string) ($statement['currency'] ?? '');
@@ -924,6 +924,7 @@ class ExcelExportService
             '',
             '',
             '',
+            '',
             $statement['opening_balance'] ?? 0,
             $baseCurrency,
             '', '', '', '', '', '',
@@ -931,14 +932,21 @@ class ExcelExportService
 
         foreach ($statement['rows'] ?? [] as $event) {
             $type = (string) ($event['type'] ?? '');
+            $docAmount = $event['document_amount'] ?? '';
+            $docCurrency = $event['currency'] ?? $baseCurrency;
+            $docLabel = $event['document_label']
+                ?? (($docAmount !== '' && $docAmount !== null)
+                    ? (rtrim(rtrim(number_format((float) $docAmount, 2, '.', ','), '0'), '.').' '.$docCurrency)
+                    : '');
             $rows[] = [
                 $event['date'] ?? '',
                 $this->statementTypeLabel($type),
                 $event['number'] ?? '',
+                $docLabel,
                 $event['debit'] ?? 0,
                 $event['credit'] ?? 0,
                 $event['balance'] ?? 0,
-                $event['currency'] ?? $baseCurrency,
+                $docCurrency,
                 '', '', '', '', '', '',
             ];
 
@@ -949,6 +957,28 @@ class ExcelExportService
             $invoice = $event['invoice'] ?? null;
             if (! is_array($invoice)) {
                 continue;
+            }
+
+            foreach ($invoice['payments'] ?? [] as $payment) {
+                if (! is_array($payment)) {
+                    continue;
+                }
+                $payCur = strtoupper((string) ($payment['currency'] ?? $invoice['currency'] ?? $baseCurrency));
+                $payAmt = (float) ($payment['amount'] ?? 0);
+                if ($payAmt <= 0) {
+                    continue;
+                }
+                $rows[] = [
+                    $event['date'] ?? '',
+                    '  دفعة',
+                    $payment['receipt_number'] ?? ($event['number'] ?? ''),
+                    rtrim(rtrim(number_format($payAmt, 2, '.', ','), '0'), '.').' '.$payCur,
+                    '',
+                    '',
+                    '',
+                    $payCur,
+                    '', '', '', '', '', '',
+                ];
             }
 
             $lineLabel = $type === 'return' ? '  بند مرتجع' : '  بند فاتورة';
@@ -969,6 +999,7 @@ class ExcelExportService
                     '',
                     '',
                     '',
+                    '',
                     $invoice['currency'] ?? ($event['currency'] ?? $baseCurrency),
                     $product['name'] ?? '',
                     $product['brand'] ?? '',
@@ -984,6 +1015,7 @@ class ExcelExportService
             '',
             'إجمالي الحركة',
             '',
+            '',
             $statement['total_debit'] ?? 0,
             $statement['total_credit'] ?? 0,
             '',
@@ -993,6 +1025,7 @@ class ExcelExportService
         $rows[] = [
             $to ?: '',
             'رصيد ختامي',
+            '',
             '',
             '',
             '',

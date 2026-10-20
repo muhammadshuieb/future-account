@@ -286,40 +286,40 @@ export function StatementPrintView({
             <th>التاريخ</th>
             <th>النوع</th>
             <th>الرقم</th>
-            <th>عليه</th>
-            <th>له</th>
-            <th>الرصيد</th>
+            <th>مبلغ المستند</th>
+            <th>عليه ({currency})</th>
+            <th>له ({currency})</th>
+            <th>الرصيد ({currency})</th>
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={6} className="statement-print__empty">
+              <td colSpan={7} className="statement-print__empty">
                 لا توجد حركات في الفترة المحددة
               </td>
             </tr>
           ) : (
-            rows.map((r, i) => (
+            rows.map((r, i) => {
+              const docAmt = Number(r.document_amount) || 0
+              const docCur = r.currency || currency
+              const docText = isStatementPaymentRow(r.type)
+                ? (r.document_label || (docAmt > 0 ? formatMoney(docAmt, docCur) : '—'))
+                : (docAmt > 0 ? formatMoney(docAmt, docCur) : '—')
+              return (
               <Fragment key={`${r.number}-${i}`}>
                 <tr className={isStatementPaymentRow(r.type) ? 'statement-row--payment' : undefined}>
                   <td>{r.date}</td>
-                  <td>
-                    <div>{statementTypeLabel(r.type)}</div>
-                    {(r.document_label || (r.currency && Number(r.document_amount) > 0)) ? (
-                      <div className="statement-print__doc-amount">
-                        {r.document_label
-                          || formatMoney(Number(r.document_amount) || 0, r.currency || currency)}
-                      </div>
-                    ) : null}
-                  </td>
+                  <td>{statementTypeLabel(r.type)}</td>
                   <td className="font-mono text-xs">{r.number}</td>
+                  <td className="tabular-nums statement-print__doc-amount-cell">{docText}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.debit) || 0, currency)}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.credit) || 0, currency)}</td>
                   <td className="tabular-nums">{formatMoney(Number(r.balance) || 0, currency)}</td>
                 </tr>
                 {isStatementDetailRow(r.type) && r.invoice ? (
                   <tr className="print-avoid-break statement-print__detail-row">
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <InvoiceDetailBlock
                         invoice={r.invoice}
                         fallbackCurrency={currency}
@@ -329,13 +329,14 @@ export function StatementPrintView({
                   </tr>
                 ) : null}
               </Fragment>
-            ))
+              )
+            })
           )}
         </tbody>
         {rows.length > 0 && (
           <tfoot>
             <tr className="font-semibold">
-              <td colSpan={3}>الإجمالي</td>
+              <td colSpan={4}>الإجمالي</td>
               <td className="tabular-nums">{formatMoney(totalDebit, currency)}</td>
               <td className="tabular-nums">{formatMoney(totalCredit, currency)}</td>
               <td />

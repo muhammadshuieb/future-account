@@ -734,6 +734,14 @@ body {
   color: var(--color-teal-dark);
 }
 
+.statement-print__doc-amount-cell {
+  font-weight: 700 !important;
+  color: #8a5a00 !important;
+  white-space: normal !important;
+  word-break: break-word;
+  min-width: 7.5rem;
+}
+
 .statement-invoice-detail__notes {
   margin: 0;
   color: #2a3d48;
@@ -1652,6 +1660,17 @@ textarea {
   .statement-print__movements .statement-row--payment > td:nth-child(2),
   .statement-panel__movements .statement-row--payment > td:nth-child(3) {
     color: #8a5a00 !important;
+  }
+
+  .statement-print__doc-amount,
+  .statement-print__doc-amount-cell {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: #8a5a00 !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .statement-print__detail-row > td,
