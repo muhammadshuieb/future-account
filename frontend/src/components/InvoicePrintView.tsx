@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
 import { LOGO } from '@/lib/brand'
 import { formatMoney, formatQuantity } from '@/components/ui'
-import { formatInvoiceDateTime, todayYmd } from '@/lib/dates'
+import { formatInvoiceDateTime } from '@/lib/dates'
 import { ProductIdentityCells } from '@/components/ProductIdentityCells'
 import PrintStamp from '@/components/PrintStamp'
 import { statementPaymentTypeLabel } from '@/components/StatementPrintView'
@@ -109,7 +109,7 @@ function InvoiceBrandHeader({
   companyName?: string
   taxNumber?: string
   extra?: ReactNode
-  /** Match partner statement print header (company / brand / title / print date). */
+  /** Match partner statement print header (company / brand / title). */
   statementStyle?: boolean
 }) {
   const { t } = useTranslation()
@@ -129,7 +129,6 @@ function InvoiceBrandHeader({
           <p className="statement-print__doc-title">{documentLabel}</p>
           <p className="statement-print__muted font-mono">{invoiceNumber}</p>
           <p className="statement-print__muted">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
-          <p className="statement-print__muted">تاريخ الطباعة: {todayYmd()}</p>
           {extra}
         </div>
         <BrandLogo />
