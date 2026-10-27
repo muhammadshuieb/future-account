@@ -207,7 +207,9 @@ class FtthDailyReportController extends ApiController
     /** @return array<string, mixed> */
     protected function present(FtthDailyReport $report): array
     {
-        $works = $report->works ?: FtthReportDefaults::works();
+        // Keep the stored rows as-is (including empty arrays). Do not inject
+        // catalog defaults here — that made blank template rows appear on print.
+        $works = is_array($report->works) ? $report->works : [];
         $summary = $this->summarizeWorks($works);
 
         return array_merge($report->toArray(), [

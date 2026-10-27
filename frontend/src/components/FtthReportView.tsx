@@ -86,6 +86,27 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+function filled(v?: string | null): boolean {
+  return !!v?.trim()
+}
+
+/** Rows the user never filled — hide them on print / report view. */
+function isWorkFilled(w: FtthWorkRow): boolean {
+  return num(w.planned) > 0 || num(w.actual) > 0 || filled(w.location) || filled(w.notes)
+}
+
+function isMaterialFilled(m: FtthMaterialRow): boolean {
+  return num(m.opening) > 0 || num(m.received) > 0 || num(m.used) > 0 || filled(m.notes)
+}
+
+function isPlanFilled(p: FtthNextDayRow): boolean {
+  return num(p.target) > 0 || filled(p.location) || filled(p.notes)
+}
+
+function isResourceFilled(r: FtthResourceRow): boolean {
+  return filled(r.quantity) || filled(r.location) || filled(r.needed_at) || filled(r.owner) || filled(r.notes)
+}
+
 function Brand() {
   return (
     <img
@@ -103,10 +124,11 @@ function Brand() {
 }
 
 function NoteBlock({ label, value }: { label: string; value?: string | null }) {
+  if (!filled(value)) return null
   return (
     <div className="ftth-report__note">
       <p className="ftth-report__note-label">{label}</p>
-      <p className="ftth-report__note-body">{value?.trim() || '—'}</p>
+      <p className="ftth-report__note-body">{value!.trim()}</p>
     </div>
   )
 }
@@ -118,11 +140,27 @@ export default function FtthReportView({
   report: FtthDailyReport
   showNextDay?: boolean
 }) {
-  const works = report.works || []
-  const materials = report.materials || []
-  const plan = report.next_day_plan || []
-  const resources = report.next_day_resources || []
+  const works = (report.works || []).filter(isWorkFilled)
+  const materials = (report.materials || []).filter(isMaterialFilled)
+  const plan = (report.next_day_plan || []).filter(isPlanFilled)
+  const resources = (report.next_day_resources || []).filter(isResourceFilled)
   const summary = report.summary || {}
+
+  const dayNotes = [
+    { label: 'المعوقات / أسباب التأخير', value: report.obstacles },
+    { label: 'إجراءات المعالجة المطلوبة', value: report.remediation },
+    { label: 'ملاحظات الجودة والفحص قبل الردم', value: report.quality_notes },
+    { label: 'ملاحظات السلامة وحركة المرور', value: report.safety_notes },
+    { label: 'الصور / أرقام المرفقات', value: report.attachments_notes },
+  ].filter((n) => filled(n.value))
+
+  const nextDayNotes = [
+    { label: 'المعوقات المتوقعة', value: report.next_day_obstacles },
+    { label: 'التنسيق مع البلدية / المرور / أصحاب الخدمات', value: report.next_day_coordination },
+    { label: 'إجراءات السلامة قبل بدء الحفر', value: report.next_day_safety },
+    { label: 'الأعمال المطلوب فحصها قبل الردم', value: report.next_day_inspection },
+    { label: 'هدف نهاية اليوم', value: report.next_day_goal },
+  ].filter((n) => filled(n.value))
 
   return (
     <div className="ftth-report" dir="rtl">
@@ -171,163 +209,175 @@ export default function FtthReportView({
         </div>
       </section>
 
-      <section className="ftth-report__section">
-        <h2>الأعمال المنفذة خلال اليوم</h2>
-        <table className="ftth-report__table">
-          <thead>
-            <tr>
-              <th>م</th>
-              <th>نوع العمل</th>
-              <th>الموقع / من – إلى</th>
-              <th>الوحدة</th>
-              <th>المخطط</th>
-              <th>المنفذ</th>
-              <th>الفرق</th>
-              <th>ملاحظات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {works.map((w, i) => {
-              const planned = num(w.planned)
-              const actual = num(w.actual)
-              return (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{w.type}</td>
-                  <td>{w.location || '—'}</td>
-                  <td>{w.unit || '—'}</td>
-                  <td className="tabular-nums">{formatQuantity(planned)}</td>
-                  <td className="tabular-nums">{formatQuantity(actual)}</td>
-                  <td className="tabular-nums">{formatQuantity(actual - planned)}</td>
-                  <td>{w.notes || '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </section>
+      {works.length > 0 ? (
+        <section className="ftth-report__section">
+          <h2>الأعمال المنفذة خلال اليوم</h2>
+          <table className="ftth-report__table">
+            <thead>
+              <tr>
+                <th>م</th>
+                <th>نوع العمل</th>
+                <th>الموقع / من – إلى</th>
+                <th>الوحدة</th>
+                <th>المخطط</th>
+                <th>المنفذ</th>
+                <th>الفرق</th>
+                <th>ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {works.map((w, i) => {
+                const planned = num(w.planned)
+                const actual = num(w.actual)
+                return (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td>{w.type}</td>
+                    <td>{w.location || '—'}</td>
+                    <td>{w.unit || '—'}</td>
+                    <td className="tabular-nums">{formatQuantity(planned)}</td>
+                    <td className="tabular-nums">{formatQuantity(actual)}</td>
+                    <td className="tabular-nums">{formatQuantity(actual - planned)}</td>
+                    <td>{w.notes || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
-      <section className="ftth-report__section">
-        <h2>المواد والمعدات</h2>
-        <table className="ftth-report__table">
-          <thead>
-            <tr>
-              <th>م</th>
-              <th>المادة / المعدة</th>
-              <th>الوحدة</th>
-              <th>رصيد أول اليوم</th>
-              <th>المستلم</th>
-              <th>المستخدم</th>
-              <th>رصيد آخر اليوم</th>
-              <th>ملاحظات</th>
-            </tr>
-          </thead>
-          <tbody>
-            {materials.map((m, i) => {
-              const opening = num(m.opening)
-              const received = num(m.received)
-              const used = num(m.used)
-              const closing = opening + received - used
-              return (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{m.item}</td>
-                  <td>{m.unit || '—'}</td>
-                  <td className="tabular-nums">{formatQuantity(opening)}</td>
-                  <td className="tabular-nums">{formatQuantity(received)}</td>
-                  <td className="tabular-nums">{formatQuantity(used)}</td>
-                  <td className="tabular-nums">{formatQuantity(closing)}</td>
-                  <td>{m.notes || '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </section>
+      {materials.length > 0 ? (
+        <section className="ftth-report__section">
+          <h2>المواد والمعدات</h2>
+          <table className="ftth-report__table">
+            <thead>
+              <tr>
+                <th>م</th>
+                <th>المادة / المعدة</th>
+                <th>الوحدة</th>
+                <th>رصيد أول اليوم</th>
+                <th>المستلم</th>
+                <th>المستخدم</th>
+                <th>رصيد آخر اليوم</th>
+                <th>ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody>
+              {materials.map((m, i) => {
+                const opening = num(m.opening)
+                const received = num(m.received)
+                const used = num(m.used)
+                const closing = opening + received - used
+                return (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td>{m.item}</td>
+                    <td>{m.unit || '—'}</td>
+                    <td className="tabular-nums">{formatQuantity(opening)}</td>
+                    <td className="tabular-nums">{formatQuantity(received)}</td>
+                    <td className="tabular-nums">{formatQuantity(used)}</td>
+                    <td className="tabular-nums">{formatQuantity(closing)}</td>
+                    <td>{m.notes || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
-      <section className="ftth-report__section">
-        <h2>المعوقات والجودة والسلامة</h2>
-        <div className="ftth-report__notes-grid">
-          <NoteBlock label="المعوقات / أسباب التأخير" value={report.obstacles} />
-          <NoteBlock label="إجراءات المعالجة المطلوبة" value={report.remediation} />
-          <NoteBlock label="ملاحظات الجودة والفحص قبل الردم" value={report.quality_notes} />
-          <NoteBlock label="ملاحظات السلامة وحركة المرور" value={report.safety_notes} />
-          <NoteBlock label="الصور / أرقام المرفقات" value={report.attachments_notes} />
-        </div>
-      </section>
+      {dayNotes.length > 0 ? (
+        <section className="ftth-report__section">
+          <h2>المعوقات والجودة والسلامة</h2>
+          <div className="ftth-report__notes-grid">
+            {dayNotes.map((n) => (
+              <NoteBlock key={n.label} label={n.label} value={n.value} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {showNextDay ? (
         <>
-          <section className="ftth-report__section">
-            <h2>خطة العمل لليوم التالي</h2>
-            <table className="ftth-report__table">
-              <thead>
-                <tr>
-                  <th>م</th>
-                  <th>النشاط</th>
-                  <th>الموقع</th>
-                  <th>الوحدة</th>
-                  <th>الكمية المستهدفة</th>
-                  <th>الفريق</th>
-                  <th>المواد / المعدات</th>
-                  <th>ملاحظات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {plan.map((p, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
-                    <td>{p.activity}</td>
-                    <td>{p.location || '—'}</td>
-                    <td>{p.unit || '—'}</td>
-                    <td className="tabular-nums">{formatQuantity(num(p.target))}</td>
-                    <td>{p.team || '—'}</td>
-                    <td>{p.resources || '—'}</td>
-                    <td>{p.notes || '—'}</td>
+          {plan.length > 0 ? (
+            <section className="ftth-report__section">
+              <h2>خطة العمل لليوم التالي</h2>
+              <table className="ftth-report__table">
+                <thead>
+                  <tr>
+                    <th>م</th>
+                    <th>النشاط</th>
+                    <th>الموقع</th>
+                    <th>الوحدة</th>
+                    <th>الكمية المستهدفة</th>
+                    <th>الفريق</th>
+                    <th>المواد / المعدات</th>
+                    <th>ملاحظات</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
+                </thead>
+                <tbody>
+                  {plan.map((p, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>{p.activity}</td>
+                      <td>{p.location || '—'}</td>
+                      <td>{p.unit || '—'}</td>
+                      <td className="tabular-nums">{formatQuantity(num(p.target))}</td>
+                      <td>{p.team || '—'}</td>
+                      <td>{p.resources || '—'}</td>
+                      <td>{p.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          ) : null}
 
-          <section className="ftth-report__section">
-            <h2>العمالة والمعدات والمواد المطلوبة غداً</h2>
-            <table className="ftth-report__table">
-              <thead>
-                <tr>
-                  <th>م</th>
-                  <th>البند</th>
-                  <th>العدد / الكمية</th>
-                  <th>الوحدة</th>
-                  <th>الموقع / الفريق</th>
-                  <th>موعد الحاجة</th>
-                  <th>المسؤول</th>
-                  <th>ملاحظات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {resources.map((r, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
-                    <td>{r.item}</td>
-                    <td>{r.quantity || '—'}</td>
-                    <td>{r.unit || '—'}</td>
-                    <td>{r.location || '—'}</td>
-                    <td>{r.needed_at || '—'}</td>
-                    <td>{r.owner || '—'}</td>
-                    <td>{r.notes || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="ftth-report__notes-grid" style={{ marginTop: '0.75rem' }}>
-              <NoteBlock label="المعوقات المتوقعة" value={report.next_day_obstacles} />
-              <NoteBlock label="التنسيق مع البلدية / المرور / أصحاب الخدمات" value={report.next_day_coordination} />
-              <NoteBlock label="إجراءات السلامة قبل بدء الحفر" value={report.next_day_safety} />
-              <NoteBlock label="الأعمال المطلوب فحصها قبل الردم" value={report.next_day_inspection} />
-              <NoteBlock label="هدف نهاية اليوم" value={report.next_day_goal} />
-            </div>
-          </section>
+          {resources.length > 0 || nextDayNotes.length > 0 ? (
+            <section className="ftth-report__section">
+              {resources.length > 0 ? (
+                <>
+                  <h2>العمالة والمعدات والمواد المطلوبة غداً</h2>
+                  <table className="ftth-report__table">
+                    <thead>
+                      <tr>
+                        <th>م</th>
+                        <th>البند</th>
+                        <th>العدد / الكمية</th>
+                        <th>الوحدة</th>
+                        <th>الموقع / الفريق</th>
+                        <th>موعد الحاجة</th>
+                        <th>المسؤول</th>
+                        <th>ملاحظات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resources.map((r, i) => (
+                        <tr key={i}>
+                          <td>{i + 1}</td>
+                          <td>{r.item}</td>
+                          <td>{r.quantity || '—'}</td>
+                          <td>{r.unit || '—'}</td>
+                          <td>{r.location || '—'}</td>
+                          <td>{r.needed_at || '—'}</td>
+                          <td>{r.owner || '—'}</td>
+                          <td>{r.notes || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              ) : null}
+              {nextDayNotes.length > 0 ? (
+                <div className="ftth-report__notes-grid" style={{ marginTop: resources.length > 0 ? '0.75rem' : 0 }}>
+                  {nextDayNotes.map((n) => (
+                    <NoteBlock key={n.label} label={n.label} value={n.value} />
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
         </>
       ) : null}
 
