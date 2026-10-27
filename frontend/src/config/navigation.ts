@@ -18,6 +18,7 @@ import {
   FileSpreadsheet,
   Receipt,
   Cable,
+  Tags,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -62,6 +63,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: '/sales', key: 'sales', icon: ShoppingCart, permission: 'sales.view' },
       { to: '/quotes', key: 'quotes', icon: FileSpreadsheet, permission: 'quotes.view' },
+      { to: '/price-lists', key: 'priceLists', icon: Tags, permission: 'price_lists.view' },
       { to: '/print-invoices', key: 'printInvoices', icon: Receipt, permission: 'print_invoices.view' },
       { to: '/purchases', key: 'purchases', icon: Truck, permission: 'purchases.view' },
       { to: '/warehouse', key: 'warehouse', icon: Warehouse, permission: 'warehouse.view' },

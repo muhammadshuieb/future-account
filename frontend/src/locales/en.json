@@ -18,6 +18,7 @@
     "journal": "Journal Entries",
     "sales": "Sales",
     "quotes": "Price Quotes",
+    "priceLists": "Price List",
     "printInvoices": "Print Invoices",
     "purchases": "Purchases",
     "warehouse": "Warehouse",
@@ -317,6 +318,36 @@
     "loadFailed": "Could not load quote",
     "noPermission": "You do not have permission to view price quotes"
   },
+  "priceLists": {
+    "title": "Price List",
+    "subtitle": "Product prices — editable by admins only",
+    "viewOnly": "View only — you cannot edit prices",
+    "search": "Search model or specs…",
+    "allCategories": "All categories",
+    "category": "Category",
+    "rowNo": "#",
+    "model": "Model No.",
+    "mp": "MP",
+    "specs": "Specs",
+    "lens": "Lens",
+    "superWholesale": "Super wholesale",
+    "retail": "Retail",
+    "wholesale": "Wholesale",
+    "actions": "Actions",
+    "addItem": "Add item",
+    "editItem": "Edit item",
+    "saveItem": "Save",
+    "deleteItem": "Delete",
+    "confirmDelete": "Delete this item from the price list?",
+    "saved": "Saved",
+    "deleted": "Deleted",
+    "empty": "No items in the price list",
+    "noPermission": "You do not have permission to view the price list",
+    "currency": "Currency",
+    "updatedBy": "Last updated by",
+    "isCategoryHeader": "Category header",
+    "active": "Active"
+  },
   "printInvoices": {
     "title": "Print Invoices",
     "subtitle": "Create invoices for printing only — not recorded in sales or purchases",
@@ -550,7 +581,8 @@
     "warehouse": "Warehouse Keeper",
     "warehouse_manager": "Warehouse Manager",
     "sales": "Sales",
-    "purchasing": "Purchasing"
+    "purchasing": "Purchasing",
+    "price_viewer": "Price List Viewer"
   },
   "permissionNames": {
     "dashboard": { "view": "View dashboard" },
@@ -561,6 +593,7 @@
     "quotes": { "view": "View price quotes", "manage": "Manage price quotes" },
     "print_invoices": { "view": "View print invoices", "manage": "Manage print invoices" },
     "ftth": { "view": "View FTTH reports", "manage": "Manage FTTH reports" },
+    "price_lists": { "view": "View price list", "manage": "Manage price list" },
     "purchases": { "view": "View purchases", "manage": "Manage purchases", "invoices": { "edit": "Edit posted purchase invoices" } },
     "warehouse": {
       "view": "View warehouse",

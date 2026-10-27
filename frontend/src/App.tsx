@@ -19,6 +19,7 @@ const WarehousePage = lazy(() => import('@/pages/WarehousePage'))
 const WarehouseApprovalsPage = lazy(() => import('@/pages/WarehouseApprovalsPage'))
 const SalesPage = lazy(() => import('@/pages/SalesPage'))
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'))
+const PriceListsPage = lazy(() => import('@/pages/PriceListsPage'))
 const PrintInvoicesPage = lazy(() => import('@/pages/PrintInvoicesPage'))
 const PurchasesPage = lazy(() => import('@/pages/PurchasesPage'))
 const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
@@ -113,6 +114,7 @@ export default function App() {
                 <Route path="settings" element={<SettingsPage />} />
                 <Route path="sales" element={<SalesPage />} />
                 <Route path="quotes" element={<QuotesPage />} />
+                <Route path="price-lists" element={<PriceListsPage />} />
                 <Route path="print-invoices" element={<PrintInvoicesPage />} />
                 <Route path="purchases" element={<PurchasesPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />

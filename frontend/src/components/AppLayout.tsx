@@ -30,6 +30,9 @@ function canSeeNavItem(
   if (item.key === 'printInvoices') {
     return hasPermission('print_invoices.view') || hasPermission('sales.view')
   }
+  if (item.key === 'priceLists') {
+    return hasPermission('price_lists.view') || hasPermission('price_lists.manage')
+  }
   if (!item.permission) return true
   return hasPermission(item.permission)
 }

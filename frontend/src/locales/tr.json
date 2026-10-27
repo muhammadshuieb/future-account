@@ -18,6 +18,7 @@
     "journal": "Yevmiye Fişleri",
     "sales": "Satışlar",
     "quotes": "Fiyat Teklifleri",
+    "priceLists": "Fiyat Listesi",
     "printInvoices": "Yazdırma Faturaları",
     "purchases": "Satın Alma",
     "warehouse": "Depo",
@@ -315,6 +316,36 @@
     "loadFailed": "Teklif yüklenemedi",
     "noPermission": "Fiyat tekliflerini görüntüleme yetkiniz yok"
   },
+  "priceLists": {
+    "title": "Fiyat Listesi",
+    "subtitle": "Ürün fiyatları — yalnızca yöneticiler düzenleyebilir",
+    "viewOnly": "Yalnızca görüntüleme — fiyatları düzenleyemezsiniz",
+    "search": "Model veya özellik ara…",
+    "allCategories": "Tüm kategoriler",
+    "category": "Kategori",
+    "rowNo": "#",
+    "model": "Model No.",
+    "mp": "MP",
+    "specs": "Özellikler",
+    "lens": "Lens",
+    "superWholesale": "Süper toptan",
+    "retail": "Perakende",
+    "wholesale": "Toptan",
+    "actions": "İşlemler",
+    "addItem": "Kalem ekle",
+    "editItem": "Kalemi düzenle",
+    "saveItem": "Kaydet",
+    "deleteItem": "Sil",
+    "confirmDelete": "Bu kalem fiyat listesinden silinsin mi?",
+    "saved": "Kaydedildi",
+    "deleted": "Silindi",
+    "empty": "Fiyat listesinde kalem yok",
+    "noPermission": "Fiyat listesini görüntüleme yetkiniz yok",
+    "currency": "Para birimi",
+    "updatedBy": "Son güncelleyen",
+    "isCategoryHeader": "Kategori başlığı",
+    "active": "Aktif"
+  },
   "printInvoices": {
     "title": "Yazdırma Faturaları",
     "subtitle": "Yalnızca yazdırmak için fatura — satış veya satın almaya kaydedilmez",
@@ -544,7 +575,8 @@
     "warehouse": "Depo Sorumlusu",
     "warehouse_manager": "Depo Yöneticisi",
     "sales": "Satış",
-    "purchasing": "Satın Alma"
+    "purchasing": "Satın Alma",
+    "price_viewer": "Fiyat Listesi Görüntüleyici"
   },
   "permissionNames": {
     "dashboard": { "view": "Kontrol panelini görüntüle" },
@@ -555,6 +587,7 @@
     "quotes": { "view": "Fiyat tekliflerini görüntüle", "manage": "Fiyat tekliflerini yönet" },
     "print_invoices": { "view": "Yazdırma faturalarını görüntüle", "manage": "Yazdırma faturalarını yönet" },
     "ftth": { "view": "FTTH raporlarını görüntüle", "manage": "FTTH raporlarını yönet" },
+    "price_lists": { "view": "Fiyat listesini görüntüle", "manage": "Fiyat listesini yönet" },
     "purchases": { "view": "Satın almayı görüntüle", "manage": "Satın almayı yönet", "invoices": { "edit": "Onaylı satın alma faturalarını düzenle" } },
     "warehouse": {
       "view": "Depoyu görüntüle",

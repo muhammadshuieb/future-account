@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\JournalEntryController;
 use App\Http\Controllers\Api\LeaveRequestController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\PriceListController;
 use App\Http\Controllers\Api\PrintInvoiceController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProductImportController;
@@ -152,6 +153,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('warehouse-approvals/{warehouseApprovalRequest}/approve', [WarehouseApprovalController::class, 'approve']);
     Route::post('warehouse-approvals/{warehouseApprovalRequest}/reject', [WarehouseApprovalController::class, 'reject']);
     Route::get('warehouse-dashboard/summary', [WarehouseDashboardController::class, 'summary']);
+
+    // Price lists (admin manage / assigned managers view)
+    Route::get('price-lists', [PriceListController::class, 'index']);
+    Route::post('price-lists', [PriceListController::class, 'store']);
+    Route::get('price-lists/{priceList}', [PriceListController::class, 'show']);
+    Route::put('price-lists/{priceList}', [PriceListController::class, 'update']);
+    Route::delete('price-lists/{priceList}', [PriceListController::class, 'destroy']);
+    Route::post('price-lists/{priceList}/items/reorder', [PriceListController::class, 'reorderItems']);
+    Route::post('price-lists/{priceList}/items', [PriceListController::class, 'storeItem']);
+    Route::put('price-lists/{priceList}/items/{item}', [PriceListController::class, 'updateItem']);
+    Route::delete('price-lists/{priceList}/items/{item}', [PriceListController::class, 'destroyItem']);
 
     // Phase 3 — Sales & Purchases
     Route::apiResource('customers', CustomerController::class);

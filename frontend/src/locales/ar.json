@@ -18,6 +18,7 @@
     "journal": "القيود اليومية",
     "sales": "المبيعات",
     "quotes": "عروض الأسعار",
+    "priceLists": "قائمة الأسعار",
     "printInvoices": "فواتير الطباعة",
     "purchases": "المشتريات",
     "warehouse": "المخازن",
@@ -317,6 +318,36 @@
     "loadFailed": "تعذر تحميل عرض السعر",
     "noPermission": "ليس لديك صلاحية عرض عروض الأسعار"
   },
+  "priceLists": {
+    "title": "قائمة الأسعار",
+    "subtitle": "أسعار المنتجات — التعديل للمسؤول فقط",
+    "viewOnly": "عرض فقط — لا يمكنك تعديل الأسعار",
+    "search": "بحث بالموديل أو المواصفات…",
+    "allCategories": "كل الفئات",
+    "category": "الفئة",
+    "rowNo": "#",
+    "model": "رقم الموديل",
+    "mp": "MP",
+    "specs": "المواصفات",
+    "lens": "العدسة",
+    "superWholesale": "جملة الجملة",
+    "retail": "المفرق",
+    "wholesale": "الجملة",
+    "actions": "إجراءات",
+    "addItem": "إضافة بند",
+    "editItem": "تعديل البند",
+    "saveItem": "حفظ",
+    "deleteItem": "حذف",
+    "confirmDelete": "حذف هذا البند من قائمة الأسعار؟",
+    "saved": "تم الحفظ",
+    "deleted": "تم الحذف",
+    "empty": "لا توجد بنود في قائمة الأسعار",
+    "noPermission": "ليس لديك صلاحية عرض قائمة الأسعار",
+    "currency": "العملة",
+    "updatedBy": "آخر تعديل بواسطة",
+    "isCategoryHeader": "عنوان فئة",
+    "active": "نشط"
+  },
   "printInvoices": {
     "title": "فواتير الطباعة",
     "subtitle": "إنشاء فاتورة للطباعة فقط — لا تُسجَّل في المبيعات ولا المشتريات",
@@ -550,7 +581,8 @@
     "warehouse": "أمين المستودع",
     "warehouse_manager": "مسؤول مخزن",
     "sales": "مبيعات",
-    "purchasing": "مشتريات"
+    "purchasing": "مشتريات",
+    "price_viewer": "عرض قائمة الأسعار"
   },
   "permissionNames": {
     "dashboard": { "view": "عرض لوحة التحكم" },
@@ -561,6 +593,7 @@
     "quotes": { "view": "عرض عروض الأسعار", "manage": "إدارة عروض الأسعار" },
     "print_invoices": { "view": "عرض فواتير الطباعة", "manage": "إدارة فواتير الطباعة" },
     "ftth": { "view": "عرض تقارير FTTH", "manage": "إدارة تقارير FTTH" },
+    "price_lists": { "view": "عرض قائمة الأسعار", "manage": "إدارة قائمة الأسعار" },
     "purchases": { "view": "عرض المشتريات", "manage": "إدارة المشتريات", "invoices": { "edit": "تعديل فواتير المشتريات المرحّلة" } },
     "warehouse": {
       "view": "عرض المستودع",
