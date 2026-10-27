@@ -68,10 +68,9 @@ class RolesAndPermissionsSeeder extends Seeder
         // True system admin keeps every permission (including capital + profits).
         $admin->syncPermissions(Permission::all());
 
-        // View-only role: assign to a specific manager who may see prices but not edit.
+        // View-only role: assign to a specific manager who may see prices but not the dashboard.
         $priceViewer = Role::findOrCreate('price_viewer');
         $priceViewer->syncPermissions([
-            'dashboard.view',
             'price_lists.view',
         ]);
 

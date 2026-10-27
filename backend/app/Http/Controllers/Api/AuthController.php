@@ -87,8 +87,20 @@ class AuthController extends Controller
 
     protected function landingPath(User $user): string
     {
-        return $user->hasRole('warehouse_manager') && ! $user->hasRole('admin')
-            ? '/warehouse-dashboard'
-            : '/';
+        if ($user->hasRole('warehouse_manager') && ! $user->hasRole('admin')) {
+            return '/warehouse-dashboard';
+        }
+
+        if ($user->hasRole('price_viewer') && ! $user->hasRole('admin')) {
+            return '/price-lists';
+        }
+
+        // Permission-only price access without dashboard.view → land on price list.
+        if (! $user->can('dashboard.view')
+            && ($user->can('price_lists.view') || $user->can('price_lists.manage'))) {
+            return '/price-lists';
+        }
+
+        return '/';
     }
 }

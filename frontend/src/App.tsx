@@ -8,7 +8,7 @@ import api from '@/lib/api'
 import AppLayout from '@/components/AppLayout'
 import LoginPage from '@/pages/LoginPage'
 import { useAuth } from '@/context/AuthContext'
-import { isWarehouseManager } from '@/lib/authRouting'
+import { isPriceViewerOnly, isWarehouseManager, landingPathForUser } from '@/lib/authRouting'
 
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const WarehouseDashboardPage = lazy(() => import('@/pages/WarehouseDashboardPage'))
@@ -74,7 +74,10 @@ function BootstrapLocale() {
 
 function HomeRoute() {
   const { user } = useAuth()
-  return isWarehouseManager(user) ? <Navigate to="/warehouse-dashboard" replace /> : <DashboardPage />
+  if (isWarehouseManager(user) || isPriceViewerOnly(user)) {
+    return <Navigate to={landingPathForUser(user)} replace />
+  }
+  return <DashboardPage />
 }
 
 function WarehouseManagerRoute({ children }: { children: ReactNode }) {

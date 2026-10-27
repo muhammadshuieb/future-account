@@ -12,15 +12,16 @@ import LanguageSwitcher from '@/components/LanguageSwitcher'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import HeaderLiveClock from '@/components/HeaderLiveClock'
 import { navGroups, type NavItem } from '@/config/navigation'
-import { isWarehouseManager } from '@/lib/authRouting'
+import { isPriceViewerOnly, isWarehouseManager } from '@/lib/authRouting'
 
 function canSeeNavItem(
   item: NavItem,
   hasPermission: (p: string) => boolean,
   warehouseManager: boolean,
+  priceViewerOnly: boolean,
 ): boolean {
   if (item.warehouseManagerOnly && !warehouseManager) return false
-  if (item.key === 'dashboard' && warehouseManager) return false
+  if (item.key === 'dashboard' && (warehouseManager || priceViewerOnly)) return false
   if (item.key === 'partners') {
     return hasPermission('customers.view') || hasPermission('suppliers.view')
   }
@@ -106,10 +107,13 @@ export default function AppLayout() {
   }
 
   const warehouseManager = isWarehouseManager(user)
+  const priceViewerOnly = isPriceViewerOnly(user)
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => canSeeNavItem(item, hasPermission, warehouseManager)),
+      items: group.items.filter((item) =>
+        canSeeNavItem(item, hasPermission, warehouseManager, priceViewerOnly),
+      ),
     }))
     .filter((group) => group.items.length > 0)
 
