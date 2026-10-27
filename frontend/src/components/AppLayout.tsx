@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Navigate, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { LogOut, Bell, Menu, X } from 'lucide-react'
@@ -51,10 +51,13 @@ type NotifItem = {
 export default function AppLayout() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, loading, logout, hasPermission } = useAuth()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const qc = useQueryClient()
+  /** Wide tables (price list) need the full content pane — no max-w-6xl side gutters. */
+  const fullBleedMain = location.pathname.startsWith('/price-lists')
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : ''
@@ -283,7 +286,13 @@ export default function AppLayout() {
         </header>
 
         <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
+          <div
+            className={
+              fullBleedMain
+                ? 'mx-auto w-full max-w-none px-3 py-4 sm:px-4 sm:py-5'
+                : 'mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8'
+            }
+          >
             <Outlet />
           </div>
         </main>

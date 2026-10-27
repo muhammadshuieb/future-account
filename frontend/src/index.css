@@ -1110,6 +1110,18 @@ textarea {
   overflow-x: auto;
 }
 
+/* Dense price-list grid so columns fit the browser content width. */
+.price-list-table th,
+.price-list-table td {
+  padding: 0.45rem 0.55rem;
+  font-size: 0.8125rem;
+}
+
+.price-list-table th {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;

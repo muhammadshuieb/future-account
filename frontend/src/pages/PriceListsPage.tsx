@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
@@ -96,7 +96,8 @@ export default function PriceListsPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
-  const [category, setCategory] = useState('')
+  /** null = still picking default (first category); '' = all categories. */
+  const [category, setCategory] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<ItemForm>(emptyForm())
@@ -108,13 +109,25 @@ export default function PriceListsPage() {
   })
 
   const listId = lists.data?.[0]?.id ?? null
+  const searching = search.debouncedQ.trim().length > 0
+  const bootstrapping = !searching && category === null
 
   const detail = useQuery({
-    queryKey: ['price-lists', listId, search.debouncedQ, category],
+    queryKey: [
+      'price-lists',
+      listId,
+      searching ? search.debouncedQ : '',
+      bootstrapping ? 'meta' : searching ? 'all' : (category ?? ''),
+    ],
     queryFn: async () => {
       const params: Record<string, string> = {}
-      if (search.debouncedQ) params.q = search.debouncedQ
-      if (category) params.category = category
+      if (bootstrapping) {
+        params.meta_only = '1'
+      } else if (searching) {
+        params.q = search.debouncedQ.trim()
+      } else if (category) {
+        params.category = category
+      }
       return (await api.get(`/price-lists/${listId}`, { params })).data.data as {
         list: PriceListMeta
         items: PriceListItem[]
@@ -125,6 +138,16 @@ export default function PriceListsPage() {
     },
     enabled: canView && !!listId,
   })
+
+  useEffect(() => {
+    setCategory(null)
+  }, [listId])
+
+  useEffect(() => {
+    if (!bootstrapping || !detail.isSuccess) return
+    const first = detail.data.categories?.[0] ?? ''
+    setCategory(first)
+  }, [bootstrapping, detail.isSuccess, detail.data?.categories])
 
   const manage = canManage && (detail.data?.can_manage ?? canManage)
   const items = detail.data?.items ?? []
@@ -195,7 +218,7 @@ export default function PriceListsPage() {
 
   function openCreate() {
     setEditingId(null)
-    setForm({ ...emptyForm(), category })
+    setForm({ ...emptyForm(), category: category || '' })
     setModalOpen(true)
   }
 
@@ -233,8 +256,10 @@ export default function PriceListsPage() {
     )
   }
 
+  const showLoading = lists.isLoading || detail.isLoading || bootstrapping
+
   return (
-    <div className="space-y-4 p-4 md:p-6">
+    <div className="space-y-3">
       <PageHeader
         title={meta?.name || t('priceLists.title')}
         subtitle={subtitle}
@@ -250,16 +275,20 @@ export default function PriceListsPage() {
 
       <Msg message={msg.message} error={msg.error} />
 
-      <Panel>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <Panel className="!p-3 sm:!p-4">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1">
             <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('priceLists.search')} />
+            {searching ? (
+              <p className="mt-1 text-xs text-black/45">{t('priceLists.searchAllCategories')}</p>
+            ) : null}
           </div>
           <div className="sm:w-64">
             <Field label={t('priceLists.category')}>
               <select
                 className={`${inputClass} font-medium text-ink`}
-                value={category}
+                value={category ?? ''}
+                disabled={searching || category === null}
                 onChange={(e) => setCategory(e.target.value)}
               >
                 <option value="">{t('priceLists.allCategories')}</option>
@@ -273,13 +302,13 @@ export default function PriceListsPage() {
           </div>
         </div>
 
-        {lists.isLoading || detail.isLoading ? (
+        {showLoading ? (
           <div className="skeleton h-40 w-full rounded-xl" />
         ) : items.length === 0 ? (
           <EmptyState title={t('priceLists.empty')} />
         ) : (
-          <div className="table-wrap">
-            <table className="data-table text-sm">
+          <div className="table-wrap -mx-1">
+            <table className="data-table price-list-table text-sm">
               <thead>
                 <tr className="bg-mist text-right text-black/70">
                   <th className="whitespace-nowrap">{t('priceLists.rowNo')}</th>
@@ -304,7 +333,7 @@ export default function PriceListsPage() {
                 {items.map((item) =>
                   item.is_category_header ? (
                     <tr key={item.id} className="bg-teal-soft">
-                      <td colSpan={colSpan} className="!py-2.5 text-base font-bold text-teal-dark">
+                      <td colSpan={colSpan} className="!py-2 text-sm font-bold text-teal-dark">
                         {item.model_no || item.category}
                       </td>
                     </tr>
@@ -328,7 +357,7 @@ export default function PriceListsPage() {
                         )}
                       </td>
                       <td className="whitespace-nowrap text-ink">{item.mp}</td>
-                      <td className="max-w-[280px] text-black/75">
+                      <td className="max-w-[min(22rem,28vw)] text-black/75">
                         <span className="line-clamp-2" title={item.specs ?? undefined}>
                           {item.specs}
                         </span>

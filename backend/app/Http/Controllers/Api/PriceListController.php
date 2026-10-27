@@ -32,28 +32,35 @@ class PriceListController extends ApiController
 
         $q = $request->string('q')->trim()->toString();
         $category = $request->string('category')->trim()->toString();
-
-        $itemsQuery = $priceList->items()->getQuery();
-
-        if ($category !== '') {
-            $itemsQuery->where('category', $category);
-        }
-
-        if ($q !== '') {
-            $like = '%'.$q.'%';
-            $itemsQuery->where(function ($w) use ($like) {
-                $w->where('model_no', 'like', $like)
-                    ->orWhere('specs', 'like', $like)
-                    ->orWhere('mp', 'like', $like)
-                    ->orWhere('lens', 'like', $like)
-                    ->orWhere('category', 'like', $like)
-                    ->orWhere('row_no', 'like', $like);
-            });
-        }
+        // Cheap bootstrap: categories (+ meta) without loading thousands of rows.
+        $metaOnly = $request->boolean('meta_only');
 
         $visible = $this->visiblePriceColumns();
-        $items = $itemsQuery->orderBy('sort_order')->orderBy('id')->get()
-            ->map(fn (PriceListItem $item) => $this->presentItem($item, $visible));
+        $items = collect();
+
+        if (! $metaOnly) {
+            $itemsQuery = $priceList->items()->getQuery();
+
+            // Search always spans every category; category filter applies only when browsing.
+            if ($q === '' && $category !== '') {
+                $itemsQuery->where('category', $category);
+            }
+
+            if ($q !== '') {
+                $like = '%'.$q.'%';
+                $itemsQuery->where(function ($w) use ($like) {
+                    $w->where('model_no', 'like', $like)
+                        ->orWhere('specs', 'like', $like)
+                        ->orWhere('mp', 'like', $like)
+                        ->orWhere('lens', 'like', $like)
+                        ->orWhere('category', 'like', $like)
+                        ->orWhere('row_no', 'like', $like);
+                });
+            }
+
+            $items = $itemsQuery->orderBy('sort_order')->orderBy('id')->get()
+                ->map(fn (PriceListItem $item) => $this->presentItem($item, $visible));
+        }
 
         // Prefer category header order (sheet order), then any leftover category names.
         $headerCategories = PriceListItem::query()

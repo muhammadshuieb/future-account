@@ -323,6 +323,7 @@
     "subtitle": "Product prices — editable by admins only",
     "viewOnly": "View only — you cannot edit prices",
     "search": "Search model or specs…",
+    "searchAllCategories": "Search covers all categories",
     "allCategories": "All categories",
     "category": "Category",
     "rowNo": "#",
