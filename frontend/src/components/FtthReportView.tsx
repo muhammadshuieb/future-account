@@ -174,40 +174,72 @@ export default function FtthReportView({
       </header>
 
       <section className="ftth-report__meta">
-        <div><span>اسم المشروع</span><strong>{report.project_name || '—'}</strong></div>
-        <div><span>تاريخ التقرير</span><strong>{report.report_date}</strong></div>
-        <div><span>رقم التقرير</span><strong className="font-mono">{report.report_number}</strong></div>
-        <div><span>حالة الطقس</span><strong>{report.weather || '—'}</strong></div>
-        <div><span>المنطقة / القطاع</span><strong>{report.area_sector || '—'}</strong></div>
-        <div><span>المشرف المسؤول</span><strong>{report.supervisor || '—'}</strong></div>
-        <div><span>المقاول / فريق التنفيذ</span><strong>{report.contractor_team || '—'}</strong></div>
-        <div><span>عدد العمال</span><strong>{report.workers_count ?? 0}</strong></div>
-        <div><span>وقت البدء</span><strong>{report.start_time || '—'}</strong></div>
-        <div><span>وقت الانتهاء</span><strong>{report.end_time || '—'}</strong></div>
+        {[
+          { label: 'اسم المشروع', value: report.project_name },
+          { label: 'تاريخ التقرير', value: report.report_date, always: true },
+          { label: 'رقم التقرير', value: report.report_number, always: true, mono: true },
+          { label: 'حالة الطقس', value: report.weather },
+          { label: 'المنطقة / القطاع', value: report.area_sector },
+          { label: 'المشرف المسؤول', value: report.supervisor },
+          { label: 'المقاول / فريق التنفيذ', value: report.contractor_team },
+          {
+            label: 'عدد العمال',
+            value: report.workers_count != null && Number(report.workers_count) > 0
+              ? String(report.workers_count)
+              : '',
+          },
+          { label: 'وقت البدء', value: report.start_time },
+          { label: 'وقت الانتهاء', value: report.end_time },
+        ]
+          .filter((f) => f.always || filled(f.value))
+          .map((f) => (
+            <div key={f.label}>
+              <span>{f.label}</span>
+              <strong className={f.mono ? 'font-mono' : undefined}>{f.value}</strong>
+            </div>
+          ))}
       </section>
 
-      <section className="ftth-report__kpis">
-        <div>
-          <span>الحفر المخطط</span>
-          <strong>{formatQuantity(summary.planned_excavation_m ?? 0)} م</strong>
-        </div>
-        <div>
-          <span>الحفر المنفذ</span>
-          <strong>{formatQuantity(summary.actual_excavation_m ?? 0)} م</strong>
-        </div>
-        <div>
-          <span>نسبة إنجاز الحفر</span>
-          <strong>{summary.excavation_pct ?? 0}%</strong>
-        </div>
-        <div>
-          <span>الدكت الممدد</span>
-          <strong>{formatQuantity(summary.duct_m ?? 0)} م</strong>
-        </div>
-        <div>
-          <span>المنهولات</span>
-          <strong>{formatQuantity(summary.manholes ?? 0)}</strong>
-        </div>
-      </section>
+      {(() => {
+        const kpis = [
+          {
+            label: 'الحفر المخطط',
+            value: Number(summary.planned_excavation_m ?? 0),
+            text: `${formatQuantity(summary.planned_excavation_m ?? 0)} م`,
+          },
+          {
+            label: 'الحفر المنفذ',
+            value: Number(summary.actual_excavation_m ?? 0),
+            text: `${formatQuantity(summary.actual_excavation_m ?? 0)} م`,
+          },
+          {
+            label: 'نسبة إنجاز الحفر',
+            value: Number(summary.excavation_pct ?? 0),
+            text: `${summary.excavation_pct ?? 0}%`,
+          },
+          {
+            label: 'الدكت الممدد',
+            value: Number(summary.duct_m ?? 0),
+            text: `${formatQuantity(summary.duct_m ?? 0)} م`,
+          },
+          {
+            label: 'المنهولات',
+            value: Number(summary.manholes ?? 0),
+            text: formatQuantity(summary.manholes ?? 0),
+          },
+        ].filter((k) => k.value > 0)
+        if (!kpis.length) return null
+        return (
+          <section className="ftth-report__kpis">
+            {kpis.map((k) => (
+              <div key={k.label}>
+                <span>{k.label}</span>
+                <strong>{k.text}</strong>
+              </div>
+            ))}
+          </section>
+        )
+      })()}
 
       {works.length > 0 ? (
         <section className="ftth-report__section">
