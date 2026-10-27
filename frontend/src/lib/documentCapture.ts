@@ -341,6 +341,38 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
 }
 
 /**
+ * PDF page embeds used PNG (lossless) at scale 2 → multi‑MB single pages.
+ * JPEG at ~0.82 keeps print quality while cutting typical A4 exports to a few hundred KB.
+ */
+const PDF_JPEG_QUALITY = 0.82
+
+function rasterToJpegDataUrl(img: HTMLImageElement | HTMLCanvasElement, quality = PDF_JPEG_QUALITY): string {
+  if (img instanceof HTMLCanvasElement) {
+    // White underlay — JPEG has no alpha; avoids black where PNGs were transparent.
+    const out = document.createElement('canvas')
+    out.width = img.width
+    out.height = img.height
+    const ctx = out.getContext('2d')
+    if (!ctx) return img.toDataURL('image/jpeg', quality)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, out.width, out.height)
+    ctx.drawImage(img, 0, 0)
+    return out.toDataURL('image/jpeg', quality)
+  }
+  const w = img.naturalWidth || img.width
+  const h = img.naturalHeight || img.height
+  const out = document.createElement('canvas')
+  out.width = w
+  out.height = h
+  const ctx = out.getContext('2d')
+  if (!ctx) throw new Error('PDF capture failed')
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
+  ctx.drawImage(img, 0, 0)
+  return out.toDataURL('image/jpeg', quality)
+}
+
+/**
  * ISO A4 portrait — same geometry as browser @page / print CSS.
  * 210mm ≈ 793.7px, 297mm ≈ 1122.5px at 96dpi.
  */
@@ -385,7 +417,7 @@ function imageToA4PdfPages(
 
   if (srcH <= pageSlicePx * SINGLE_PAGE_FIT_MAX) {
     const drawH = Math.min(contentH, (srcH / srcW) * contentW)
-    pdf.addImage(img, 'PNG', marginX, marginY, contentW, drawH)
+    pdf.addImage(rasterToJpegDataUrl(img), 'JPEG', marginX, marginY, contentW, drawH, undefined, 'MEDIUM')
     return
   }
 
@@ -394,6 +426,8 @@ function imageToA4PdfPages(
   source.height = srcH
   const srcCtx = source.getContext('2d')
   if (!srcCtx) throw new Error('PDF capture failed')
+  srcCtx.fillStyle = '#ffffff'
+  srcCtx.fillRect(0, 0, srcW, srcH)
   srcCtx.drawImage(img, 0, 0)
 
   let sourceY = 0
@@ -410,7 +444,7 @@ function imageToA4PdfPages(
     ctx.drawImage(source, 0, sourceY, srcW, sliceHeightPx, 0, 0, srcW, sliceHeightPx)
     const sliceH = (sliceHeightPx / srcW) * contentW
     if (!firstSlice) pdf.addPage()
-    pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', marginX, marginY, contentW, sliceH)
+    pdf.addImage(rasterToJpegDataUrl(sliceCanvas), 'JPEG', marginX, marginY, contentW, sliceH, undefined, 'MEDIUM')
     firstSlice = false
     sourceY += sliceHeightPx
     if (sliceHeightPx < 2) break
@@ -440,7 +474,8 @@ export async function captureElement(
   let canvas: HTMLCanvasElement
   try {
     canvas = await html2canvas(element, {
-      scale: 2,
+      // 1.5≈144dpi — sharp enough for A4 print; scale 2 + PNG was ~5–8MB per page.
+      scale: 1.5,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
