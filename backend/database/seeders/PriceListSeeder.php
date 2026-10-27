@@ -35,6 +35,7 @@ class PriceListSeeder extends Seeder
         PriceListItem::query()->where('price_list_id', $list->id)->delete();
 
         $currentCategory = null;
+        $prevRowNo = null;
         $sort = 0;
         $imported = 0;
 
@@ -54,14 +55,11 @@ class PriceListSeeder extends Seeder
             if ($col0 === '' && $col1 === '' && $col2 === '' && $col3 === '') {
                 continue;
             }
-            if ($index === 0 && (str_contains(mb_strtolower($col0.$col1), 'model') || $col0 === '#' || str_contains($col1, 'Model'))) {
-                // fall through — detect properly below
-            }
             if ($this->isHeaderRow($cells)) {
                 continue;
             }
 
-            // Category banner: e.g. [null, "Analogue CAMERA", …] with no prices
+            // Category banner: e.g. [null, "Analogue CAMERA", …] — Excel often puts 0 in price cells
             if ($this->isCategoryRow($cells)) {
                 $currentCategory = $col0 !== '' ? $col0 : $col1;
                 $sort++;
@@ -74,6 +72,7 @@ class PriceListSeeder extends Seeder
                     'is_active' => true,
                 ]);
                 $imported++;
+                $prevRowNo = null;
 
                 continue;
             }
@@ -83,6 +82,38 @@ class PriceListSeeder extends Seeder
             $model = $col1;
             if ($model === '' && $rowNo === '') {
                 continue;
+            }
+
+            // Numbering restarted without a category banner → infer section name from model
+            if ($rowNo !== '' && is_numeric($rowNo) && (int) $rowNo === 1 && $prevRowNo !== null && $prevRowNo > 1) {
+                $inferred = $this->inferCategoryFromModel($model);
+                if ($inferred !== null && $inferred !== $currentCategory) {
+                    $currentCategory = $inferred;
+                    $sort++;
+                    PriceListItem::query()->create([
+                        'price_list_id' => $list->id,
+                        'sort_order' => $sort,
+                        'category' => $currentCategory,
+                        'model_no' => $currentCategory,
+                        'is_category_header' => true,
+                        'is_active' => true,
+                    ]);
+                    $imported++;
+                }
+            }
+
+            if ($currentCategory === null) {
+                $currentCategory = $this->inferCategoryFromModel($model) ?? 'عام';
+                $sort++;
+                PriceListItem::query()->create([
+                    'price_list_id' => $list->id,
+                    'sort_order' => $sort,
+                    'category' => $currentCategory,
+                    'model_no' => $currentCategory,
+                    'is_category_header' => true,
+                    'is_active' => true,
+                ]);
+                $imported++;
             }
 
             $sort++;
@@ -102,6 +133,9 @@ class PriceListSeeder extends Seeder
                 'is_active' => true,
             ]);
             $imported++;
+            if ($rowNo !== '' && is_numeric($rowNo)) {
+                $prevRowNo = (int) $rowNo;
+            }
         }
 
         $this->command?->info("Price list seeded: {$imported} rows into #{$list->id}");
@@ -126,11 +160,10 @@ class PriceListSeeder extends Seeder
         $col0 = $this->cellStr($cells[0] ?? null);
         $col1 = $this->cellStr($cells[1] ?? null);
 
-        $hasPrice = $this->toMoney($cells[5] ?? null) !== null
-            || $this->toMoney($cells[6] ?? null) !== null
-            || $this->toMoney($cells[7] ?? null) !== null;
-
-        if ($hasPrice) {
+        // Category banners often have literal 0 in price columns — treat 0 as empty.
+        if ($this->hasRealPrice($cells[5] ?? null)
+            || $this->hasRealPrice($cells[6] ?? null)
+            || $this->hasRealPrice($cells[7] ?? null)) {
             return false;
         }
 
@@ -186,5 +219,79 @@ class PriceListSeeder extends Seeder
         }
 
         return round((float) $s, 2);
+    }
+
+    private function hasRealPrice(mixed $v): bool
+    {
+        $n = $this->toMoney($v);
+
+        return $n !== null && abs($n) > 0.00001;
+    }
+
+    private function inferCategoryFromModel(string $model): ?string
+    {
+        $m = mb_strtoupper($model);
+
+        if (str_contains($m, 'DS-2CD') || str_contains($m, 'IDS-2CD') || str_contains($m, 'HM-TD')
+            || str_contains($m, 'DS-2XT') || str_contains($m, 'DS-2CF') || str_contains($m, 'DS-TCG')) {
+            return 'كاميرات شبكية IP';
+        }
+        if (str_contains($m, 'DS-76') || str_contains($m, 'DS-77') || str_contains($m, 'IDS-77')
+            || str_contains($m, 'IDS-96') || str_contains($m, 'DS-96') || str_contains($m, 'NXI')) {
+            return 'مسجلات NVR';
+        }
+        if (str_contains($m, 'DS-2CE') || str_contains($m, 'ANALOGUE')) {
+            return 'Analogue CAMERA';
+        }
+        if (str_contains($m, 'HQHI') || str_contains($m, 'DVR') || str_contains($m, 'DS-71')) {
+            return 'مسجلات DVR';
+        }
+        if (str_contains($m, 'DS-MH') || str_contains($m, 'RX300') || str_contains($m, 'BODY')) {
+            return 'كاميرات محمولة';
+        }
+        if (str_contains($m, 'DS-2DE') || str_contains($m, 'PTZ')) {
+            return 'كاميرات PTZ';
+        }
+        if (str_contains($m, 'DASH') || str_contains($m, 'AE-D') || str_contains($m, 'MVR')) {
+            return 'مسجل للسيارات والباصات (MVR)';
+        }
+        if (str_contains($m, 'DS-3E') || str_contains($m, 'SWITCH') || str_contains($m, 'PORT')) {
+            return 'سويتشات شبكة';
+        }
+        if (str_contains($m, 'CAT6') || str_contains($m, 'DS-1LN') || str_contains($m, 'CABLE')) {
+            return 'كابلات وملحقات';
+        }
+        if (str_contains($m, 'DS-D5') || str_contains($m, 'INTERACTIVE')) {
+            return 'شاشات تفاعلية INTERACTIVE';
+        }
+        if (str_contains($m, 'PWA') || str_contains($m, 'ALARM') || str_contains($m, 'DS-PD')) {
+            return 'Wireless Alarm';
+        }
+        if (str_contains($m, 'DS-KP') || str_contains($m, 'SIP')) {
+            return 'مقاسم هاتف SIP IP';
+        }
+        if (str_contains($m, 'DS-KH') || str_contains($m, 'DS-KV') || str_contains($m, 'INTERCOM')) {
+            return 'انترفون Intercom';
+        }
+        if (str_contains($m, 'DS-QA') || str_contains($m, 'SPEAKER') || str_contains($m, 'AMP')) {
+            return 'صوتيات SPEAKER';
+        }
+        if (str_contains($m, 'EZVIZ') || str_contains($m, 'CS-')) {
+            return 'EZVIZ';
+        }
+        if (str_contains($m, 'DS-3W') || str_contains($m, 'WAP') || str_contains($m, 'WIRELESS')) {
+            return 'وايرلس ADAPTER';
+        }
+        if (str_contains($m, 'DS-K1') || str_contains($m, 'DS-K3') || str_contains($m, 'ACCESS')) {
+            return 'تحكم بالدخول';
+        }
+        if (str_contains($m, 'DS-1M') || str_contains($m, 'DS-1F') || str_contains($m, 'RJ45')) {
+            return 'ملحقات شبكية';
+        }
+        if (str_contains($m, 'TCVC') || str_contains($m, 'TDSB') || str_contains($m, 'CHECKPOINT')) {
+            return 'نقاط تفتيش ورادار';
+        }
+
+        return null;
     }
 }

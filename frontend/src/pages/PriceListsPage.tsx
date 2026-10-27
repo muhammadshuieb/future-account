@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
@@ -117,14 +117,19 @@ export default function PriceListsPage() {
   })
 
   const manage = canManage && (detail.data?.can_manage ?? canManage)
-
-  useEffect(() => {
-    if (!canView) return
-  }, [canView])
-
-  const categories = detail.data?.categories ?? []
   const items = detail.data?.items ?? []
   const meta = detail.data?.list ?? lists.data?.[0]
+
+  const categories = useMemo(() => {
+    const fromApi = detail.data?.categories ?? []
+    if (fromApi.length > 0) return fromApi
+    const seen = new Set<string>()
+    for (const item of items) {
+      const c = item.category?.trim()
+      if (c) seen.add(c)
+    }
+    return [...seen]
+  }, [detail.data?.categories, items])
 
   const saveItem = useMutation({
     mutationFn: async () => {
@@ -229,9 +234,13 @@ export default function PriceListsPage() {
           <div className="min-w-0 flex-1">
             <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('priceLists.search')} />
           </div>
-          <div className="sm:w-56">
+          <div className="sm:w-64">
             <Field label={t('priceLists.category')}>
-              <select className={inputClass} value={category} onChange={(e) => setCategory(e.target.value)}>
+              <select
+                className={`${inputClass} font-medium text-ink`}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              >
                 <option value="">{t('priceLists.allCategories')}</option>
                 {categories.map((c) => (
                   <option key={c} value={c}>
@@ -248,55 +257,62 @@ export default function PriceListsPage() {
         ) : items.length === 0 ? (
           <EmptyState title={t('priceLists.empty')} />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+          <div className="table-wrap">
+            <table className="data-table text-sm">
               <thead>
-                <tr className="border-b border-border text-start text-muted">
-                  <th className="px-2 py-2 font-medium">{t('priceLists.rowNo')}</th>
-                  <th className="px-2 py-2 font-medium">{t('priceLists.model')}</th>
-                  <th className="px-2 py-2 font-medium">{t('priceLists.mp')}</th>
-                  <th className="px-2 py-2 font-medium">{t('priceLists.specs')}</th>
-                  <th className="px-2 py-2 font-medium">{t('priceLists.lens')}</th>
-                  <th className="px-2 py-2 font-medium text-end">{t('priceLists.superWholesale')}</th>
-                  <th className="px-2 py-2 font-medium text-end">{t('priceLists.retail')}</th>
-                  <th className="px-2 py-2 font-medium text-end">{t('priceLists.wholesale')}</th>
-                  {manage ? <th className="px-2 py-2 font-medium">{t('priceLists.actions')}</th> : null}
+                <tr className="bg-mist text-right text-black/70">
+                  <th className="whitespace-nowrap">{t('priceLists.rowNo')}</th>
+                  <th>{t('priceLists.model')}</th>
+                  <th className="whitespace-nowrap">{t('priceLists.mp')}</th>
+                  <th>{t('priceLists.specs')}</th>
+                  <th className="whitespace-nowrap">{t('priceLists.lens')}</th>
+                  <th className="whitespace-nowrap text-left">{t('priceLists.superWholesale')}</th>
+                  <th className="whitespace-nowrap text-left">{t('priceLists.retail')}</th>
+                  <th className="whitespace-nowrap text-left">{t('priceLists.wholesale')}</th>
+                  {manage ? <th>{t('priceLists.actions')}</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {items.map((item) =>
                   item.is_category_header ? (
-                    <tr key={item.id} className="bg-teal/10">
-                      <td colSpan={manage ? 9 : 8} className="px-3 py-2 font-semibold text-teal">
+                    <tr key={item.id} className="bg-teal-soft">
+                      <td
+                        colSpan={manage ? 9 : 8}
+                        className="!py-2.5 text-base font-bold text-teal-dark"
+                      >
                         {item.model_no || item.category}
                       </td>
                     </tr>
                   ) : (
-                    <tr key={item.id} className="border-b border-border/60 hover:bg-muted/30">
-                      <td className="px-2 py-2 tabular-nums text-muted">{item.row_no}</td>
-                      <td className="px-2 py-2 font-medium">{item.model_no}</td>
-                      <td className="px-2 py-2 whitespace-nowrap">{item.mp}</td>
-                      <td className="max-w-[280px] px-2 py-2 text-muted">
+                    <tr key={item.id} className="hover:bg-teal-soft/40">
+                      <td className="tabular-nums text-black/55">{item.row_no}</td>
+                      <td className="font-semibold text-ink">{item.model_no}</td>
+                      <td className="whitespace-nowrap text-ink">{item.mp}</td>
+                      <td className="max-w-[280px] text-black/75">
                         <span className="line-clamp-2" title={item.specs ?? undefined}>
                           {item.specs}
                         </span>
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap">{item.lens}</td>
-                      <td className="px-2 py-2 text-end tabular-nums">
-                        {item.price_super_wholesale != null ? formatMoney(Number(item.price_super_wholesale), currency) : '—'}
+                      <td className="whitespace-nowrap text-ink">{item.lens || '—'}</td>
+                      <td className="text-left font-semibold tabular-nums text-teal-dark">
+                        {item.price_super_wholesale != null
+                          ? formatMoney(Number(item.price_super_wholesale), currency)
+                          : '—'}
                       </td>
-                      <td className="px-2 py-2 text-end tabular-nums">
+                      <td className="text-left font-semibold tabular-nums text-amber">
                         {item.price_retail != null ? formatMoney(Number(item.price_retail), currency) : '—'}
                       </td>
-                      <td className="px-2 py-2 text-end tabular-nums">
-                        {item.price_wholesale != null ? formatMoney(Number(item.price_wholesale), currency) : '—'}
+                      <td className="text-left font-semibold tabular-nums text-ink">
+                        {item.price_wholesale != null
+                          ? formatMoney(Number(item.price_wholesale), currency)
+                          : '—'}
                       </td>
                       {manage ? (
-                        <td className="px-2 py-2">
+                        <td>
                           <div className="flex gap-1">
                             <button
                               type="button"
-                              className="rounded-lg p-1.5 text-muted hover:bg-muted hover:text-fg"
+                              className="rounded-lg p-1.5 text-teal-dark hover:bg-teal-soft"
                               onClick={() => openEdit(item)}
                               title={t('priceLists.editItem')}
                             >
@@ -304,7 +320,7 @@ export default function PriceListsPage() {
                             </button>
                             <button
                               type="button"
-                              className="rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-600"
+                              className="rounded-lg p-1.5 text-danger hover:bg-red-50"
                               onClick={() => {
                                 if (window.confirm(t('priceLists.confirmDelete'))) {
                                   deleteItem.mutate(item.id)
@@ -341,7 +357,7 @@ export default function PriceListsPage() {
             saveItem.mutate()
           }}
         >
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
               checked={form.is_category_header}

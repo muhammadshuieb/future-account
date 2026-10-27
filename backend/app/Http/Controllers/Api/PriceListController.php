@@ -51,13 +51,29 @@ class PriceListController extends ApiController
         }
 
         $items = $itemsQuery->orderBy('sort_order')->orderBy('id')->get();
-        $categories = PriceListItem::query()
+
+        // Prefer category header order (sheet order), then any leftover category names.
+        $headerCategories = PriceListItem::query()
+            ->where('price_list_id', $priceList->id)
+            ->where('is_category_header', true)
+            ->whereNotNull('category')
+            ->where('category', '!=', '')
+            ->orderBy('sort_order')
+            ->pluck('category')
+            ->unique()
+            ->values();
+
+        $otherCategories = PriceListItem::query()
             ->where('price_list_id', $priceList->id)
             ->whereNotNull('category')
             ->where('category', '!=', '')
             ->distinct()
             ->orderBy('category')
-            ->pluck('category');
+            ->pluck('category')
+            ->reject(fn ($c) => $headerCategories->contains($c))
+            ->values();
+
+        $categories = $headerCategories->concat($otherCategories)->values()->all();
 
         $priceList->load('updatedBy:id,name');
 
