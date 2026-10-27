@@ -328,6 +328,9 @@
     "mp": "MP",
     "specs": "Özellikler",
     "lens": "Lens",
+    "productLink": "Ürün bağlantısı",
+    "productLinkHint": "Boş bırakırsanız modelden Hikvision arama/datasheet bağlantısı oluşur; veya tam URL yapıştırın",
+    "openProduct": "Aç",
     "superWholesale": "Süper toptan",
     "retail": "Perakende",
     "wholesale": "Toptan",
@@ -587,7 +590,15 @@
     "quotes": { "view": "Fiyat tekliflerini görüntüle", "manage": "Fiyat tekliflerini yönet" },
     "print_invoices": { "view": "Yazdırma faturalarını görüntüle", "manage": "Yazdırma faturalarını yönet" },
     "ftth": { "view": "FTTH raporlarını görüntüle", "manage": "FTTH raporlarını yönet" },
-    "price_lists": { "view": "Fiyat listesini görüntüle", "manage": "Fiyat listesini yönet" },
+    "price_lists": {
+      "view": "Fiyat listesini görüntüle",
+      "manage": "Fiyat listesini yönet",
+      "prices": {
+        "retail": "Fiyat listesinde perakende fiyatları gör",
+        "wholesale": "Fiyat listesinde toptan fiyatları gör",
+        "super_wholesale": "Fiyat listesinde süper toptan fiyatları gör"
+      }
+    },
     "purchases": { "view": "Satın almayı görüntüle", "manage": "Satın almayı yönet", "invoices": { "edit": "Onaylı satın alma faturalarını düzenle" } },
     "warehouse": {
       "view": "Depoyu görüntüle",
@@ -627,6 +638,11 @@
     "roles": "Roller",
     "rolesMultiHint": "Aynı kullanıcıya birden fazla rol verebilirsiniz — yetkiler birleştirilir",
     "rolesRequired": "En az bir rol seçin",
+    "priceListColumns": "Görünen fiyat sütunları",
+    "priceListColumnsHint": "Bu kullanıcının göreceği fiyat sütunlarını seçin: perakende / toptan / süper toptan",
+    "priceColRetail": "Perakende",
+    "priceColWholesale": "Toptan",
+    "priceColSuperWholesale": "Süper toptan",
     "permissions": "Yetkiler",
     "adminRoleLocked": "Yönetici rolü yetkileri sabittir ve değiştirilemez",
     "autoBackupSchedule": "Otomatik yedekleme zamanlaması",

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PriceList;
 use App\Models\PriceListItem;
+use App\Support\HikvisionProductUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,9 @@ class PriceListController extends ApiController
             });
         }
 
-        $items = $itemsQuery->orderBy('sort_order')->orderBy('id')->get();
+        $visible = $this->visiblePriceColumns();
+        $items = $itemsQuery->orderBy('sort_order')->orderBy('id')->get()
+            ->map(fn (PriceListItem $item) => $this->presentItem($item, $visible));
 
         // Prefer category header order (sheet order), then any leftover category names.
         $headerCategories = PriceListItem::query()
@@ -82,6 +85,7 @@ class PriceListController extends ApiController
             'items' => $items,
             'categories' => $categories,
             'can_manage' => $this->userCan('price_lists.manage'),
+            'visible_prices' => $visible,
         ]);
     }
 
@@ -137,6 +141,7 @@ class PriceListController extends ApiController
     {
         $this->authorizePermission('price_lists.manage');
         $data = $this->validatedItem($request);
+        $data = $this->withAutoProductUrl($data);
 
         $maxSort = (int) $priceList->items()->max('sort_order');
         $item = $priceList->items()->create(array_merge($data, [
@@ -145,7 +150,7 @@ class PriceListController extends ApiController
 
         $priceList->forceFill(['updated_by' => $request->user()?->id])->save();
 
-        return $this->ok($item, 201);
+        return $this->ok($this->presentItem($item, $this->visiblePriceColumns()), 201);
     }
 
     public function updateItem(Request $request, PriceList $priceList, PriceListItem $item): JsonResponse
@@ -156,10 +161,11 @@ class PriceListController extends ApiController
         }
 
         $data = $this->validatedItem($request, partial: true);
+        $data = $this->withAutoProductUrl($data, $item);
         $item->fill($data)->save();
         $priceList->forceFill(['updated_by' => $request->user()?->id])->save();
 
-        return $this->ok($item->fresh());
+        return $this->ok($this->presentItem($item->fresh(), $this->visiblePriceColumns()));
     }
 
     public function destroyItem(PriceList $priceList, PriceListItem $item): JsonResponse
@@ -198,6 +204,75 @@ class PriceListController extends ApiController
     }
 
     /**
+     * @return array{super_wholesale: bool, retail: bool, wholesale: bool}
+     */
+    private function visiblePriceColumns(): array
+    {
+        if ($this->userCan('price_lists.manage')) {
+            return [
+                'super_wholesale' => true,
+                'retail' => true,
+                'wholesale' => true,
+            ];
+        }
+
+        return [
+            'super_wholesale' => $this->userCan('price_lists.prices.super_wholesale'),
+            'retail' => $this->userCan('price_lists.prices.retail'),
+            'wholesale' => $this->userCan('price_lists.prices.wholesale'),
+        ];
+    }
+
+    /**
+     * @param  array{super_wholesale: bool, retail: bool, wholesale: bool}  $visible
+     * @return array<string, mixed>
+     */
+    private function presentItem(PriceListItem $item, array $visible): array
+    {
+        $row = $item->toArray();
+        if (! $visible['super_wholesale']) {
+            $row['price_super_wholesale'] = null;
+        }
+        if (! $visible['retail']) {
+            $row['price_retail'] = null;
+        }
+        if (! $visible['wholesale']) {
+            $row['price_wholesale'] = null;
+        }
+
+        return $row;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function withAutoProductUrl(array $data, ?PriceListItem $existing = null): array
+    {
+        $model = array_key_exists('model_no', $data)
+            ? ($data['model_no'] ?? null)
+            : $existing?->model_no;
+
+        $urlProvided = array_key_exists('product_url', $data);
+        $url = $urlProvided ? ($data['product_url'] ?? null) : $existing?->product_url;
+
+        if ($urlProvided && is_string($url) && trim($url) !== '') {
+            $data['product_url'] = trim($url);
+
+            return $data;
+        }
+
+        // Empty / missing → auto Hikvision datasheet search from model.
+        if ($model) {
+            $data['product_url'] = HikvisionProductUrl::forModel((string) $model);
+        } elseif ($urlProvided) {
+            $data['product_url'] = null;
+        }
+
+        return $data;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validatedItem(Request $request, bool $partial = false): array
@@ -212,6 +287,7 @@ class PriceListController extends ApiController
             'mp' => [$req, 'nullable', 'string', 'max:64'],
             'specs' => [$req, 'nullable', 'string', 'max:5000'],
             'lens' => [$req, 'nullable', 'string', 'max:128'],
+            'product_url' => [$req, 'nullable', 'string', 'max:1000'],
             'price_super_wholesale' => [$req, 'nullable', 'numeric'],
             'price_retail' => [$req, 'nullable', 'numeric'],
             'price_wholesale' => [$req, 'nullable', 'numeric'],

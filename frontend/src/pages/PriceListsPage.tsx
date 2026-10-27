@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
 import api from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 import { useListSearch } from '@/lib/useListSearch'
@@ -31,6 +31,12 @@ type PriceListMeta = {
   updated_at?: string
 }
 
+type VisiblePrices = {
+  super_wholesale: boolean
+  retail: boolean
+  wholesale: boolean
+}
+
 type PriceListItem = {
   id: number
   sort_order: number
@@ -40,6 +46,7 @@ type PriceListItem = {
   mp?: string | null
   specs?: string | null
   lens?: string | null
+  product_url?: string | null
   price_super_wholesale?: number | string | null
   price_retail?: number | string | null
   price_wholesale?: number | string | null
@@ -54,6 +61,7 @@ type ItemForm = {
   mp: string
   specs: string
   lens: string
+  product_url: string
   price_super_wholesale: string
   price_retail: string
   price_wholesale: string
@@ -67,6 +75,7 @@ const emptyForm = (): ItemForm => ({
   mp: '',
   specs: '',
   lens: '',
+  product_url: '',
   price_super_wholesale: '',
   price_retail: '',
   price_wholesale: '',
@@ -111,6 +120,7 @@ export default function PriceListsPage() {
         items: PriceListItem[]
         categories: string[]
         can_manage: boolean
+        visible_prices: VisiblePrices
       }
     },
     enabled: canView && !!listId,
@@ -119,6 +129,15 @@ export default function PriceListsPage() {
   const manage = canManage && (detail.data?.can_manage ?? canManage)
   const items = detail.data?.items ?? []
   const meta = detail.data?.list ?? lists.data?.[0]
+  const visible: VisiblePrices = detail.data?.visible_prices ?? {
+    super_wholesale: canManage || hasPermission('price_lists.prices.super_wholesale'),
+    retail: canManage || hasPermission('price_lists.prices.retail'),
+    wholesale: canManage || hasPermission('price_lists.prices.wholesale'),
+  }
+
+  const priceColCount =
+    (visible.super_wholesale ? 1 : 0) + (visible.retail ? 1 : 0) + (visible.wholesale ? 1 : 0)
+  const colSpan = 6 + priceColCount + (manage ? 1 : 0)
 
   const categories = useMemo(() => {
     const fromApi = detail.data?.categories ?? []
@@ -141,6 +160,7 @@ export default function PriceListsPage() {
         mp: form.mp || null,
         specs: form.specs || null,
         lens: form.lens || null,
+        product_url: form.product_url.trim() || null,
         price_super_wholesale: form.price_super_wholesale === '' ? null : Number(form.price_super_wholesale),
         price_retail: form.price_retail === '' ? null : Number(form.price_retail),
         price_wholesale: form.price_wholesale === '' ? null : Number(form.price_wholesale),
@@ -188,6 +208,7 @@ export default function PriceListsPage() {
       mp: item.mp ?? '',
       specs: item.specs ?? '',
       lens: item.lens ?? '',
+      product_url: item.product_url ?? '',
       price_super_wholesale: moneyStr(item.price_super_wholesale),
       price_retail: moneyStr(item.price_retail),
       price_wholesale: moneyStr(item.price_wholesale),
@@ -263,12 +284,19 @@ export default function PriceListsPage() {
                 <tr className="bg-mist text-right text-black/70">
                   <th className="whitespace-nowrap">{t('priceLists.rowNo')}</th>
                   <th>{t('priceLists.model')}</th>
+                  <th className="whitespace-nowrap">{t('priceLists.productLink')}</th>
                   <th className="whitespace-nowrap">{t('priceLists.mp')}</th>
                   <th>{t('priceLists.specs')}</th>
                   <th className="whitespace-nowrap">{t('priceLists.lens')}</th>
-                  <th className="whitespace-nowrap text-left">{t('priceLists.superWholesale')}</th>
-                  <th className="whitespace-nowrap text-left">{t('priceLists.retail')}</th>
-                  <th className="whitespace-nowrap text-left">{t('priceLists.wholesale')}</th>
+                  {visible.super_wholesale ? (
+                    <th className="whitespace-nowrap text-left">{t('priceLists.superWholesale')}</th>
+                  ) : null}
+                  {visible.retail ? (
+                    <th className="whitespace-nowrap text-left">{t('priceLists.retail')}</th>
+                  ) : null}
+                  {visible.wholesale ? (
+                    <th className="whitespace-nowrap text-left">{t('priceLists.wholesale')}</th>
+                  ) : null}
                   {manage ? <th>{t('priceLists.actions')}</th> : null}
                 </tr>
               </thead>
@@ -276,10 +304,7 @@ export default function PriceListsPage() {
                 {items.map((item) =>
                   item.is_category_header ? (
                     <tr key={item.id} className="bg-teal-soft">
-                      <td
-                        colSpan={manage ? 9 : 8}
-                        className="!py-2.5 text-base font-bold text-teal-dark"
-                      >
+                      <td colSpan={colSpan} className="!py-2.5 text-base font-bold text-teal-dark">
                         {item.model_no || item.category}
                       </td>
                     </tr>
@@ -287,6 +312,21 @@ export default function PriceListsPage() {
                     <tr key={item.id} className="hover:bg-teal-soft/40">
                       <td className="tabular-nums text-black/55">{item.row_no}</td>
                       <td className="font-semibold text-ink">{item.model_no}</td>
+                      <td className="whitespace-nowrap">
+                        {item.product_url ? (
+                          <a
+                            href={item.product_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 font-semibold text-teal-dark hover:underline"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            {t('priceLists.openProduct')}
+                          </a>
+                        ) : (
+                          <span className="text-black/40">—</span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap text-ink">{item.mp}</td>
                       <td className="max-w-[280px] text-black/75">
                         <span className="line-clamp-2" title={item.specs ?? undefined}>
@@ -294,19 +334,25 @@ export default function PriceListsPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap text-ink">{item.lens || '—'}</td>
-                      <td className="text-left font-semibold tabular-nums text-teal-dark">
-                        {item.price_super_wholesale != null
-                          ? formatMoney(Number(item.price_super_wholesale), currency)
-                          : '—'}
-                      </td>
-                      <td className="text-left font-semibold tabular-nums text-amber">
-                        {item.price_retail != null ? formatMoney(Number(item.price_retail), currency) : '—'}
-                      </td>
-                      <td className="text-left font-semibold tabular-nums text-ink">
-                        {item.price_wholesale != null
-                          ? formatMoney(Number(item.price_wholesale), currency)
-                          : '—'}
-                      </td>
+                      {visible.super_wholesale ? (
+                        <td className="text-left font-semibold tabular-nums text-teal-dark">
+                          {item.price_super_wholesale != null
+                            ? formatMoney(Number(item.price_super_wholesale), currency)
+                            : '—'}
+                        </td>
+                      ) : null}
+                      {visible.retail ? (
+                        <td className="text-left font-semibold tabular-nums text-amber">
+                          {item.price_retail != null ? formatMoney(Number(item.price_retail), currency) : '—'}
+                        </td>
+                      ) : null}
+                      {visible.wholesale ? (
+                        <td className="text-left font-semibold tabular-nums text-ink">
+                          {item.price_wholesale != null
+                            ? formatMoney(Number(item.price_wholesale), currency)
+                            : '—'}
+                        </td>
+                      ) : null}
                       {manage ? (
                         <td>
                           <div className="flex gap-1">
@@ -375,6 +421,17 @@ export default function PriceListsPage() {
             <div className="sm:col-span-2">
               <Field label={t('priceLists.model')}>
                 <input className={inputClass} value={form.model_no} onChange={(e) => setForm((f) => ({ ...f, model_no: e.target.value }))} required />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label={t('priceLists.productLink')} hint={t('priceLists.productLinkHint')}>
+                <input
+                  className={inputClass}
+                  type="url"
+                  value={form.product_url}
+                  onChange={(e) => setForm((f) => ({ ...f, product_url: e.target.value }))}
+                  placeholder="https://www.hikvision.com/..."
+                />
               </Field>
             </div>
             <Field label={t('priceLists.mp')}>

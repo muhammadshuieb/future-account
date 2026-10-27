@@ -57,6 +57,10 @@ class RolesAndPermissionsSeeder extends Seeder
             'ftth.manage',
             'price_lists.view',
             'price_lists.manage',
+            // Which price columns a viewer may see (assigned per user or via role).
+            'price_lists.prices.retail',
+            'price_lists.prices.wholesale',
+            'price_lists.prices.super_wholesale',
             'users.manage',
         ];
 

@@ -330,6 +330,9 @@
     "mp": "MP",
     "specs": "Specs",
     "lens": "Lens",
+    "productLink": "Product link",
+    "productLinkHint": "Leave empty to auto-build a Hikvision search/datasheet link from the model, or paste an exact URL",
+    "openProduct": "Open",
     "superWholesale": "Super wholesale",
     "retail": "Retail",
     "wholesale": "Wholesale",
@@ -593,7 +596,15 @@
     "quotes": { "view": "View price quotes", "manage": "Manage price quotes" },
     "print_invoices": { "view": "View print invoices", "manage": "Manage print invoices" },
     "ftth": { "view": "View FTTH reports", "manage": "Manage FTTH reports" },
-    "price_lists": { "view": "View price list", "manage": "Manage price list" },
+    "price_lists": {
+      "view": "View price list",
+      "manage": "Manage price list",
+      "prices": {
+        "retail": "See retail prices on price list",
+        "wholesale": "See wholesale prices on price list",
+        "super_wholesale": "See super-wholesale prices on price list"
+      }
+    },
     "purchases": { "view": "View purchases", "manage": "Manage purchases", "invoices": { "edit": "Edit posted purchase invoices" } },
     "warehouse": {
       "view": "View warehouse",
@@ -633,6 +644,11 @@
     "roles": "Roles",
     "rolesMultiHint": "You can assign multiple roles to the same user — their permissions are combined",
     "rolesRequired": "Select at least one role",
+    "priceListColumns": "Visible price columns",
+    "priceListColumnsHint": "Choose which price columns this user sees: retail / wholesale / super wholesale",
+    "priceColRetail": "Retail",
+    "priceColWholesale": "Wholesale",
+    "priceColSuperWholesale": "Super wholesale",
     "permissions": "Permissions",
     "adminRoleLocked": "Admin role permissions are fixed and cannot be changed",
     "autoBackupSchedule": "Automatic backup schedule",

@@ -11,11 +11,18 @@ use Illuminate\Validation\ValidationException;
 
 class UserController extends ApiController
 {
+    /** @var array<string, string> */
+    private const PRICE_COLUMN_PERMS = [
+        'retail' => 'price_lists.prices.retail',
+        'wholesale' => 'price_lists.prices.wholesale',
+        'super_wholesale' => 'price_lists.prices.super_wholesale',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('users.manage');
 
-        $query = User::query()->with(['roles', 'warehouses:id,name,code'])->orderBy('name');
+        $query = User::query()->with(['roles', 'permissions', 'warehouses:id,name,code'])->orderBy('name');
         ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name']);
         $users = $query->get()->map(fn (User $u) => $this->userPayload($u));
 
@@ -37,6 +44,8 @@ class UserController extends ApiController
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
+            'price_list_columns' => ['nullable', 'array'],
+            'price_list_columns.*' => ['string', Rule::in(array_keys(self::PRICE_COLUMN_PERMS))],
         ]);
         if (in_array('warehouse_manager', $data['roles'] ?? [], true) && empty($data['warehouse_ids'])) {
             throw ValidationException::withMessages(['warehouse_ids' => ['يجب تخصيص مخزن واحد على الأقل لمسؤول المخزن.']]);
@@ -59,8 +68,11 @@ class UserController extends ApiController
             $user->syncRoles($data['roles']);
         }
         $user->warehouses()->sync($data['warehouse_ids'] ?? []);
+        if (array_key_exists('price_list_columns', $data)) {
+            $this->syncPriceColumnPermissions($user, $data['price_list_columns'] ?? []);
+        }
 
-        return $this->ok($this->userPayload($user->load(['roles', 'warehouses:id,name,code'])), 201);
+        return $this->ok($this->userPayload($user->load(['roles', 'permissions', 'warehouses:id,name,code'])), 201);
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -78,6 +90,8 @@ class UserController extends ApiController
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
+            'price_list_columns' => ['nullable', 'array'],
+            'price_list_columns.*' => ['string', Rule::in(array_keys(self::PRICE_COLUMN_PERMS))],
         ]);
         $nextRoles = $data['roles'] ?? $user->getRoleNames()->all();
         $nextWarehouses = $data['warehouse_ids'] ?? $user->warehouses()->pluck('warehouses.id')->all();
@@ -122,8 +136,11 @@ class UserController extends ApiController
         if (array_key_exists('warehouse_ids', $data)) {
             $user->warehouses()->sync($data['warehouse_ids'] ?? []);
         }
+        if (array_key_exists('price_list_columns', $data)) {
+            $this->syncPriceColumnPermissions($user, $data['price_list_columns'] ?? []);
+        }
 
-        return $this->ok($this->userPayload($user->fresh(['roles', 'warehouses:id,name,code'])));
+        return $this->ok($this->userPayload($user->fresh(['roles', 'permissions', 'warehouses:id,name,code'])));
     }
 
     public function destroy(User $user): JsonResponse
@@ -150,8 +167,53 @@ class UserController extends ApiController
             'is_active' => $user->is_active,
             'roles' => $user->roles->pluck('name'),
             'permissions' => $user->getAllPermissions()->pluck('name'),
+            'price_list_columns' => $this->priceListColumnsFor($user),
             'warehouse_ids' => $user->warehouses->pluck('id'),
             'warehouses' => $user->warehouses->map->only(['id', 'name', 'code'])->values(),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function priceListColumnsFor(User $user): array
+    {
+        if ($user->can('price_lists.manage') || $user->hasRole('admin')) {
+            return array_keys(self::PRICE_COLUMN_PERMS);
+        }
+
+        $cols = [];
+        foreach (self::PRICE_COLUMN_PERMS as $col => $perm) {
+            if ($user->can($perm)) {
+                $cols[] = $col;
+            }
+        }
+
+        return $cols;
+    }
+
+    /**
+     * Sync only the three price-column permissions as direct user permissions
+     * (keeps any other direct permissions intact).
+     *
+     * @param  list<string>  $columns
+     */
+    private function syncPriceColumnPermissions(User $user, array $columns): void
+    {
+        $wanted = [];
+        foreach ($columns as $col) {
+            if (isset(self::PRICE_COLUMN_PERMS[$col])) {
+                $wanted[] = self::PRICE_COLUMN_PERMS[$col];
+            }
+        }
+
+        $pricePerms = array_values(self::PRICE_COLUMN_PERMS);
+        $otherDirect = $user->permissions
+            ->pluck('name')
+            ->reject(fn ($name) => in_array($name, $pricePerms, true))
+            ->values()
+            ->all();
+
+        $user->syncPermissions(array_values(array_unique([...$otherDirect, ...$wanted])));
     }
 }

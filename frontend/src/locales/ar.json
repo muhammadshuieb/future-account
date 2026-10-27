@@ -330,6 +330,9 @@
     "mp": "MP",
     "specs": "المواصفات",
     "lens": "العدسة",
+    "productLink": "رابط المنتج",
+    "productLinkHint": "اتركه فارغاً ليُنشأ تلقائياً من موقع Hikvision حسب الموديل، أو الصق رابط الـ Datasheet",
+    "openProduct": "فتح",
     "superWholesale": "جملة الجملة",
     "retail": "المفرق",
     "wholesale": "الجملة",
@@ -593,7 +596,15 @@
     "quotes": { "view": "عرض عروض الأسعار", "manage": "إدارة عروض الأسعار" },
     "print_invoices": { "view": "عرض فواتير الطباعة", "manage": "إدارة فواتير الطباعة" },
     "ftth": { "view": "عرض تقارير FTTH", "manage": "إدارة تقارير FTTH" },
-    "price_lists": { "view": "عرض قائمة الأسعار", "manage": "إدارة قائمة الأسعار" },
+    "price_lists": {
+      "view": "عرض قائمة الأسعار",
+      "manage": "إدارة قائمة الأسعار",
+      "prices": {
+        "retail": "أسعار المفرق في قائمة الأسعار",
+        "wholesale": "أسعار الجملة في قائمة الأسعار",
+        "super_wholesale": "أسعار جملة الجملة في قائمة الأسعار"
+      }
+    },
     "purchases": { "view": "عرض المشتريات", "manage": "إدارة المشتريات", "invoices": { "edit": "تعديل فواتير المشتريات المرحّلة" } },
     "warehouse": {
       "view": "عرض المستودع",
@@ -633,6 +644,11 @@
     "roles": "الأدوار",
     "rolesMultiHint": "يمكن اختيار أكثر من دور لنفس المستخدم — تُجمَع صلاحياتها معاً",
     "rolesRequired": "اختر دوراً واحداً على الأقل",
+    "priceListColumns": "أعمدة الأسعار الظاهرة",
+    "priceListColumnsHint": "حدد ما يراه المستخدم في قائمة الأسعار: مفرق / جملة / جملة الجملة",
+    "priceColRetail": "المفرق",
+    "priceColWholesale": "الجملة",
+    "priceColSuperWholesale": "جملة الجملة",
     "permissions": "الصلاحيات",
     "adminRoleLocked": "صلاحيات مدير النظام ثابتة ولا يمكن تعديلها",
     "autoBackupSchedule": "جدولة النسخ التلقائي",

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\PriceList;
 use App\Models\PriceListItem;
+use App\Support\HikvisionProductUrl;
 use Illuminate\Database\Seeder;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -116,16 +117,18 @@ class PriceListSeeder extends Seeder
                 $imported++;
             }
 
+            $modelNo = $model !== '' ? $model : null;
             $sort++;
             PriceListItem::query()->create([
                 'price_list_id' => $list->id,
                 'sort_order' => $sort,
                 'category' => $currentCategory,
                 'row_no' => $rowNo !== '' ? $rowNo : null,
-                'model_no' => $model !== '' ? $model : null,
+                'model_no' => $modelNo,
                 'mp' => $col2 !== '' ? $col2 : null,
                 'specs' => $col3 !== '' ? $col3 : null,
                 'lens' => $col4 !== '' ? $col4 : null,
+                'product_url' => HikvisionProductUrl::forModel($modelNo),
                 'price_super_wholesale' => $this->toMoney($cells[5] ?? null),
                 'price_retail' => $this->toMoney($cells[6] ?? null),
                 'price_wholesale' => $this->toMoney($cells[7] ?? null),

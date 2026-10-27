@@ -9,6 +9,7 @@ class PriceListItem extends Model
 {
     protected $fillable = [
         'price_list_id', 'sort_order', 'category', 'row_no', 'model_no', 'mp', 'specs', 'lens',
+        'product_url',
         'price_super_wholesale', 'price_retail', 'price_wholesale',
         'is_category_header', 'is_active',
     ];
