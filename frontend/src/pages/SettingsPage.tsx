@@ -415,6 +415,9 @@ export default function SettingsPage() {
 
   const saveUser = useMutation({
     mutationFn: () => {
+      if (!userForm.roles.length) {
+        throw { response: { data: { message: t('settings.rolesRequired') } } }
+      }
       const payload = {
         first_name: userForm.first_name,
         last_name: userForm.last_name,
@@ -1164,8 +1167,33 @@ export default function SettingsPage() {
             <Field label={t('settings.mobile')}><input className={inputClass} value={userForm.mobile} onChange={(e) => setUserForm({ ...userForm, mobile: e.target.value })} required inputMode="tel" /></Field>
             <Field label={t('settings.email')} hint={t('settings.emailOptionalHint')}><input type="email" className={inputClass} value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} /></Field>
             <Field label={t('settings.password')} hint={userModal === 'edit' ? t('settings.passwordKeepHint') : undefined}><input type="password" className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} required={userModal === 'create'} minLength={8} /></Field>
-            <Field label={t('settings.roles')}><select className={inputClass} value={userForm.roles[0]} onChange={(e) => setUserForm({ ...userForm, roles: [e.target.value] })}>{(rolesAdmin.data?.roles || []).map((r) => <option key={r.id} value={r.name}>{roleLabel(t, r.name)}</option>)}</select></Field>
           </div>
+          <Field label={t('settings.roles')} hint={t('settings.rolesMultiHint')}>
+            <div className="grid gap-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:grid-cols-2">
+              {(rolesAdmin.data?.roles || []).map((r) => {
+                const checked = userForm.roles.includes(r.name)
+                return (
+                  <label key={r.id} className="flex items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...userForm.roles, r.name]
+                          : userForm.roles.filter((name) => name !== r.name)
+                        setUserForm({
+                          ...userForm,
+                          roles: next,
+                          warehouse_ids: next.includes('warehouse_manager') ? userForm.warehouse_ids : [],
+                        })
+                      }}
+                    />
+                    <span className="font-medium">{roleLabel(t, r.name)}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </Field>
           {userForm.roles.includes('warehouse_manager') && (
             <Field label={t('settings.assignedWarehouses')} hint={t('settings.assignedWarehousesHint')}>
               <div className="grid gap-2 rounded-lg border border-[var(--color-line)] p-3 sm:grid-cols-2">

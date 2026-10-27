@@ -631,6 +631,8 @@
     "saved": "Settings saved.",
     "users": "Users & Permissions",
     "roles": "Roles",
+    "rolesMultiHint": "You can assign multiple roles to the same user — their permissions are combined",
+    "rolesRequired": "Select at least one role",
     "permissions": "Permissions",
     "adminRoleLocked": "Admin role permissions are fixed and cannot be changed",
     "autoBackupSchedule": "Automatic backup schedule",

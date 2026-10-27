@@ -33,7 +33,7 @@ class UserController extends ApiController
             'email' => ['nullable', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8'],
             'is_active' => ['boolean'],
-            'roles' => ['nullable', 'array'],
+            'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
@@ -74,13 +74,16 @@ class UserController extends ApiController
             'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:8'],
             'is_active' => ['boolean'],
-            'roles' => ['nullable', 'array'],
+            'roles' => ['sometimes', 'array', 'min:1'],
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
         ]);
         $nextRoles = $data['roles'] ?? $user->getRoleNames()->all();
         $nextWarehouses = $data['warehouse_ids'] ?? $user->warehouses()->pluck('warehouses.id')->all();
+        if (array_key_exists('roles', $data) && empty($data['roles'])) {
+            throw ValidationException::withMessages(['roles' => ['يجب اختيار دور واحد على الأقل.']]);
+        }
         if (in_array('warehouse_manager', $nextRoles, true) && empty($nextWarehouses)) {
             throw ValidationException::withMessages(['warehouse_ids' => ['يجب تخصيص مخزن واحد على الأقل لمسؤول المخزن.']]);
         }

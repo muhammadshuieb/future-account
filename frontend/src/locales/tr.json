@@ -625,6 +625,8 @@
     "saved": "Ayarlar kaydedildi.",
     "users": "Kullanıcılar ve Yetkiler",
     "roles": "Roller",
+    "rolesMultiHint": "Aynı kullanıcıya birden fazla rol verebilirsiniz — yetkiler birleştirilir",
+    "rolesRequired": "En az bir rol seçin",
     "permissions": "Yetkiler",
     "adminRoleLocked": "Yönetici rolü yetkileri sabittir ve değiştirilemez",
     "autoBackupSchedule": "Otomatik yedekleme zamanlaması",
