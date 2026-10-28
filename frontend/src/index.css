@@ -234,6 +234,13 @@ body {
   print-color-adjust: exact;
 }
 
+/* Al-Bairaq mark ships on a dark plate — keep it compact on A4 headers. */
+.brand-logo--print-albairaq {
+  max-height: 78px;
+  max-width: min(200px, 58mm);
+  border-radius: 6px;
+}
+
 .print-brand-header {
   display: flex;
   flex-wrap: nowrap;

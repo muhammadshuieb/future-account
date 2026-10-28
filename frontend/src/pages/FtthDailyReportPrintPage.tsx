@@ -46,6 +46,7 @@ export default function FtthDailyReportPrintPage() {
     <PrintDocumentShell
       hint={t('ftth.printPreviewHint')}
       fileName={`FTTH-${report.data.report_number}`}
+      brandSelectable={false}
     >
       <FtthReportView report={report.data} />
     </PrintDocumentShell>

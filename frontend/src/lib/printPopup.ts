@@ -1,3 +1,5 @@
+import { withDocumentBrandQuery } from '@/lib/brand'
+
 /** Open a same-origin print document in a browser popup (shares localStorage auth token). */
 export function openPrintPopup(path: string): Window | null {
   // ~A4 at 96dpi (210×297mm) plus chrome for toolbar — keeps preview proportions right
@@ -15,7 +17,7 @@ export function openPrintPopup(path: string): Window | null {
     'resizable=yes',
   ].join(',')
 
-  const win = window.open(path, 'fa-invoice-print', features)
+  const win = window.open(withDocumentBrandQuery(path), 'fa-invoice-print', features)
   if (!win) {
     // Popup blocked — fall back to a new tab
     return window.open(path, '_blank')

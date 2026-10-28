@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import QRCode from 'qrcode'
-import { LOGO } from '@/lib/brand'
+import { useDocumentBrand } from '@/context/DocumentBrandContext'
 import { formatMoney, formatQuantity } from '@/components/ui'
 import { formatInvoiceDateTime } from '@/lib/dates'
 import { ProductIdentityCells } from '@/components/ProductIdentityCells'
@@ -76,16 +76,18 @@ type StructuredEInvoice = {
 }
 
 function BrandLogo() {
+  const { brand } = useDocumentBrand()
   return (
     <img
-      src={LOGO.print}
-      alt="SYNAMOR TECHNOLOGY"
-      className="brand-logo brand-logo--print print-logo"
+      key={brand.logoPrint}
+      src={brand.logoPrint}
+      alt={brand.brandMark}
+      className={`brand-logo brand-logo--print print-logo${brand.id === 'albairaq' ? ' brand-logo--print-albairaq' : ''}`}
       onError={(e) => {
         const img = e.currentTarget
         if (img.dataset.fallback === '1') return
         img.dataset.fallback = '1'
-        img.src = LOGO.default
+        img.src = brand.logoFallback
       }}
     />
   )
@@ -97,7 +99,6 @@ function InvoiceBrandHeader({
   invoiceNumber,
   invoiceDate,
   createdAt,
-  companyName,
   taxNumber,
   extra,
   statementStyle = false,
@@ -106,26 +107,29 @@ function InvoiceBrandHeader({
   invoiceNumber: string
   invoiceDate: string
   createdAt?: string | null
-  companyName?: string
+  /** Optional tax / CR line when e-invoice provides it (Syna); Albairaq uses CR from brand profile. */
   taxNumber?: string
   extra?: ReactNode
   /** Match partner statement print header (company / brand / title). */
   statementStyle?: boolean
 }) {
   const { t } = useTranslation()
-  const brandLine = companyName?.trim()
-    ? companyName
-    : `${t('app.name')} — Syna Co`
+  const { brand } = useDocumentBrand()
+  const brandLine = `${brand.companyName} — ${brand.companyNameEn}`
+  const registryLine = brand.commercialRegister
+    ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
+    : taxNumber
+      ? `${t('companies.taxNumber')}: ${taxNumber}`
+      : null
 
   if (statementStyle) {
     return (
       <header className="print-brand-header statement-print__header">
         <div className="min-w-0 text-start">
           <p className="statement-print__company">{brandLine}</p>
-          <p className="statement-print__brand">SYNAMOR TECHNOLOGY</p>
-          {taxNumber && (
-            <p className="statement-print__muted">{t('companies.taxNumber')}: {taxNumber}</p>
-          )}
+          <p className="statement-print__brand">{brand.brandMark}</p>
+          {brand.tagline ? <p className="statement-print__muted">{brand.tagline}</p> : null}
+          {registryLine ? <p className="statement-print__muted">{registryLine}</p> : null}
           <p className="statement-print__doc-title">{documentLabel}</p>
           <p className="statement-print__muted font-mono">{invoiceNumber}</p>
           <p className="statement-print__muted">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
@@ -141,9 +145,8 @@ function InvoiceBrandHeader({
       {/* First in RTL → visual right: company + report title */}
       <div className="min-w-0 text-start">
         <p className="text-base font-bold leading-tight">{brandLine}</p>
-        {taxNumber && (
-          <p className="text-[11px] text-black/55">{t('companies.taxNumber')}: {taxNumber}</p>
-        )}
+        {brand.tagline ? <p className="text-[11px] text-black/55">{brand.tagline}</p> : null}
+        {registryLine ? <p className="text-[11px] text-black/55">{registryLine}</p> : null}
         <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
         <p className="font-mono text-sm font-bold">{invoiceNumber}</p>
         <p className="text-xs">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
@@ -216,7 +219,6 @@ export function SalesInvoicePrintView({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const payload = eInvoice?.qr_payload
   const structured = eInvoice?.e_invoice as StructuredEInvoice | undefined
-  const companyName = structured?.seller?.name
 
   useEffect(() => {
     if (canvasRef.current && payload) {
@@ -234,7 +236,6 @@ export function SalesInvoicePrintView({
         invoiceNumber={invoice.invoice_number}
         invoiceDate={invoice.invoice_date}
         createdAt={invoice.created_at}
-        companyName={companyName}
         taxNumber={structured?.seller?.tax_number}
       />
 

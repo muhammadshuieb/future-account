@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FileDown } from 'lucide-react'
 import { Button } from '@/components/ui'
 import { exportMergedPdfFromPrintPaths, exportPdf } from '@/lib/documentCapture'
+import { withDocumentBrandQuery } from '@/lib/brand'
 
 type SingleProps = {
   /** Base file name without extension */
@@ -57,7 +58,7 @@ export default function PdfExportButton(props: Props) {
           return
         }
         const max = 40
-        const paths = props.printPaths.slice(0, max)
+        const paths = props.printPaths.slice(0, max).map((p) => withDocumentBrandQuery(p))
         if (props.printPaths.length > max) {
           window.alert(t('common.exportPdfLimited', { max, total: props.printPaths.length }))
         }
@@ -66,7 +67,7 @@ export default function PdfExportButton(props: Props) {
         await exportPdf({
           fileName,
           captureSelector: props.captureSelector,
-          printPath: props.printPath,
+          printPath: props.printPath ? withDocumentBrandQuery(props.printPath) : props.printPath,
         })
       }
     } catch (err) {

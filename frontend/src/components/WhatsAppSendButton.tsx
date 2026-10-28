@@ -9,6 +9,7 @@ import {
   type CaptureFormat,
 } from '@/lib/documentCapture'
 import { fetchExcelExport } from '@/lib/excelExport'
+import { withDocumentBrandQuery } from '@/lib/brand'
 import { useCompanyDisplayName } from '@/lib/companyName'
 import { normalizeWhatsAppPhone, openWhatsAppChat } from '@/lib/phone'
 import { Button, Field, Modal, inputClass } from '@/components/ui'
@@ -151,7 +152,7 @@ export default function WhatsAppSendButton({
       return captureSelectorInDocument(document, captureSelector, { format: captureFormat, fileName })
     }
     if (printPath) {
-      return captureFromPrintPopup(printPath, { format: captureFormat, fileName })
+      return captureFromPrintPopup(withDocumentBrandQuery(printPath), { format: captureFormat, fileName })
     }
     return captureSelectorInDocument(document, captureSelector, { format: captureFormat, fileName })
   }
