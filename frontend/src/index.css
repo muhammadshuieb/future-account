@@ -236,16 +236,233 @@ body {
 
 /* Al-Bairaq stacked brand block (emblem + name + activity + CR). */
 .brand-logo--print-albairaq {
-  max-height: 118px;
-  max-width: min(168px, 48mm);
+  max-height: 132px;
+  max-width: min(190px, 54mm);
   border-radius: 0;
   object-position: top center;
 }
 
-.statement-print__header--albairaq,
-.print-brand-header--albairaq {
-  align-items: center !important;
-  gap: 1rem !important;
+/* ── Al-Bairaq document theme (navy + gold) — distinct from Syna teal ── */
+.statement-print--albairaq {
+  --ab-navy: #123469;
+  --ab-navy-deep: #0b2348;
+  --ab-gold: #b8922a;
+  --ab-gold-soft: #d4b45a;
+  --ab-mist: #f4f6fb;
+  --ab-line: rgba(18, 52, 105, 0.18);
+  gap: 0.95rem;
+  color: #121826;
+}
+
+.ab-print-header {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.65rem !important;
+  width: 100%;
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+.ab-print-header__brand {
+  display: flex;
+  justify-content: center;
+  padding: 0.15rem 0 0.25rem;
+}
+
+.ab-print-header__rule {
+  height: 3px;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ab-navy) 0%, var(--ab-gold) 48%, var(--ab-navy) 100%);
+}
+
+.ab-print-header__banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.35rem;
+  background: linear-gradient(135deg, var(--ab-navy-deep), var(--ab-navy) 55%, #1a4a8a);
+  color: #fff;
+  box-shadow: inset 0 -2px 0 rgba(184, 146, 42, 0.85);
+}
+
+.ab-print-header__banner-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.85rem;
+}
+
+.ab-print-header__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ab-gold-soft);
+}
+
+.ab-print-header__number {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.ab-print-header__date {
+  margin: 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.statement-print--albairaq .statement-print__einvoice {
+  border: 1px solid var(--ab-line);
+  border-radius: 0.4rem;
+  background: var(--ab-mist);
+  padding: 0.55rem 0.75rem;
+}
+
+.statement-print--albairaq .statement-print__einvoice-title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ab-navy);
+}
+
+.statement-print--albairaq .statement-print__meta {
+  grid-template-columns: 1fr;
+  gap: 0.55rem;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (min-width: 640px) {
+  .statement-print--albairaq .statement-print__meta {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.statement-print--albairaq .statement-print__meta > p {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--ab-line);
+  border-inline-start: 3px solid var(--ab-gold);
+  border-radius: 0.3rem;
+  background: #fff;
+}
+
+.statement-print--albairaq .statement-print__label {
+  color: var(--ab-navy);
+  font-weight: 650;
+}
+
+.statement-print--albairaq .statement-invoice-detail {
+  border: 1px solid var(--ab-line);
+  border-radius: 0.35rem;
+  background: #fff;
+  padding: 0;
+  overflow: hidden;
+}
+
+.statement-print--albairaq .statement-invoice-detail__notes {
+  margin: 0;
+  padding: 0.45rem 0.75rem;
+  border: 1px dashed rgba(184, 146, 42, 0.55);
+  border-radius: 0.3rem;
+  background: rgba(184, 146, 42, 0.08);
+  color: #3a3018;
+}
+
+.statement-print--albairaq .statement-invoice-detail__lines,
+.statement-print--albairaq .statement-invoice-lines {
+  border: none;
+}
+
+.statement-print--albairaq .statement-invoice-detail__lines th,
+.statement-print--albairaq .statement-invoice-lines th {
+  background: var(--ab-navy) !important;
+  color: #fff !important;
+  border-color: var(--ab-navy-deep) !important;
+  font-weight: 700;
+}
+
+.statement-print--albairaq .statement-invoice-detail__lines td,
+.statement-print--albairaq .statement-invoice-lines td {
+  border-color: var(--ab-line) !important;
+  background: #fff !important;
+}
+
+.statement-print--albairaq .statement-invoice-detail__lines tbody tr:nth-child(even) td,
+.statement-print--albairaq .statement-invoice-lines tbody tr:nth-child(even) td {
+  background: var(--ab-mist) !important;
+}
+
+.statement-print--albairaq .ab-print-closing {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.85rem 1.25rem;
+  align-items: end;
+  margin-top: 0.35rem;
+}
+
+.statement-print--albairaq .ab-print-closing__totals {
+  min-width: 0;
+}
+
+.statement-print--albairaq .statement-print__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--ab-line);
+  border-radius: 0.35rem;
+  background: linear-gradient(180deg, #eef2f9 0%, #fff 70%);
+  box-shadow: inset 3px 0 0 var(--ab-gold);
+}
+
+.statement-print--albairaq .statement-print__summary--footer {
+  margin-top: 0;
+}
+
+.statement-print--albairaq .statement-print__closing-line {
+  margin-top: 0.25rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--ab-line);
+  color: var(--ab-navy-deep);
+  font-size: 0.9rem !important;
+}
+
+.statement-print--albairaq .statement-print__closing-line strong {
+  color: var(--ab-navy);
+}
+
+.statement-print--albairaq .ab-print-closing__stamp.company-stamp,
+.statement-print--albairaq .company-stamp--albairaq {
+  width: auto;
+  margin: 0;
+  padding: 0;
+  justify-content: center;
+}
+
+.statement-print__einvoice {
+  border-radius: 0.45rem;
+  border: 1px solid rgba(13, 115, 119, 0.3);
+  background: rgba(13, 115, 119, 0.05);
+  padding: 0.5rem;
+}
+
+.statement-print__einvoice-title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #0f766e;
 }
 
 .print-brand-header {
@@ -1630,13 +1847,22 @@ textarea {
   .print-document img.brand-logo--print-albairaq,
   .print-sheet img.brand-logo--print-albairaq,
   img.brand-logo--print-albairaq {
-    max-height: 118px !important;
-    max-width: 48mm !important;
+    max-height: 132px !important;
+    max-width: 54mm !important;
   }
 
-  .statement-print__header--albairaq,
-  .print-brand-header--albairaq {
-    align-items: center !important;
+  .statement-print--albairaq .ab-print-header__banner,
+  .statement-print--albairaq .statement-invoice-detail__lines th,
+  .statement-print--albairaq .statement-invoice-lines th,
+  .statement-print--albairaq .statement-print__summary,
+  .statement-print--albairaq .ab-print-header__rule {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .statement-print--albairaq .ab-print-closing {
+    grid-template-columns: 1.2fr 0.8fr !important;
+    align-items: end !important;
   }
 
   /* Statement: keep section rhythm; nested invoice tables must not collapse */

@@ -75,6 +75,11 @@ type StructuredEInvoice = {
   tax_breakdown?: { rate: number; taxable: number; tax: number }[]
 }
 
+function usePrintDocClass(extra = '') {
+  const { brand } = useDocumentBrand()
+  return ['statement-print', `statement-print--${brand.id}`, extra].filter(Boolean).join(' ')
+}
+
 function BrandLogo() {
   const { brand } = useDocumentBrand()
   return (
@@ -93,6 +98,38 @@ function BrandLogo() {
   )
 }
 
+/** Albairaq: stacked brand block on top + navy/gold document banner (unlike Syna side-by-side). */
+function AlbairaqBrandHeader({
+  documentLabel,
+  invoiceNumber,
+  invoiceDate,
+  createdAt,
+  extra,
+}: {
+  documentLabel: string
+  invoiceNumber: string
+  invoiceDate: string
+  createdAt?: string | null
+  extra?: ReactNode
+}) {
+  return (
+    <header className="ab-print-header print-brand-header">
+      <div className="ab-print-header__brand">
+        <BrandLogo />
+      </div>
+      <div className="ab-print-header__rule" aria-hidden="true" />
+      <div className="ab-print-header__banner">
+        <div className="ab-print-header__banner-main">
+          <p className="ab-print-header__title">{documentLabel}</p>
+          <p className="ab-print-header__number font-mono">{invoiceNumber}</p>
+        </div>
+        <p className="ab-print-header__date">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
+        {extra}
+      </div>
+    </header>
+  )
+}
+
 /** Shared invoice print/view header: logo left, company + title right (RTL). */
 function InvoiceBrandHeader({
   documentLabel,
@@ -107,7 +144,7 @@ function InvoiceBrandHeader({
   invoiceNumber: string
   invoiceDate: string
   createdAt?: string | null
-  /** Optional tax / CR line when e-invoice provides it (Syna); Albairaq uses CR from brand profile. */
+  /** Optional tax / CR line when e-invoice provides it (Syna). */
   taxNumber?: string
   extra?: ReactNode
   /** Match partner statement print header (company / brand / title). */
@@ -115,33 +152,35 @@ function InvoiceBrandHeader({
 }) {
   const { t } = useTranslation()
   const { brand } = useDocumentBrand()
-  /** Albairaq print logo already carries name + activity + CR — avoid duplicating in text. */
-  const logoCarriesIdentity = brand.id === 'albairaq'
+
+  if (brand.id === 'albairaq') {
+    return (
+      <AlbairaqBrandHeader
+        documentLabel={documentLabel}
+        invoiceNumber={invoiceNumber}
+        invoiceDate={invoiceDate}
+        createdAt={createdAt}
+        extra={extra}
+      />
+    )
+  }
+
   const brandLine = `${brand.companyName} — ${brand.companyNameEn}`
-  const showBrandMark = !logoCarriesIdentity && brand.brandMark && brand.brandMark !== brand.companyNameEn
-  const registryLine = logoCarriesIdentity
-    ? null
-    : brand.commercialRegister
-      ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
-      : taxNumber
-        ? `${t('companies.taxNumber')}: ${taxNumber}`
-        : null
+  const showBrandMark = brand.brandMark && brand.brandMark !== brand.companyNameEn
+  const registryLine = brand.commercialRegister
+    ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
+    : taxNumber
+      ? `${t('companies.taxNumber')}: ${taxNumber}`
+      : null
 
   if (statementStyle) {
     return (
-      <header className={`print-brand-header statement-print__header statement-print__header--${brand.id}`}>
+      <header className="print-brand-header statement-print__header statement-print__header--syna">
         <div className="min-w-0 text-start">
-          {!logoCarriesIdentity ? <p className="statement-print__company">{brandLine}</p> : null}
+          <p className="statement-print__company">{brandLine}</p>
           {showBrandMark ? <p className="statement-print__brand">{brand.brandMark}</p> : null}
-          {!logoCarriesIdentity && brand.tagline ? (
-            <p className="statement-print__muted">{brand.tagline}</p>
-          ) : null}
+          {brand.tagline ? <p className="statement-print__muted">{brand.tagline}</p> : null}
           {registryLine ? <p className="statement-print__muted">{registryLine}</p> : null}
-          {!logoCarriesIdentity && taxNumber ? (
-            <p className="statement-print__muted">
-              {t('companies.taxNumber')}: {taxNumber}
-            </p>
-          ) : null}
           <p className="statement-print__doc-title">{documentLabel}</p>
           <p className="statement-print__muted font-mono">{invoiceNumber}</p>
           <p className="statement-print__muted">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
@@ -153,23 +192,37 @@ function InvoiceBrandHeader({
   }
 
   return (
-    <header className={`print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2 print-brand-header--${brand.id}`}>
+    <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2 print-brand-header--syna">
       <div className="min-w-0 text-start">
-        {!logoCarriesIdentity ? <p className="text-base font-bold leading-tight">{brandLine}</p> : null}
+        <p className="text-base font-bold leading-tight">{brandLine}</p>
         {showBrandMark ? <p className="text-[11px] font-semibold text-black/60">{brand.brandMark}</p> : null}
-        {!logoCarriesIdentity && brand.tagline ? (
-          <p className="text-[11px] text-black/55">{brand.tagline}</p>
-        ) : null}
+        {brand.tagline ? <p className="text-[11px] text-black/55">{brand.tagline}</p> : null}
         {registryLine ? <p className="text-[11px] text-black/55">{registryLine}</p> : null}
-        <p className={`text-[11px] font-semibold text-teal${logoCarriesIdentity ? '' : ' mt-0.5'}`}>
-          {documentLabel}
-        </p>
+        <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
         <p className="font-mono text-sm font-bold">{invoiceNumber}</p>
         <p className="text-xs">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
         {extra}
       </div>
       <BrandLogo />
     </header>
+  )
+}
+
+function PrintClosing({ children }: { children: ReactNode }) {
+  const { brand } = useDocumentBrand()
+  if (brand.id === 'albairaq') {
+    return (
+      <div className="ab-print-closing print-avoid-break">
+        <div className="ab-print-closing__totals">{children}</div>
+        <PrintStamp className="ab-print-closing__stamp" />
+      </div>
+    )
+  }
+  return (
+    <>
+      {children}
+      <PrintStamp />
+    </>
   )
 }
 
@@ -231,6 +284,7 @@ export function SalesInvoicePrintView({
   eInvoice?: EInvoiceData
 }) {
   const { t } = useTranslation()
+  const rootClass = usePrintDocClass()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const payload = eInvoice?.qr_payload
   const structured = eInvoice?.e_invoice as StructuredEInvoice | undefined
@@ -244,7 +298,7 @@ export function SalesInvoicePrintView({
   const currency = invoice.currency || 'USD'
 
   return (
-    <div className="statement-print" dir="rtl">
+    <div className={rootClass} dir="rtl">
       <InvoiceBrandHeader
         statementStyle
         documentLabel={t('sales.invoices')}
@@ -255,10 +309,10 @@ export function SalesInvoicePrintView({
       />
 
       {(payload || invoice.e_invoice_uuid || eInvoice?.e_invoice_uuid || structured?.uuid) && (
-        <div className="rounded border border-teal/30 bg-teal/5 p-2">
+        <div className="statement-print__einvoice">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-[11px] font-semibold uppercase text-teal">
+              <p className="statement-print__einvoice-title">
                 {t('sales.eInvoice')} — future-account-einvoice/1.0
               </p>
               <p className="mt-0.5 font-mono text-[10px] text-black/60">
@@ -330,35 +384,36 @@ export function SalesInvoicePrintView({
         </div>
       )}
 
-      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
-        <p>
-          فرعي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
-        </p>
-        {Number(invoice.discount_amount) > 0 && (
+      <PrintClosing>
+        <section className="statement-print__summary statement-print__summary--footer">
           <p>
-            حسم:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.discount_amount) || 0, currency)}</strong>
+            فرعي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
           </p>
-        )}
-        {Number(invoice.tax_amount) > 0 && (
-          <p>
-            ضريبة:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
+          {Number(invoice.discount_amount) > 0 && (
+            <p>
+              حسم:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.discount_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.tax_amount) > 0 && (
+            <p>
+              ضريبة:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {invoice.paid_amount != null && (
+            <p>
+              المدفوع:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          <p className="statement-print__closing-line">
+            الإجمالي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
           </p>
-        )}
-        {invoice.paid_amount != null && (
-          <p>
-            المدفوع:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        <p className="statement-print__closing-line">
-          الإجمالي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
-        </p>
-      </section>
-      <PrintStamp />
+        </section>
+      </PrintClosing>
     </div>
   )
 }
@@ -398,6 +453,7 @@ function quoteLineProduct(item: NonNullable<SalesQuotePrintData['items']>[number
 
 export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
   const { t } = useTranslation()
+  const rootClass = usePrintDocClass()
   const lines = (quote.items || []).map((l) => ({
     product: quoteLineProduct(l),
     quantity: l.quantity,
@@ -407,7 +463,7 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
   const currency = quote.currency || 'USD'
 
   return (
-    <div className="statement-print" dir="rtl">
+    <div className={rootClass} dir="rtl">
       <InvoiceBrandHeader
         statementStyle
         documentLabel={t('quotes.documentTitle')}
@@ -465,23 +521,24 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
         <StatementStyleLinesTable lines={lines} currency={currency} />
       </div>
 
-      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
-        <p>
-          فرعي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(quote.subtotal) || 0, currency)}</strong>
-        </p>
-        {Number(quote.tax_amount) > 0 && (
+      <PrintClosing>
+        <section className="statement-print__summary statement-print__summary--footer">
           <p>
-            ضريبة:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(quote.tax_amount) || 0, currency)}</strong>
+            فرعي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(quote.subtotal) || 0, currency)}</strong>
           </p>
-        )}
-        <p className="statement-print__closing-line">
-          الإجمالي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(quote.total) || 0, currency)}</strong>
-        </p>
-      </section>
-      <PrintStamp />
+          {Number(quote.tax_amount) > 0 && (
+            <p>
+              ضريبة:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(quote.tax_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          <p className="statement-print__closing-line">
+            الإجمالي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(quote.total) || 0, currency)}</strong>
+          </p>
+        </section>
+      </PrintClosing>
 
       <p className="statement-print__muted">{t('quotes.printDisclaimer')}</p>
     </div>
@@ -522,6 +579,7 @@ function printLineProduct(item: NonNullable<PrintInvoicePrintData['items']>[numb
 
 export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintData }) {
   const { t } = useTranslation()
+  const rootClass = usePrintDocClass()
   const lines = (invoice.items || []).map((l) => ({
     product: printLineProduct(l),
     quantity: l.quantity,
@@ -531,7 +589,7 @@ export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintD
   const currency = invoice.currency || 'USD'
 
   return (
-    <div className="statement-print" dir="rtl">
+    <div className={rootClass} dir="rtl">
       <InvoiceBrandHeader
         statementStyle
         documentLabel={t('printInvoices.documentTitle')}
@@ -583,34 +641,36 @@ export function PrintInvoicePrintView({ invoice }: { invoice: PrintInvoicePrintD
         <StatementStyleLinesTable lines={lines} currency={currency} />
       </div>
 
-      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
-        <p>
-          فرعي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
-        </p>
-        {Number(invoice.tax_amount) > 0 && (
+      <PrintClosing>
+        <section className="statement-print__summary statement-print__summary--footer">
           <p>
-            ضريبة:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
+            فرعي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
           </p>
-        )}
-        <p className="statement-print__closing-line">
-          الإجمالي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
-        </p>
-      </section>
-      <PrintStamp />
+          {Number(invoice.tax_amount) > 0 && (
+            <p>
+              ضريبة:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          <p className="statement-print__closing-line">
+            الإجمالي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
+          </p>
+        </section>
+      </PrintClosing>
     </div>
   )
 }
 
 export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoicePrintData }) {
   const { t } = useTranslation()
+  const rootClass = usePrintDocClass()
   const lines = invoice.lines || invoice.items || []
   const currency = invoice.currency || 'USD'
 
   return (
-    <div className="statement-print" dir="rtl">
+    <div className={rootClass} dir="rtl">
       <InvoiceBrandHeader
         statementStyle
         documentLabel={t('purchases.invoices')}
@@ -656,61 +716,62 @@ export function PurchaseInvoicePrintView({ invoice }: { invoice: PurchaseInvoice
         <StatementStyleLinesTable lines={lines} currency={currency} />
       </div>
 
-      <section className="print-avoid-break statement-print__summary statement-print__summary--footer">
-        {invoice.subtotal != null && (
-          <p>
-            فرعي:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
+      <PrintClosing>
+        <section className="statement-print__summary statement-print__summary--footer">
+          {invoice.subtotal != null && (
+            <p>
+              فرعي:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.subtotal) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.discount_amount) > 0 && (
+            <p>
+              حسم:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.discount_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (
+            <p>
+              ضريبة:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.customs_amount) > 0 && (
+            <p>
+              {t('purchases.customs')}:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.customs_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.transport_fees) > 0 && (
+            <p>
+              {t('purchases.transportFees')}:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.transport_fees) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.fines_amount) > 0 && (
+            <p>
+              {t('purchases.fines')}:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.fines_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          {Number(invoice.other_fees) > 0 && (
+            <p>
+              {t('purchases.otherFees')}:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.other_fees) || 0, currency)}</strong>
+            </p>
+          )}
+          {invoice.paid_amount != null && (
+            <p>
+              المدفوع:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          <p className="statement-print__closing-line">
+            الإجمالي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
           </p>
-        )}
-        {Number(invoice.discount_amount) > 0 && (
-          <p>
-            حسم:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.discount_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        {invoice.tax_amount != null && Number(invoice.tax_amount) > 0 && (
-          <p>
-            ضريبة:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.tax_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        {Number(invoice.customs_amount) > 0 && (
-          <p>
-            {t('purchases.customs')}:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.customs_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        {Number(invoice.transport_fees) > 0 && (
-          <p>
-            {t('purchases.transportFees')}:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.transport_fees) || 0, currency)}</strong>
-          </p>
-        )}
-        {Number(invoice.fines_amount) > 0 && (
-          <p>
-            {t('purchases.fines')}:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.fines_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        {Number(invoice.other_fees) > 0 && (
-          <p>
-            {t('purchases.otherFees')}:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.other_fees) || 0, currency)}</strong>
-          </p>
-        )}
-        {invoice.paid_amount != null && (
-          <p>
-            المدفوع:{' '}
-            <strong className="tabular-nums">{formatMoney(Number(invoice.paid_amount) || 0, currency)}</strong>
-          </p>
-        )}
-        <p className="statement-print__closing-line">
-          الإجمالي:{' '}
-          <strong className="tabular-nums">{formatMoney(Number(invoice.total) || 0, currency)}</strong>
-        </p>
-      </section>
-      <PrintStamp />
+        </section>
+      </PrintClosing>
     </div>
   )
 }
