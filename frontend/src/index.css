@@ -234,11 +234,18 @@ body {
   print-color-adjust: exact;
 }
 
-/* Al-Bairaq print wordmark (white plate, horizontal). */
+/* Al-Bairaq stacked brand block (emblem + name + activity + CR). */
 .brand-logo--print-albairaq {
-  max-height: 70px;
-  max-width: min(230px, 64mm);
+  max-height: 118px;
+  max-width: min(168px, 48mm);
   border-radius: 0;
+  object-position: top center;
+}
+
+.statement-print__header--albairaq,
+.print-brand-header--albairaq {
+  align-items: center !important;
+  gap: 1rem !important;
 }
 
 .print-brand-header {
@@ -1623,8 +1630,13 @@ textarea {
   .print-document img.brand-logo--print-albairaq,
   .print-sheet img.brand-logo--print-albairaq,
   img.brand-logo--print-albairaq {
-    max-height: 70px !important;
-    max-width: 64mm !important;
+    max-height: 118px !important;
+    max-width: 48mm !important;
+  }
+
+  .statement-print__header--albairaq,
+  .print-brand-header--albairaq {
+    align-items: center !important;
   }
 
   /* Statement: keep section rhythm; nested invoice tables must not collapse */

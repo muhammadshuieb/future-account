@@ -65,9 +65,9 @@ export const DOCUMENT_BRANDS: Record<DocumentBrandId, DocumentBrandProfile> = {
     brandMark: 'Al-Bairaq Tech',
     tagline: 'تجارة المقاولات واستيراد وتصدير الأدوات الإلكترونية',
     commercialRegister: '20258',
-    logoPrint: '/logo-albairaq.png',
-    logoFallback: '/logo-albairaq.png',
-    stamp: '/company-stamp-albairaq.png',
+    logoPrint: '/logo-albairaq.png?v=3',
+    logoFallback: '/logo-albairaq.png?v=3',
+    stamp: '/company-stamp-albairaq.png?v=2',
     titleSuffix: 'البيرق تك',
   },
 }

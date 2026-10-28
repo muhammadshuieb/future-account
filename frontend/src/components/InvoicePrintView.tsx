@@ -115,22 +115,33 @@ function InvoiceBrandHeader({
 }) {
   const { t } = useTranslation()
   const { brand } = useDocumentBrand()
+  /** Albairaq print logo already carries name + activity + CR — avoid duplicating in text. */
+  const logoCarriesIdentity = brand.id === 'albairaq'
   const brandLine = `${brand.companyName} — ${brand.companyNameEn}`
-  const showBrandMark = brand.brandMark && brand.brandMark !== brand.companyNameEn
-  const registryLine = brand.commercialRegister
-    ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
-    : taxNumber
-      ? `${t('companies.taxNumber')}: ${taxNumber}`
-      : null
+  const showBrandMark = !logoCarriesIdentity && brand.brandMark && brand.brandMark !== brand.companyNameEn
+  const registryLine = logoCarriesIdentity
+    ? null
+    : brand.commercialRegister
+      ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
+      : taxNumber
+        ? `${t('companies.taxNumber')}: ${taxNumber}`
+        : null
 
   if (statementStyle) {
     return (
       <header className={`print-brand-header statement-print__header statement-print__header--${brand.id}`}>
         <div className="min-w-0 text-start">
-          <p className="statement-print__company">{brandLine}</p>
+          {!logoCarriesIdentity ? <p className="statement-print__company">{brandLine}</p> : null}
           {showBrandMark ? <p className="statement-print__brand">{brand.brandMark}</p> : null}
-          {brand.tagline ? <p className="statement-print__muted">{brand.tagline}</p> : null}
+          {!logoCarriesIdentity && brand.tagline ? (
+            <p className="statement-print__muted">{brand.tagline}</p>
+          ) : null}
           {registryLine ? <p className="statement-print__muted">{registryLine}</p> : null}
+          {!logoCarriesIdentity && taxNumber ? (
+            <p className="statement-print__muted">
+              {t('companies.taxNumber')}: {taxNumber}
+            </p>
+          ) : null}
           <p className="statement-print__doc-title">{documentLabel}</p>
           <p className="statement-print__muted font-mono">{invoiceNumber}</p>
           <p className="statement-print__muted">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
@@ -143,18 +154,20 @@ function InvoiceBrandHeader({
 
   return (
     <header className={`print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2 print-brand-header--${brand.id}`}>
-      {/* First in RTL → visual right: company + report title */}
       <div className="min-w-0 text-start">
-        <p className="text-base font-bold leading-tight">{brandLine}</p>
+        {!logoCarriesIdentity ? <p className="text-base font-bold leading-tight">{brandLine}</p> : null}
         {showBrandMark ? <p className="text-[11px] font-semibold text-black/60">{brand.brandMark}</p> : null}
-        {brand.tagline ? <p className="text-[11px] text-black/55">{brand.tagline}</p> : null}
+        {!logoCarriesIdentity && brand.tagline ? (
+          <p className="text-[11px] text-black/55">{brand.tagline}</p>
+        ) : null}
         {registryLine ? <p className="text-[11px] text-black/55">{registryLine}</p> : null}
-        <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>
+        <p className={`text-[11px] font-semibold text-teal${logoCarriesIdentity ? '' : ' mt-0.5'}`}>
+          {documentLabel}
+        </p>
         <p className="font-mono text-sm font-bold">{invoiceNumber}</p>
         <p className="text-xs">{formatInvoiceDateTime(invoiceDate, createdAt)}</p>
         {extra}
       </div>
-      {/* Second in RTL → visual left: logo */}
       <BrandLogo />
     </header>
   )
