@@ -1,7 +1,7 @@
 import { LOGO } from '@/lib/brand'
 import { useDocumentBrand } from '@/context/DocumentBrandContext'
 
-/** Official circular company stamp — ink-only PNG/JPG with transparent or white ground. */
+/** Official circular company stamp — transparent PNG for ink/multiply print. */
 export default function CompanyStamp({
   className = '',
   onLoad,
@@ -13,7 +13,10 @@ export default function CompanyStamp({
   const src = brand.stamp || LOGO.stamp
 
   return (
-    <div className={`company-stamp print-avoid-break ${className}`.trim()} aria-hidden="true">
+    <div
+      className={`company-stamp company-stamp--${brand.id} print-avoid-break ${className}`.trim()}
+      aria-hidden="true"
+    >
       <img
         key={src}
         src={src}

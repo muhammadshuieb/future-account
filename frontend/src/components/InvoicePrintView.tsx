@@ -116,6 +116,7 @@ function InvoiceBrandHeader({
   const { t } = useTranslation()
   const { brand } = useDocumentBrand()
   const brandLine = `${brand.companyName} — ${brand.companyNameEn}`
+  const showBrandMark = brand.brandMark && brand.brandMark !== brand.companyNameEn
   const registryLine = brand.commercialRegister
     ? `${t('common.commercialRegister')}: ${brand.commercialRegister}`
     : taxNumber
@@ -124,10 +125,10 @@ function InvoiceBrandHeader({
 
   if (statementStyle) {
     return (
-      <header className="print-brand-header statement-print__header">
+      <header className={`print-brand-header statement-print__header statement-print__header--${brand.id}`}>
         <div className="min-w-0 text-start">
           <p className="statement-print__company">{brandLine}</p>
-          <p className="statement-print__brand">{brand.brandMark}</p>
+          {showBrandMark ? <p className="statement-print__brand">{brand.brandMark}</p> : null}
           {brand.tagline ? <p className="statement-print__muted">{brand.tagline}</p> : null}
           {registryLine ? <p className="statement-print__muted">{registryLine}</p> : null}
           <p className="statement-print__doc-title">{documentLabel}</p>
@@ -141,10 +142,11 @@ function InvoiceBrandHeader({
   }
 
   return (
-    <header className="print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2">
+    <header className={`print-brand-header flex w-full flex-wrap items-start justify-between gap-2 border-b border-black/10 pb-2 print-brand-header--${brand.id}`}>
       {/* First in RTL → visual right: company + report title */}
       <div className="min-w-0 text-start">
         <p className="text-base font-bold leading-tight">{brandLine}</p>
+        {showBrandMark ? <p className="text-[11px] font-semibold text-black/60">{brand.brandMark}</p> : null}
         {brand.tagline ? <p className="text-[11px] text-black/55">{brand.tagline}</p> : null}
         {registryLine ? <p className="text-[11px] text-black/55">{registryLine}</p> : null}
         <p className="mt-0.5 text-[11px] font-semibold text-teal">{documentLabel}</p>

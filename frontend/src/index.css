@@ -234,11 +234,11 @@ body {
   print-color-adjust: exact;
 }
 
-/* Al-Bairaq mark ships on a dark plate — keep it compact on A4 headers. */
+/* Al-Bairaq print wordmark (white plate, horizontal). */
 .brand-logo--print-albairaq {
-  max-height: 78px;
-  max-width: min(200px, 58mm);
-  border-radius: 6px;
+  max-height: 70px;
+  max-width: min(230px, 64mm);
+  border-radius: 0;
 }
 
 .print-brand-header {
@@ -673,32 +673,38 @@ body {
   }
 }
 
-/* Optional company stamp — ink impression on paper (not a photo card) */
-/* Visual left under totals (RTL: flex-end = left) */
+/* Optional company stamp — ink impression under totals (RTL: flex-end = visual left). */
 .company-stamp {
   display: flex;
   justify-content: flex-end;
   align-items: flex-end;
   width: 100%;
-  margin-top: 0.55rem;
-  margin-bottom: 0.15rem;
-  padding: 0;
+  margin-top: 1.1rem;
+  margin-bottom: 0.35rem;
+  padding: 0.35rem 0.15rem 0;
   pointer-events: none;
 }
 
 .company-stamp__img {
-  width: 36mm;
+  width: 38mm;
   height: auto;
-  max-width: 40mm;
+  max-width: 42mm;
   object-fit: contain;
   background: transparent !important;
   /* Multiply blends blue ink into the page like a real rubber stamp */
   mix-blend-mode: multiply;
-  opacity: 0.92;
-  transform: rotate(-4deg);
-  filter: contrast(1.08) saturate(1.05);
+  opacity: 0.94;
+  transform: rotate(-3.5deg);
+  filter: contrast(1.06) saturate(1.04);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+}
+
+.company-stamp--albairaq .company-stamp__img {
+  width: 46mm;
+  max-width: 50mm;
+  opacity: 0.95;
+  transform: rotate(-2.5deg);
 }
 
 .statement-print__detail-row > td,
@@ -1590,17 +1596,35 @@ textarea {
   .print-document img.company-stamp__img,
   .print-sheet img.company-stamp__img,
   img.company-stamp__img {
-    width: 36mm !important;
-    max-width: 40mm !important;
-    max-height: 40mm !important;
+    width: 38mm !important;
+    max-width: 42mm !important;
+    max-height: 42mm !important;
     height: auto !important;
     object-fit: contain !important;
     background: transparent !important;
     mix-blend-mode: multiply !important;
-    opacity: 0.92 !important;
-    transform: rotate(-4deg) !important;
+    opacity: 0.94 !important;
+    transform: rotate(-3.5deg) !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+
+  .company-stamp--albairaq img.company-stamp__img,
+  .print-area .company-stamp--albairaq img.company-stamp__img,
+  .print-document .company-stamp--albairaq img.company-stamp__img,
+  .print-sheet .company-stamp--albairaq img.company-stamp__img {
+    width: 46mm !important;
+    max-width: 50mm !important;
+    max-height: 50mm !important;
+    transform: rotate(-2.5deg) !important;
+  }
+
+  .print-area img.brand-logo--print-albairaq,
+  .print-document img.brand-logo--print-albairaq,
+  .print-sheet img.brand-logo--print-albairaq,
+  img.brand-logo--print-albairaq {
+    max-height: 70px !important;
+    max-width: 64mm !important;
   }
 
   /* Statement: keep section rhythm; nested invoice tables must not collapse */
