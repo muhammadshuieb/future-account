@@ -22,7 +22,7 @@ class UserController extends ApiController
     {
         $this->authorizePermission('users.manage');
 
-        $query = User::query()->with(['roles', 'permissions', 'warehouses:id,name,code'])->orderBy('name');
+        $query = User::query()->with(['roles', 'permissions', 'warehouses:id,name,code', 'priceLists:id,name'])->orderBy('name');
         ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name']);
         $users = $query->get()->map(fn (User $u) => $this->userPayload($u));
 
@@ -44,6 +44,8 @@ class UserController extends ApiController
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
+            'price_list_ids' => ['nullable', 'array'],
+            'price_list_ids.*' => ['integer', 'distinct', 'exists:price_lists,id'],
             'price_list_columns' => ['nullable', 'array'],
             'price_list_columns.*' => ['string', Rule::in(array_keys(self::PRICE_COLUMN_PERMS))],
         ]);
@@ -68,11 +70,12 @@ class UserController extends ApiController
             $user->syncRoles($data['roles']);
         }
         $user->warehouses()->sync($data['warehouse_ids'] ?? []);
+        $user->priceLists()->sync($data['price_list_ids'] ?? []);
         if (array_key_exists('price_list_columns', $data)) {
             $this->syncPriceColumnPermissions($user, $data['price_list_columns'] ?? []);
         }
 
-        return $this->ok($this->userPayload($user->load(['roles', 'permissions', 'warehouses:id,name,code'])), 201);
+        return $this->ok($this->userPayload($user->load(['roles', 'permissions', 'warehouses:id,name,code', 'priceLists:id,name'])), 201);
     }
 
     public function update(Request $request, User $user): JsonResponse
@@ -90,6 +93,8 @@ class UserController extends ApiController
             'roles.*' => ['string', 'exists:roles,name'],
             'warehouse_ids' => ['nullable', 'array'],
             'warehouse_ids.*' => ['integer', 'distinct', 'exists:warehouses,id'],
+            'price_list_ids' => ['nullable', 'array'],
+            'price_list_ids.*' => ['integer', 'distinct', 'exists:price_lists,id'],
             'price_list_columns' => ['nullable', 'array'],
             'price_list_columns.*' => ['string', Rule::in(array_keys(self::PRICE_COLUMN_PERMS))],
         ]);
@@ -136,11 +141,14 @@ class UserController extends ApiController
         if (array_key_exists('warehouse_ids', $data)) {
             $user->warehouses()->sync($data['warehouse_ids'] ?? []);
         }
+        if (array_key_exists('price_list_ids', $data)) {
+            $user->priceLists()->sync($data['price_list_ids'] ?? []);
+        }
         if (array_key_exists('price_list_columns', $data)) {
             $this->syncPriceColumnPermissions($user, $data['price_list_columns'] ?? []);
         }
 
-        return $this->ok($this->userPayload($user->fresh(['roles', 'permissions', 'warehouses:id,name,code'])));
+        return $this->ok($this->userPayload($user->fresh(['roles', 'permissions', 'warehouses:id,name,code', 'priceLists:id,name'])));
     }
 
     public function destroy(User $user): JsonResponse
@@ -168,6 +176,8 @@ class UserController extends ApiController
             'roles' => $user->roles->pluck('name'),
             'permissions' => $user->getAllPermissions()->pluck('name'),
             'price_list_columns' => $this->priceListColumnsFor($user),
+            'price_list_ids' => $user->priceLists->pluck('id'),
+            'price_lists' => $user->priceLists->map->only(['id', 'name'])->values(),
             'warehouse_ids' => $user->warehouses->pluck('id'),
             'warehouses' => $user->warehouses->map->only(['id', 'name', 'code'])->values(),
         ];

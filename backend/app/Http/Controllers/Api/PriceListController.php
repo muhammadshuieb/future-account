@@ -16,19 +16,24 @@ class PriceListController extends ApiController
     {
         $this->authorizeAnyPermission(['price_lists.view', 'price_lists.manage']);
 
-        $lists = PriceList::query()
+        $query = PriceList::query()
             ->withCount('items')
             ->with('updatedBy:id,name')
             ->orderByDesc('is_active')
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
 
-        return $this->ok($lists);
+        $restricted = $request->user()?->restrictedPriceListIds();
+        if ($restricted !== null) {
+            $query->whereIn('id', $restricted);
+        }
+
+        return $this->ok($query->get());
     }
 
     public function show(Request $request, PriceList $priceList): JsonResponse
     {
         $this->authorizeAnyPermission(['price_lists.view', 'price_lists.manage']);
+        $this->authorizePriceListAccess($priceList);
 
         $q = $request->string('q')->trim()->toString();
         $category = $request->string('category')->trim()->toString();
@@ -208,6 +213,14 @@ class PriceListController extends ApiController
         });
 
         return $this->ok(['ok' => true]);
+    }
+
+    private function authorizePriceListAccess(PriceList $priceList): void
+    {
+        $user = auth()->user();
+        if (! $user || ! $user->canAccessPriceList($priceList)) {
+            abort(403, 'ليس لديك صلاحية لعرض هذه القائمة.');
+        }
     }
 
     /**

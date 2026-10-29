@@ -179,6 +179,8 @@ export default function SettingsPage() {
       roles: string[]
       permissions?: string[]
       price_list_columns?: string[]
+      price_list_ids?: number[]
+      price_lists?: { id: number; name: string }[]
       warehouse_ids: number[]
       warehouses?: { id: number; name: string; code: string }[]
     }[],
@@ -200,6 +202,13 @@ export default function SettingsPage() {
     retry: false,
   })
 
+  const priceListsAdmin = useQuery({
+    queryKey: ['admin-price-lists'],
+    queryFn: async () => (await api.get('/price-lists')).data.data as { id: number; name: string; is_active?: boolean }[],
+    enabled: tab === 'users' && (user?.permissions.includes('users.manage') || user?.roles.includes('admin')),
+    retry: false,
+  })
+
   const emptyUserForm = {
     first_name: '',
     last_name: '',
@@ -209,6 +218,7 @@ export default function SettingsPage() {
     password: '',
     roles: ['accountant'] as string[],
     warehouse_ids: [] as number[],
+    price_list_ids: [] as number[],
     price_list_columns: [] as string[],
   }
 
@@ -435,6 +445,7 @@ export default function SettingsPage() {
         email: userForm.email || undefined,
         roles: userForm.roles,
         warehouse_ids: userForm.warehouse_ids,
+        price_list_ids: userForm.price_list_ids,
         price_list_columns: userForm.price_list_columns,
         ...(userForm.password ? { password: userForm.password } : {}),
       }
@@ -1117,6 +1128,7 @@ export default function SettingsPage() {
                         password: '',
                         roles: u.roles.length ? u.roles : ['accountant'],
                         warehouse_ids: u.warehouse_ids || [],
+                        price_list_ids: u.price_list_ids || [],
                         price_list_columns: u.price_list_columns || [],
                       })
                       setUserModal('edit')
@@ -1128,6 +1140,11 @@ export default function SettingsPage() {
                     <td>{u.email}</td>
                     <td>
                       <div>{u.roles.map((r) => roleLabel(t, r)).join(', ')}</div>
+                      {(u.price_lists || []).length > 0 ? (
+                        <div className="mt-0.5 text-[11px] text-ink/70">
+                          {(u.price_lists || []).map((pl) => pl.name).join(' · ')}
+                        </div>
+                      ) : null}
                       {(u.price_list_columns || []).length > 0 ? (
                         <div className="mt-0.5 text-[11px] text-teal-dark">
                           {(u.price_list_columns || [])
@@ -1241,6 +1258,28 @@ export default function SettingsPage() {
               </div>
             </Field>
           )}
+          <Field label={t('settings.assignedPriceLists')} hint={t('settings.assignedPriceListsHint')}>
+            <div className="grid gap-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:grid-cols-2">
+              {(priceListsAdmin.data || []).map((list) => (
+                <label key={list.id} className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={userForm.price_list_ids.includes(list.id)}
+                    onChange={(e) => setUserForm({
+                      ...userForm,
+                      price_list_ids: e.target.checked
+                        ? [...userForm.price_list_ids, list.id]
+                        : userForm.price_list_ids.filter((id) => id !== list.id),
+                    })}
+                  />
+                  <span className="font-medium">{list.name}</span>
+                </label>
+              ))}
+              {(priceListsAdmin.data || []).length === 0 ? (
+                <div className="text-sm text-ink/70 sm:col-span-2">{t('settings.noPriceListsYet')}</div>
+              ) : null}
+            </div>
+          </Field>
           <Field label={t('settings.priceListColumns')} hint={t('settings.priceListColumnsHint')}>
             <div className="grid gap-2 rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)] p-3 sm:grid-cols-3">
               {PRICE_COLUMN_OPTIONS.map((opt) => {
