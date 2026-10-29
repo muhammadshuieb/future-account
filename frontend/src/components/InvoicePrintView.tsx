@@ -116,10 +116,7 @@ function AlbairaqBrandHeader({
   return (
     <header className="ab-print-header print-brand-header">
       <div className="ab-print-header__brand">
-        {/* RTL: first = visual right (logo), second = visual left (name, half page) */}
-        <div className="ab-print-header__logo">
-          <BrandLogo />
-        </div>
+        {/* RTL: first = visual right (name), second = visual left (logo) */}
         <div className="ab-print-header__identity">
           <p className="ab-print-header__company">{brand.companyName}</p>
           <p className="ab-print-header__company-en">{brand.companyNameEn}</p>
@@ -127,6 +124,9 @@ function AlbairaqBrandHeader({
           {brand.commercialRegister ? (
             <p className="ab-print-header__cr">سجل تجاري: {brand.commercialRegister}</p>
           ) : null}
+        </div>
+        <div className="ab-print-header__logo">
+          <BrandLogo />
         </div>
       </div>
       <div className="ab-print-header__rule" aria-hidden="true" />
