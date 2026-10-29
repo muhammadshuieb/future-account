@@ -540,6 +540,21 @@ export async function captureElement(
               object-fit: contain !important;
               flex-shrink: 0 !important;
             }
+            /* Albairaq emblem needs more pixels — 56px crushed the 3D artwork. */
+            .pdf-capture-root img.brand-logo--print-albairaq {
+              max-height: 92px !important;
+              max-width: 48mm !important;
+            }
+            .pdf-capture-root .ab-print-header {
+              flex-direction: column !important;
+              align-items: stretch !important;
+            }
+            .pdf-capture-root .ab-print-header__brand {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr !important;
+              align-items: center !important;
+              gap: 0.65rem 1rem !important;
+            }
             .pdf-capture-root .data-table th,
             .pdf-capture-root .data-table td { padding: 0.28rem 0.4rem !important; font-size: 10.5px !important; }
             .pdf-capture-root canvas.print-qr,

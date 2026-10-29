@@ -98,7 +98,7 @@ function BrandLogo() {
   )
 }
 
-/** Albairaq: stacked brand block on top + navy/gold document banner (unlike Syna side-by-side). */
+/** Albairaq: company name (left half) + crisp emblem (right) + navy/gold doc banner. */
 function AlbairaqBrandHeader({
   documentLabel,
   invoiceNumber,
@@ -112,10 +112,22 @@ function AlbairaqBrandHeader({
   createdAt?: string | null
   extra?: ReactNode
 }) {
+  const { brand } = useDocumentBrand()
   return (
     <header className="ab-print-header print-brand-header">
       <div className="ab-print-header__brand">
-        <BrandLogo />
+        {/* RTL: first = visual right (logo), second = visual left (name, half page) */}
+        <div className="ab-print-header__logo">
+          <BrandLogo />
+        </div>
+        <div className="ab-print-header__identity">
+          <p className="ab-print-header__company">{brand.companyName}</p>
+          <p className="ab-print-header__company-en">{brand.companyNameEn}</p>
+          {brand.tagline ? <p className="ab-print-header__tagline">{brand.tagline}</p> : null}
+          {brand.commercialRegister ? (
+            <p className="ab-print-header__cr">سجل تجاري: {brand.commercialRegister}</p>
+          ) : null}
+        </div>
       </div>
       <div className="ab-print-header__rule" aria-hidden="true" />
       <div className="ab-print-header__banner">
@@ -539,8 +551,6 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
           </p>
         </section>
       </PrintClosing>
-
-      <p className="statement-print__muted">{t('quotes.printDisclaimer')}</p>
     </div>
   )
 }
