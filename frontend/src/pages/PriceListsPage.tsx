@@ -96,6 +96,8 @@ export default function PriceListsPage() {
   const qc = useQueryClient()
   const msg = useFormMessage()
   const search = useListSearch()
+  /** Selected price list (Hikvision / ساينا / …). null until lists load. */
+  const [listId, setListId] = useState<number | null>(null)
   /** null = still picking default (first category); '' = all categories. */
   const [category, setCategory] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -108,7 +110,12 @@ export default function PriceListsPage() {
     enabled: canView,
   })
 
-  const listId = lists.data?.[0]?.id ?? null
+  useEffect(() => {
+    if (!lists.data?.length) return
+    if (listId != null && lists.data.some((l) => l.id === listId)) return
+    setListId(lists.data[0].id)
+  }, [lists.data, listId])
+
   const searching = search.debouncedQ.trim().length > 0
   const bootstrapping = !searching && category === null
 
@@ -283,12 +290,32 @@ export default function PriceListsPage() {
               <p className="mt-1 text-xs text-black/45">{t('priceLists.searchAllCategories')}</p>
             ) : null}
           </div>
+          <div className="sm:w-56">
+            <Field label={t('priceLists.list')}>
+              <select
+                className={`${inputClass} font-medium text-ink`}
+                value={listId ?? ''}
+                disabled={!lists.data?.length}
+                onChange={(e) => {
+                  const next = Number(e.target.value)
+                  setListId(Number.isFinite(next) ? next : null)
+                  search.setQ('')
+                }}
+              >
+                {(lists.data || []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
           <div className="sm:w-64">
             <Field label={t('priceLists.category')}>
               <select
                 className={`${inputClass} font-medium text-ink`}
                 value={category ?? ''}
-                disabled={searching || category === null}
+                disabled={!listId || searching || category === null}
                 onChange={(e) => setCategory(e.target.value)}
               >
                 <option value="">{t('priceLists.allCategories')}</option>
