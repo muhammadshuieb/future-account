@@ -212,15 +212,12 @@ export default function SalesPage() {
     customer_id: '',
     warehouse_id: '',
     sales_invoice_id: '',
-    product_id: '',
-    quantity: '1',
-    unit_price: '',
-    batch_no: '',
-    serial_no: '',
     currency: 'USD',
     exchange_rate: '1',
     status: 'posted',
+    lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
   })
+  const retLinesScroll = useScrollToLastLine(ret.lines.length)
   const [rc, setRc] = useState({
     receipt_date: todayYmd(),
     customer_id: '',
@@ -303,6 +300,25 @@ export default function SalesPage() {
     }))
   }
 
+  const updateRetLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+    setRet((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  const addRetLine = () => {
+    retLinesScroll.markPending()
+    setRet((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  }
+
+  const removeRetLine = (index: number) => {
+    setRet((prev) => ({
+      ...prev,
+      lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
+    }))
+  }
+
   const updateQuoteLine = (index: number, patch: Partial<QuoteLineDraft>) => {
     setQuote((prev) => ({
       ...prev,
@@ -333,7 +349,7 @@ export default function SalesPage() {
     }))
   }, [allowNegativeStock])
 
-  async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' = 'inv') {
+  async function handleBarcodeScan(code: string, target: 'inv' | 'order' | 'quote' | 'ret' = 'inv') {
     try {
       const res = await api.get(`/products?barcode=${encodeURIComponent(code)}`)
       const rows = res.data.data as ProductRow[]
@@ -363,6 +379,15 @@ export default function SalesPage() {
           if (prev.warehouse_id && !skipStockAutofill.current) {
             void applyStockToInvoiceLine(targetIdx, String(found.id), prev.warehouse_id)
           }
+          return { ...prev, lines }
+        })
+      } else if (target === 'ret') {
+        setRet((prev) => {
+          const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
+          if (emptyIdx < 0) retLinesScroll.markPending()
+          const lines = emptyIdx >= 0
+            ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...patch } : line))
+            : [...prev.lines, { ...emptyInvoiceLine(), ...patch }]
           return { ...prev, lines }
         })
       } else if (target === 'order') {
@@ -513,6 +538,16 @@ export default function SalesPage() {
       exchange_rate: '1',
       lines: [emptyQuoteLine()],
     }))
+    setRet({
+      return_date: todayYmd(),
+      customer_id: '',
+      warehouse_id: defaultWarehouseId || '',
+      sales_invoice_id: '',
+      currency: baseCurrency || 'USD',
+      exchange_rate: '1',
+      status: 'posted',
+      lines: [emptyInvoiceLine()],
+    })
     setModal('create')
   }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
@@ -625,19 +660,87 @@ export default function SalesPage() {
   const invEstimatedTotal = round2(invLineSub - invDiscount + invTax)
 
   const saveRet = useMutation({
-    mutationFn: () => api.post('/sales-returns', {
-      return_date: ret.return_date,
-      customer_id: Number(ret.customer_id),
-      warehouse_id: Number(ret.warehouse_id) || undefined,
-      sales_invoice_id: ret.sales_invoice_id ? Number(ret.sales_invoice_id) : null,
-      currency: ret.currency,
-      exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
-      status: ret.status,
-      lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_price: Number(ret.unit_price), serial_no: ret.serial_no || undefined }],
-    }),
+    mutationFn: () => {
+      const filledLines = ret.lines.filter((l) => l.product_id)
+      if (filledLines.length === 0) {
+        throw { response: { data: { message: t('common.linesRequired') } } }
+      }
+      return api.post('/sales-returns', {
+        return_date: ret.return_date,
+        customer_id: Number(ret.customer_id),
+        warehouse_id: Number(ret.warehouse_id) || undefined,
+        sales_invoice_id: ret.sales_invoice_id ? Number(ret.sales_invoice_id) : null,
+        currency: ret.currency,
+        exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
+        status: ret.status,
+        lines: filledLines.map((l) => ({
+          product_id: Number(l.product_id),
+          quantity: Number(l.quantity),
+          unit_price: Number(l.unit_price),
+          batch_no: l.batch_no || undefined,
+          serial_no: l.serial_no || undefined,
+        })),
+      })
+    },
     onSuccess: () => { msg.setMessage(t('sales.returnPosted')); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
+
+  async function loadSalesReturnLinesFromInvoice(invoiceId: string) {
+    if (!invoiceId) return
+    try {
+      const res = await api.get(`/sales-invoices/${invoiceId}`)
+      const d = res.data.data as {
+        customer_id?: number
+        customer?: { id?: number }
+        warehouse_id?: number
+        warehouse?: { id?: number }
+        currency?: string
+        exchange_rate?: number | string
+        lines?: {
+          product_id?: number
+          product?: { id?: number }
+          quantity?: number
+          unit_price?: number
+          batch_no?: string
+          serial_no?: string
+        }[]
+        items?: {
+          product_id?: number
+          product?: { id?: number }
+          quantity?: number
+          unit_price?: number
+          batch_no?: string
+          serial_no?: string
+        }[]
+      }
+      const items = d.lines || d.items || []
+      setRet((prev) => ({
+        ...prev,
+        customer_id: String(d.customer_id || d.customer?.id || prev.customer_id),
+        warehouse_id: String(d.warehouse_id || d.warehouse?.id || prev.warehouse_id),
+        currency: d.currency || prev.currency,
+        exchange_rate: d.exchange_rate != null && d.exchange_rate !== ''
+          ? String(d.exchange_rate)
+          : prev.exchange_rate,
+        lines: items.length
+          ? items.map((line) => ({
+              product_id: String(line.product_id || line.product?.id || ''),
+              quantity: String(line.quantity || 1),
+              unit_price: String(line.unit_price || ''),
+              batch_no: line.batch_no || '',
+              serial_no: line.serial_no || '',
+            }))
+          : [emptyInvoiceLine()],
+      }))
+    } catch {
+      // Keep manual lines if invoice detail cannot be loaded.
+    }
+  }
+
+  const retLineSub = round2(
+    ret.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0),
+  )
 
   const convertQuote = useMutation({
     mutationFn: (id: number) => api.post(`/sales-quotes/${id}/convert-to-order`),
@@ -1120,6 +1223,80 @@ export default function SalesPage() {
     </FormSection>
   )
 
+  const returnLinesEditor = (
+    <FormSection title={t('common.lines')}>
+      <BarcodeScanInput
+        label={t('sales.scanBarcode')}
+        hint={t('sales.scanBarcodeHint')}
+        onScan={(code) => void handleBarcodeScan(code, 'ret')}
+        compact
+      />
+      {ret.lines.map((line, index) => {
+        const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
+        return (
+          <div
+            key={index}
+            className="form-line-card"
+            ref={index === ret.lines.length - 1 ? retLinesScroll.setLastLineRef : undefined}
+          >
+            <div className="form-line-card-header">
+              <span>{t('common.lineN', { n: index + 1 })}</span>
+              {ret.lines.length > 1 && (
+                <button type="button" className="text-xs text-rose-600" onClick={() => removeRetLine(index)}>
+                  {t('common.removeLine')}
+                </button>
+              )}
+            </div>
+            <ProductVariantSelect
+              products={products.data || []}
+              value={line.product_id}
+              onChange={(productId) => {
+                const selected = (products.data || []).find((p) => String(p.id) === productId)
+                const productChanged = productId !== line.product_id
+                updateRetLine(index, {
+                  product_id: productId,
+                  unit_price: productChanged && selected ? String(selected.sale_price) : line.unit_price,
+                  serial_no: selected?.track_serial ? line.serial_no : '',
+                  batch_no: selected?.track_batch ? line.batch_no : '',
+                })
+              }}
+            />
+            <div className="form-grid-4">
+              {line.product_id && (
+                <Field label={t('common.unit')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                </Field>
+              )}
+              <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+                <NumericInput value={line.quantity} onChange={(v) => updateRetLine(index, { quantity: v })} />
+              </Field>
+              <Field label={t('common.price')}>
+                <NumericInput value={line.unit_price} onChange={(v) => updateRetLine(index, { unit_price: v })} />
+              </Field>
+              <Field label={t('common.total')}>
+                <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
+              </Field>
+            </div>
+            {product?.track_serial && (
+              <Field label={t('common.serial')}>
+                <input className={inputClass} value={line.serial_no} onChange={(e) => updateRetLine(index, { serial_no: e.target.value })} required />
+              </Field>
+            )}
+          </div>
+        )
+      })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addRetLine}>{t('common.addLine')}</Button>
+      </div>
+      <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p className="font-bold">
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(retLineSub, ret.currency)}</span>
+        </p>
+      </div>
+    </FormSection>
+  )
+
   const customerFields = <T extends { customer_id: string; warehouse_id?: string; product_id?: string }>(
     state: T,
     setState: Dispatch<SetStateAction<T>>,
@@ -1536,7 +1713,7 @@ export default function SalesPage() {
               : modal === 'collect' ? t('sales.collectRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
+        size={(tab === 'invoices' || tab === 'returns') && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
         footer={
           modal === 'collect' ? (
             <>
@@ -1825,14 +2002,24 @@ export default function SalesPage() {
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>
                   {customerFields(ret, setRet)}
                   <Field label={t('common.invoice')}>
-                    <select className={inputClass} value={ret.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, sales_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}>
+                    <select
+                      className={inputClass}
+                      value={ret.sales_invoice_id}
+                      onChange={(e) => {
+                        const id = e.target.value
+                        setRet((prev) => ({ ...prev, sales_invoice_id: id }))
+                        applyInvoiceCurrency(id, setRet)
+                        if (id) void loadSalesReturnLinesFromInvoice(id)
+                        else setRet((prev) => ({ ...prev, lines: [emptyInvoiceLine()] }))
+                      }}
+                    >
                       <option value="">—</option>
                       {(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}
                     </select>
                   </Field>
                 </div>
                 <DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />
-                {productFields(ret, setRet)}
+                {returnLinesEditor}
               </FormStack>
             )}
             {tab === 'receipts' && (

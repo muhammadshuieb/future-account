@@ -40,6 +40,10 @@ function emptyInvoiceLine(): InvoiceLineDraft {
   return { product_id: '', quantity: '10', unit_cost: '', batch_no: '', serial_no: '' }
 }
 
+function emptyReturnLine(): InvoiceLineDraft {
+  return { product_id: '', quantity: '1', unit_cost: '', batch_no: '', serial_no: '' }
+}
+
 function isBlankInvoiceLine(line: InvoiceLineDraft): boolean {
   const defaultQty = emptyInvoiceLine().quantity
   return !line.product_id
@@ -165,15 +169,12 @@ export default function PurchasesPage() {
     supplier_id: '',
     warehouse_id: '',
     purchase_invoice_id: '',
-    product_id: '',
-    quantity: '1',
-    unit_cost: '',
-    batch_no: '',
-    serial_no: '',
     currency: 'USD',
     exchange_rate: '1',
     status: 'posted',
+    lines: [emptyReturnLine()] as InvoiceLineDraft[],
   })
+  const retLinesScroll = useScrollToLastLine(ret.lines.length)
   const [pay, setPay] = useState({
     payment_date: todayYmd(),
     supplier_id: '',
@@ -270,6 +271,9 @@ export default function PurchasesPage() {
   const invoiceDiscount = Math.max(0, Number(inv.discount_amount) || 0)
   const invoiceTaxAmt = round2(invoiceLineSub * effectiveTaxRate / 100)
   const invoiceEstTotal = round2(invoiceLineSub - invoiceDiscount + invoiceTaxAmt + invoiceExtrasSum)
+  const retLineSub = round2(
+    ret.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0), 0),
+  )
 
   const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
     setInv((prev) => ({
@@ -335,6 +339,25 @@ export default function PurchasesPage() {
     }))
   }
 
+  const updateRetLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+    setRet((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  const addRetLine = () => {
+    retLinesScroll.markPending()
+    setRet((prev) => ({ ...prev, lines: [...prev.lines, emptyReturnLine()] }))
+  }
+
+  const removeRetLine = (index: number) => {
+    setRet((prev) => ({
+      ...prev,
+      lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
+    }))
+  }
+
   const purchaseDeletePath = (rowTab: string, id: number) => {
     if (rowTab === 'requests') return `/purchase-requests/${id}`
     if (rowTab === 'orders') return `/purchase-orders/${id}`
@@ -390,6 +413,16 @@ export default function PurchasesPage() {
       setReq((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
       setPo((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
     }
+    setRet({
+      return_date: todayYmd(),
+      supplier_id: '',
+      warehouse_id: defaultWarehouseId || '',
+      purchase_invoice_id: '',
+      currency: baseCurrency || 'USD',
+      exchange_rate: '1',
+      status: 'posted',
+      lines: [emptyReturnLine()],
+    })
     setModal('create')
   }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
@@ -473,19 +506,83 @@ export default function PurchasesPage() {
   })
 
   const saveRet = useMutation({
-    mutationFn: () => api.post('/purchase-returns', {
-      return_date: ret.return_date,
-      supplier_id: Number(ret.supplier_id),
-      warehouse_id: Number(ret.warehouse_id) || undefined,
-      purchase_invoice_id: ret.purchase_invoice_id ? Number(ret.purchase_invoice_id) : null,
-      currency: ret.currency,
-      exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
-      status: ret.status,
-      lines: [{ product_id: Number(ret.product_id), quantity: Number(ret.quantity), unit_cost: Number(ret.unit_cost), batch_no: ret.batch_no || undefined, serial_no: ret.serial_no || undefined }],
-    }),
+    mutationFn: () => {
+      const filledLines = ret.lines.filter((l) => l.product_id)
+      if (filledLines.length === 0) {
+        throw { response: { data: { message: t('common.linesRequired') } } }
+      }
+      return api.post('/purchase-returns', {
+        return_date: ret.return_date,
+        supplier_id: Number(ret.supplier_id),
+        warehouse_id: Number(ret.warehouse_id) || undefined,
+        purchase_invoice_id: ret.purchase_invoice_id ? Number(ret.purchase_invoice_id) : null,
+        currency: ret.currency,
+        exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
+        status: ret.status,
+        lines: filledLines.map((l) => ({
+          product_id: Number(l.product_id),
+          quantity: Number(l.quantity),
+          unit_cost: Number(l.unit_cost),
+          batch_no: l.batch_no || undefined,
+          serial_no: l.serial_no || undefined,
+        })),
+      })
+    },
     onSuccess: () => { msg.setMessage(t('purchases.returnPosted')); invalidate(); closeModal() },
     onError: msg.fromErr,
   })
+
+  async function loadPurchaseReturnLinesFromInvoice(invoiceId: string) {
+    if (!invoiceId) return
+    try {
+      const res = await api.get(`/purchase-invoices/${invoiceId}`)
+      const d = res.data.data as {
+        supplier_id?: number
+        supplier?: { id?: number }
+        warehouse_id?: number
+        warehouse?: { id?: number }
+        currency?: string
+        exchange_rate?: number | string
+        lines?: {
+          product_id?: number
+          product?: { id?: number }
+          quantity?: number
+          unit_cost?: number
+          batch_no?: string
+          serial_no?: string
+        }[]
+        items?: {
+          product_id?: number
+          product?: { id?: number }
+          quantity?: number
+          unit_cost?: number
+          batch_no?: string
+          serial_no?: string
+        }[]
+      }
+      const items = d.lines || d.items || []
+      setRet((prev) => ({
+        ...prev,
+        supplier_id: String(d.supplier_id || d.supplier?.id || prev.supplier_id),
+        warehouse_id: String(d.warehouse_id || d.warehouse?.id || prev.warehouse_id),
+        currency: d.currency || prev.currency,
+        exchange_rate: d.exchange_rate != null && d.exchange_rate !== ''
+          ? String(d.exchange_rate)
+          : prev.exchange_rate,
+        lines: items.length
+          ? items.map((line) => ({
+              product_id: String(line.product_id || line.product?.id || ''),
+              quantity: String(line.quantity || 1),
+              unit_cost: String(line.unit_cost || ''),
+              batch_no: line.batch_no || '',
+              serial_no: line.serial_no || '',
+            }))
+          : [emptyReturnLine()],
+      }))
+    } catch {
+      // Keep manual lines if invoice detail cannot be loaded.
+    }
+  }
 
   const convertReq = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-requests/${id}/convert-to-order`),
@@ -750,6 +847,79 @@ export default function PurchasesPage() {
         )}
         <p className="font-bold">
           {t('common.total')}: <span className="tabular-nums">{formatMoney(invoiceEstTotal, inv.currency)}</span>
+        </p>
+      </div>
+    </FormSection>
+  )
+
+  const returnLinesEditor = (
+    <FormSection title={t('common.lines')}>
+      {ret.lines.map((line, index) => {
+        const product = productCatalog.find((p) => String(p.id) === line.product_id)
+        const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))
+        return (
+          <div
+            key={index}
+            className="form-line-card"
+            ref={index === ret.lines.length - 1 ? retLinesScroll.setLastLineRef : undefined}
+          >
+            <div className="form-line-card-header">
+              <span>{t('common.lineN', { n: index + 1 })}</span>
+              {ret.lines.length > 1 && (
+                <button type="button" className="text-xs text-rose-600" onClick={() => removeRetLine(index)}>
+                  {t('common.removeLine')}
+                </button>
+              )}
+            </div>
+            <ProductVariantSelect
+              products={productCatalog}
+              value={line.product_id}
+              onChange={(productId) => {
+                const selected = productCatalog.find((p) => String(p.id) === productId)
+                const productChanged = productId !== line.product_id
+                updateRetLine(index, {
+                  product_id: productId,
+                  unit_cost: productChanged && selected ? String(selected.cost_price) : line.unit_cost,
+                  serial_no: selected?.track_serial ? line.serial_no : '',
+                  batch_no: selected?.track_batch ? line.batch_no : '',
+                })
+              }}
+            />
+            <div className="form-grid-4">
+              {line.product_id && (
+                <Field label={t('common.unit')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                </Field>
+              )}
+              <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+                <NumericInput value={line.quantity} onChange={(v) => updateRetLine(index, { quantity: v })} />
+              </Field>
+              <Field label={t('common.cost')}>
+                <NumericInput value={line.unit_cost} onChange={(v) => updateRetLine(index, { unit_cost: v })} />
+              </Field>
+              <Field label={t('common.total')}>
+                <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
+              </Field>
+            </div>
+            {product?.track_batch && (
+              <Field label={t('common.batch')}>
+                <input className={inputClass} value={line.batch_no} onChange={(e) => updateRetLine(index, { batch_no: e.target.value })} required />
+              </Field>
+            )}
+            {product?.track_serial && (
+              <Field label={t('common.serial')}>
+                <input className={inputClass} value={line.serial_no} onChange={(e) => updateRetLine(index, { serial_no: e.target.value })} required />
+              </Field>
+            )}
+          </div>
+        )
+      })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addRetLine}>{t('common.addLine')}</Button>
+      </div>
+      <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p className="font-bold">
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(retLineSub, ret.currency)}</span>
         </p>
       </div>
     </FormSection>
@@ -1155,7 +1325,7 @@ export default function PurchasesPage() {
               : modal === 'pay' ? t('purchases.payRemaining')
                 : t('common.view')
         }
-        size={tab === 'invoices' && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
+        size={(tab === 'invoices' || tab === 'returns') && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
         footer={
           modal === 'pay' ? (
             <>
@@ -1359,14 +1529,24 @@ export default function PurchasesPage() {
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={ret.return_date} onChange={(e) => setRet({ ...ret, return_date: e.target.value })} /></Field>
                   {supplierFields(ret, setRet)}
                   <Field label={t('common.invoice')}>
-                    <select className={inputClass} value={ret.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setRet({ ...ret, purchase_invoice_id: id }); applyInvoiceCurrency(id, setRet) }}>
+                    <select
+                      className={inputClass}
+                      value={ret.purchase_invoice_id}
+                      onChange={(e) => {
+                        const id = e.target.value
+                        setRet((prev) => ({ ...prev, purchase_invoice_id: id }))
+                        applyInvoiceCurrency(id, setRet)
+                        if (id) void loadPurchaseReturnLinesFromInvoice(id)
+                        else setRet((prev) => ({ ...prev, lines: [emptyReturnLine()] }))
+                      }}
+                    >
                       <option value="">—</option>
                       {(invoices.data || []).map((i: { id: number; invoice_number: string }) => <option key={i.id} value={i.id}>{i.invoice_number}</option>)}
                     </select>
                   </Field>
                 </div>
                 <DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />
-                {productFields(ret, setRet)}
+                {returnLinesEditor}
               </FormStack>
             )}
             {tab === 'payments' && (
