@@ -296,16 +296,19 @@ export function SalesInvoicePrintView({
   eInvoice?: EInvoiceData
 }) {
   const { t } = useTranslation()
+  const { brand } = useDocumentBrand()
   const rootClass = usePrintDocClass()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const payload = eInvoice?.qr_payload
   const structured = eInvoice?.e_invoice as StructuredEInvoice | undefined
+  const showEInvoiceQr = brand.id !== 'albairaq'
 
   useEffect(() => {
+    if (!showEInvoiceQr) return
     if (canvasRef.current && payload) {
       void QRCode.toCanvas(canvasRef.current, payload, { width: 72, margin: 1 })
     }
-  }, [payload])
+  }, [payload, showEInvoiceQr])
 
   const currency = invoice.currency || 'USD'
 
@@ -320,7 +323,7 @@ export function SalesInvoicePrintView({
         taxNumber={structured?.seller?.tax_number}
       />
 
-      {(payload || invoice.e_invoice_uuid || eInvoice?.e_invoice_uuid || structured?.uuid) && (
+      {showEInvoiceQr && (payload || invoice.e_invoice_uuid || eInvoice?.e_invoice_uuid || structured?.uuid) && (
         <div className="statement-print__einvoice">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
