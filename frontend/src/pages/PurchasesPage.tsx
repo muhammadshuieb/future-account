@@ -423,6 +423,18 @@ export default function PurchasesPage() {
       status: 'posted',
       lines: [emptyReturnLine()],
     })
+    setPay({
+      payment_date: todayYmd(),
+      supplier_id: '',
+      purchase_invoice_id: '',
+      cash_box_id: '',
+      amount: '',
+      base_amount: '',
+      currency: baseCurrency || 'USD',
+      exchange_rate: '1',
+      method: 'cash',
+      status: 'posted',
+    })
     setModal('create')
   }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
@@ -1433,12 +1445,13 @@ export default function PurchasesPage() {
                   }))}
                 />
               </Field>
-              <Field label={t('common.date')}>
+              <Field label={t('common.paymentDate')} hint={t('common.manualDateHint')}>
                 <input
                   type="date"
                   className={inputClass}
                   value={payForm.payment_date}
                   onChange={(e) => setPayForm({ ...payForm, payment_date: e.target.value })}
+                  required
                 />
               </Field>
               <Field label={t('common.amount')}>
@@ -1553,6 +1566,15 @@ export default function PurchasesPage() {
               <FormStack>
                 <p className="text-xs leading-relaxed text-black/55">{t('common.supplierPaymentHint')}</p>
                 <div className="form-grid-3">
+                  <Field label={t('common.paymentDate')} hint={t('common.manualDateHint')}>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={pay.payment_date}
+                      onChange={(e) => setPay({ ...pay, payment_date: e.target.value })}
+                      required
+                    />
+                  </Field>
                   {supplierFields(pay, setPay, false)}
                   <Field label={t('common.invoice')}>
                     <select className={inputClass} value={pay.purchase_invoice_id} onChange={(e) => { const id = e.target.value; setPay({ ...pay, purchase_invoice_id: id }); applyInvoiceCurrency(id, setPay) }}>

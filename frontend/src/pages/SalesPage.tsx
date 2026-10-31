@@ -548,6 +548,18 @@ export default function SalesPage() {
       status: 'posted',
       lines: [emptyInvoiceLine()],
     })
+    setRc({
+      receipt_date: todayYmd(),
+      customer_id: '',
+      sales_invoice_id: '',
+      cash_box_id: '',
+      amount: '',
+      base_amount: '',
+      currency: baseCurrency || 'USD',
+      exchange_rate: '1',
+      method: 'cash',
+      status: 'posted',
+    })
     setModal('create')
   }
   const openRow = (row: Record<string, unknown> & { id: number }, editable = false) => {
@@ -1823,12 +1835,13 @@ export default function SalesPage() {
                   }))}
                 />
               </Field>
-              <Field label={t('common.date')}>
+              <Field label={t('common.receiptDate')} hint={t('common.manualDateHint')}>
                 <input
                   type="date"
                   className={inputClass}
                   value={collectForm.receipt_date}
                   onChange={(e) => setCollectForm({ ...collectForm, receipt_date: e.target.value })}
+                  required
                 />
               </Field>
             </div>
@@ -2026,6 +2039,15 @@ export default function SalesPage() {
               <FormStack>
                 <p className="text-xs leading-relaxed text-black/55">{t('common.receiptHint')}</p>
                 <div className="form-grid-3">
+                  <Field label={t('common.receiptDate')} hint={t('common.manualDateHint')}>
+                    <input
+                      type="date"
+                      className={inputClass}
+                      value={rc.receipt_date}
+                      onChange={(e) => setRc({ ...rc, receipt_date: e.target.value })}
+                      required
+                    />
+                  </Field>
                   {customerFields(rc, setRc, false)}
                   <Field label={t('common.invoice')}>
                     <select className={inputClass} value={rc.sales_invoice_id} onChange={(e) => { const id = e.target.value; setRc({ ...rc, sales_invoice_id: id }); applyInvoiceCurrency(id, setRc) }}>
