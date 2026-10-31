@@ -10,10 +10,13 @@ use App\Models\JournalDetail;
 use App\Models\Product;
 use App\Models\PurchaseInvoice;
 use App\Models\SalesInvoice;
+use App\Models\SalesInvoiceLine;
+use App\Models\SalesReturnLine;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
 
 class ReportService
 {
@@ -202,6 +205,113 @@ class ReportService
             'total_document' => $totalDoc,
             'total_base' => $totalBase,
             'rows' => $invoices,
+        ];
+    }
+
+    /**
+     * Inventory of sold products: net quantity and amount by product
+     * (posted sales invoices minus posted sales returns) for a period.
+     */
+    public function soldProductsReport(
+        ?string $from = null,
+        ?string $to = null,
+        ?int $branchId = null,
+        ?int $warehouseId = null,
+    ): array {
+        $from = $from ?: now()->startOfMonth()->toDateString();
+        $to = $to ?: now()->toDateString();
+        $base = strtoupper($this->currencies->baseCurrency());
+
+        $sales = SalesInvoiceLine::query()
+            ->select([
+                'sales_invoice_lines.product_id',
+                DB::raw('SUM(sales_invoice_lines.quantity) as quantity'),
+                DB::raw("SUM(sales_invoice_lines.line_total * CASE WHEN UPPER(COALESCE(sales_invoices.currency, '{$base}')) = '{$base}' THEN 1 ELSE COALESCE(NULLIF(sales_invoices.exchange_rate, 0), 1) END) as amount_base"),
+            ])
+            ->join('sales_invoices', 'sales_invoices.id', '=', 'sales_invoice_lines.sales_invoice_id')
+            ->where('sales_invoices.status', 'posted')
+            ->whereDate('sales_invoices.invoice_date', '>=', $from)
+            ->whereDate('sales_invoices.invoice_date', '<=', $to)
+            ->whereNotNull('sales_invoice_lines.product_id')
+            ->when($branchId, fn ($q) => $q->where('sales_invoices.branch_id', $branchId))
+            ->when($warehouseId, fn ($q) => $q->where('sales_invoices.warehouse_id', $warehouseId))
+            ->groupBy('sales_invoice_lines.product_id')
+            ->get()
+            ->keyBy('product_id');
+
+        $returns = SalesReturnLine::query()
+            ->select([
+                'sales_return_lines.product_id',
+                DB::raw('SUM(sales_return_lines.quantity) as quantity'),
+                DB::raw("SUM(sales_return_lines.line_total * CASE WHEN UPPER(COALESCE(sales_returns.currency, '{$base}')) = '{$base}' THEN 1 ELSE COALESCE(NULLIF(sales_returns.exchange_rate, 0), 1) END) as amount_base"),
+            ])
+            ->join('sales_returns', 'sales_returns.id', '=', 'sales_return_lines.sales_return_id')
+            ->where('sales_returns.status', 'posted')
+            ->whereDate('sales_returns.return_date', '>=', $from)
+            ->whereDate('sales_returns.return_date', '<=', $to)
+            ->whereNotNull('sales_return_lines.product_id')
+            ->when($branchId, function ($q) use ($branchId) {
+                $q->where(function ($inner) use ($branchId) {
+                    $inner->whereIn(
+                        'sales_returns.warehouse_id',
+                        Warehouse::query()->where('branch_id', $branchId)->select('id'),
+                    )->orWhereIn(
+                        'sales_returns.sales_invoice_id',
+                        SalesInvoice::query()->where('branch_id', $branchId)->select('id'),
+                    );
+                });
+            })
+            ->when($warehouseId, fn ($q) => $q->where('sales_returns.warehouse_id', $warehouseId))
+            ->groupBy('sales_return_lines.product_id')
+            ->get()
+            ->keyBy('product_id');
+
+        $productIds = $sales->keys()->merge($returns->keys())->unique()->filter()->values();
+        $products = $productIds->isEmpty()
+            ? collect()
+            : Product::query()
+                ->whereIn('id', $productIds)
+                ->get(['id', 'sku', 'name', 'brand', 'model'])
+                ->keyBy('id');
+
+        $rows = $productIds->map(function ($productId) use ($sales, $returns, $products) {
+            $soldQty = (float) ($sales->get($productId)?->quantity ?? 0);
+            $soldAmt = (float) ($sales->get($productId)?->amount_base ?? 0);
+            $retQty = (float) ($returns->get($productId)?->quantity ?? 0);
+            $retAmt = (float) ($returns->get($productId)?->amount_base ?? 0);
+            $qty = round($soldQty - $retQty, 3);
+            $amount = round($soldAmt - $retAmt, 2);
+            $product = $products->get($productId);
+
+            return [
+                'product_id' => (int) $productId,
+                'sku' => $product?->sku,
+                'name' => $product?->name,
+                'brand' => $product?->brand,
+                'model' => $product?->model,
+                'quantity' => $qty,
+                'quantity_sold' => round($soldQty, 3),
+                'quantity_returned' => round($retQty, 3),
+                'amount' => $amount,
+                'amount_sold' => round($soldAmt, 2),
+                'amount_returned' => round($retAmt, 2),
+            ];
+        })
+            ->filter(fn ($row) => abs($row['quantity']) > 0.0001 || abs($row['amount']) > 0.0001)
+            ->sortByDesc('amount')
+            ->values()
+            ->all();
+
+        return [
+            'from' => $from,
+            'to' => $to,
+            'branch_id' => $branchId,
+            'warehouse_id' => $warehouseId,
+            'currency' => $base,
+            'product_count' => count($rows),
+            'total_quantity' => round(collect($rows)->sum('quantity'), 3),
+            'total' => round(collect($rows)->sum('amount'), 2),
+            'rows' => $rows,
         ];
     }
 

@@ -25,6 +25,7 @@ type ReportKey =
   | 'balance-sheet'
   | 'cash-flow'
   | 'sales'
+  | 'sold-products'
   | 'purchases'
   | 'inventory'
   | 'profit'
@@ -41,6 +42,7 @@ const reportTitleFallback: Record<ReportKey, string> = {
   'balance-sheet': 'الميزانية العمومية',
   'cash-flow': 'قائمة التدفقات النقدية',
   sales: 'تقرير المبيعات',
+  'sold-products': 'جرد المواد المباعة',
   purchases: 'تقرير المشتريات',
   inventory: 'تقرير المخزون',
   profit: 'تقرير مجمل الربح',
@@ -81,7 +83,7 @@ export default function ReportsPage() {
   const warehouses = useQuery({
     queryKey: ['warehouses'],
     queryFn: async () => (await api.get('/warehouses')).data.data,
-    enabled: tab === 'inventory' || tab === 'product-movement',
+    enabled: tab === 'inventory' || tab === 'product-movement' || tab === 'sold-products',
   })
   const accounts = useQuery({
     queryKey: ['accounts', canCapital],
@@ -136,7 +138,7 @@ export default function ReportsPage() {
       if (branchId && tab !== 'customer-statement' && tab !== 'supplier-statement') {
         params.branch_id = branchId
       }
-      if (warehouseId && (tab === 'inventory' || tab === 'product-movement')) {
+      if (warehouseId && (tab === 'inventory' || tab === 'product-movement' || tab === 'sold-products')) {
         params.warehouse_id = warehouseId
       }
       return (await api.get(reportUrl!, { params })).data.data
@@ -322,7 +324,7 @@ export default function ReportsPage() {
             </select>
           </Field>
         )}
-        {(tab === 'inventory' || tab === 'product-movement') && (
+        {(tab === 'inventory' || tab === 'product-movement' || tab === 'sold-products') && (
           <Field label={t('common.warehouse')}>
             <select className={inputClass} value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
               <option value="">{t('common.allWarehouses')}</option>
@@ -598,6 +600,55 @@ export default function ReportsPage() {
                       </tr>
                     ))}
                   </tbody>
+                </table>
+              </div>
+            )}
+
+            {tab === 'sold-products' && (
+              <div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-3">
+                  <p>عدد الأصناف: <strong>{report.data.product_count || 0}</strong></p>
+                  <p>إجمالي الكمية: <strong className="tabular-nums">{formatQuantity(report.data.total_quantity || 0)}</strong></p>
+                  <p>المبلغ الإجمالي: <strong>{formatMoney(report.data.total || 0, report.data.currency || base)}</strong></p>
+                </div>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>SKU</th>
+                      <th>الصنف</th>
+                      <th>{t('warehouse.brand')}</th>
+                      <th>{t('warehouse.model')}</th>
+                      <th title={t('common.quantityUnit')}>الكمية</th>
+                      <th>المبلغ الإجمالي</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(report.data.rows || []).map((r: {
+                      product_id: number
+                      sku?: string
+                      name?: string
+                      brand?: string
+                      model?: string
+                      quantity: number
+                      amount: number
+                    }) => (
+                      <tr key={r.product_id}>
+                        <td className="font-mono">{r.sku || '—'}</td>
+                        <td>{r.name || '—'}</td>
+                        <td>{r.brand || '—'}</td>
+                        <td>{r.model || '—'}</td>
+                        <td className="tabular-nums">{formatQuantity(r.quantity)}</td>
+                        <td className="tabular-nums">{formatMoney(r.amount, report.data.currency || base)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td colSpan={4}>الإجمالي</td>
+                      <td className="tabular-nums">{formatQuantity(report.data.total_quantity || 0)}</td>
+                      <td className="tabular-nums">{formatMoney(report.data.total || 0, report.data.currency || base)}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

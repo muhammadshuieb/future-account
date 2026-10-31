@@ -389,6 +389,7 @@ class ExcelExportService
             'balance-sheet' => $this->sheetBalanceSheet($book, $asOf, $branchId),
             'cash-flow' => $this->sheetGenericReport($book, 'التدفقات النقدية', $this->reports->cashFlow($from, $to, $branchId ? (int) $branchId : null)),
             'sales' => $this->sheetSalesReport($book, $from, $to, $branchId),
+            'sold-products' => $this->sheetSoldProductsReport($book, $request),
             'purchases' => $this->sheetPurchasesReport($book, $from, $to, $branchId),
             'inventory' => $this->sheetInventoryReport($book, $request),
             'profit' => $this->sheetGenericReport($book, 'مجمل الربح', $this->reports->profitReport($from, $to, $branchId ? (int) $branchId : null)),
@@ -801,6 +802,39 @@ class ExcelExportService
             ['إلى', $data['to'] ?? ''],
             ['العدد', $data['count'] ?? 0],
             ['الإجمالي الأساسي', $data['total_base'] ?? 0],
+        ]);
+    }
+
+    protected function sheetSoldProductsReport(ExcelWorkbook $book, Request $request): void
+    {
+        $branchId = $request->filled('branch_id') ? (int) $request->query('branch_id') : null;
+        $warehouseId = $request->filled('warehouse_id') ? (int) $request->query('warehouse_id') : null;
+        $data = $this->reports->soldProductsReport(
+            $request->query('from'),
+            $request->query('to'),
+            $branchId,
+            $warehouseId,
+        );
+        $rows = collect($data['rows'] ?? [])->map(fn ($r) => [
+            $r['sku'] ?? '',
+            $r['name'] ?? '',
+            $r['brand'] ?? '',
+            $r['model'] ?? '',
+            $r['quantity'] ?? 0,
+            $r['quantity_sold'] ?? 0,
+            $r['quantity_returned'] ?? 0,
+            $r['amount'] ?? 0,
+        ])->all();
+        $book->addSheet('جرد المواد المباعة', [
+            'SKU', 'الصنف', 'الماركة', 'الموديل', 'الكمية الصافية', 'الكمية المباعة', 'الكمية المرتجعة', 'المبلغ الإجمالي',
+        ], $rows);
+        $book->addSheet('ملخص جرد المبيعات', ['الحقل', 'القيمة'], [
+            ['من', $data['from'] ?? ''],
+            ['إلى', $data['to'] ?? ''],
+            ['عدد الأصناف', $data['product_count'] ?? 0],
+            ['إجمالي الكمية', $data['total_quantity'] ?? 0],
+            ['إجمالي المبلغ', $data['total'] ?? 0],
+            ['العملة', $data['currency'] ?? ''],
         ]);
     }
 

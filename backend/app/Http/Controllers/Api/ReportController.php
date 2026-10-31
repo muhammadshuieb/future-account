@@ -66,6 +66,18 @@ class ReportController extends ApiController
         ));
     }
 
+    public function soldProducts(Request $request): JsonResponse
+    {
+        $this->authorizePermission('reports.view');
+
+        return $this->ok($this->reports->soldProductsReport(
+            $request->query('from'),
+            $request->query('to'),
+            $this->branchId($request),
+            $this->warehouseId($request),
+        ));
+    }
+
     public function purchases(Request $request): JsonResponse
     {
         $this->authorizePermission('reports.view');
