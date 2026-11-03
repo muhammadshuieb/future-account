@@ -4,14 +4,18 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\PriceList;
 use App\Models\PriceListItem;
+use App\Services\PriceListImportService;
 use App\Support\HikvisionProductUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PriceListController extends ApiController
 {
+    public function __construct(protected PriceListImportService $imports) {}
+
     public function index(Request $request): JsonResponse
     {
         $this->authorizeAnyPermission(['price_lists.view', 'price_lists.manage']);
@@ -191,6 +195,88 @@ class PriceListController extends ApiController
         $priceList->forceFill(['updated_by' => auth()->id()])->save();
 
         return response()->json(['message' => 'تم حذف البند.']);
+    }
+
+    public function bulkDestroyItems(Request $request, PriceList $priceList): JsonResponse
+    {
+        $this->authorizePermission('price_lists.manage');
+        $this->authorizePriceListAccess($priceList);
+
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', Rule::exists('price_list_items', 'id')->where('price_list_id', $priceList->id)],
+        ]);
+
+        $deleted = PriceListItem::query()
+            ->where('price_list_id', $priceList->id)
+            ->whereIn('id', $data['ids'])
+            ->delete();
+
+        $priceList->forceFill(['updated_by' => $request->user()?->id])->save();
+
+        return response()->json([
+            'data' => ['deleted' => $deleted],
+            'message' => "تم حذف {$deleted} بنداً.",
+        ]);
+    }
+
+    public function itemsTemplate(PriceList $priceList): StreamedResponse
+    {
+        $this->authorizePermission('price_lists.manage');
+        $this->authorizePriceListAccess($priceList);
+
+        return $this->imports->downloadTemplate($priceList);
+    }
+
+    public function importItems(Request $request, PriceList $priceList): JsonResponse
+    {
+        $this->authorizePermission('price_lists.manage');
+        $this->authorizePriceListAccess($priceList);
+
+        $data = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+            'replace' => ['nullable'],
+        ]);
+
+        /** @var \Illuminate\Http\UploadedFile $file */
+        $file = $data['file'];
+        $replace = $request->boolean('replace');
+        $result = $this->imports->import($file, $priceList, $replace);
+
+        $priceList->forceFill(['updated_by' => $request->user()?->id])->save();
+
+        $status = $result['imported'] > 0 ? 200 : ($result['failed'] > 0 ? 422 : 200);
+
+        return response()->json([
+            'data' => $result,
+            'message' => $this->importSummaryMessage($result),
+        ], $status);
+    }
+
+    /**
+     * @param  array{imported:int,updated:int,created:int,failed:int,total_rows:int,replaced:bool,errors:list<array{row:int,message:string}>}  $result
+     */
+    protected function importSummaryMessage(array $result): string
+    {
+        if ($result['imported'] === 0 && $result['failed'] === 0) {
+            return 'الملف لا يحتوي على صفوف بيانات للاستيراد.';
+        }
+
+        $parts = [];
+        if ($result['replaced']) {
+            $parts[] = 'تم استبدال بنود القائمة';
+        }
+        if ($result['created'] > 0) {
+            $parts[] = "أُضيف {$result['created']}";
+        }
+        if ($result['updated'] > 0) {
+            $parts[] = "حُدّث {$result['updated']}";
+        }
+        if ($result['failed'] > 0) {
+            $parts[] = "فشل {$result['failed']}";
+        }
+
+        return ($parts ? implode(' — ', $parts) : "تم استيراد {$result['imported']} بنداً").'.';
     }
 
     public function reorderItems(Request $request, PriceList $priceList): JsonResponse

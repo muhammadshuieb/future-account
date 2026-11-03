@@ -160,6 +160,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('price-lists/{priceList}', [PriceListController::class, 'show']);
     Route::put('price-lists/{priceList}', [PriceListController::class, 'update']);
     Route::delete('price-lists/{priceList}', [PriceListController::class, 'destroy']);
+    Route::get('price-lists/{priceList}/items/template', [PriceListController::class, 'itemsTemplate']);
+    Route::post('price-lists/{priceList}/items/import', [PriceListController::class, 'importItems']);
+    Route::post('price-lists/{priceList}/items/bulk-delete', [PriceListController::class, 'bulkDestroyItems']);
     Route::post('price-lists/{priceList}/items/reorder', [PriceListController::class, 'reorderItems']);
     Route::post('price-lists/{priceList}/items', [PriceListController::class, 'storeItem']);
     Route::put('price-lists/{priceList}/items/{item}', [PriceListController::class, 'updateItem']);

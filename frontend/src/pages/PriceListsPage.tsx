@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ExternalLink, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, FileDown, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import api from '@/lib/api'
+import { downloadExcelExport } from '@/lib/excelExport'
 import { useAuth } from '@/context/AuthContext'
 import { useListSearch } from '@/lib/useListSearch'
 import {
@@ -103,6 +104,11 @@ export default function PriceListsPage() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<ItemForm>(emptyForm())
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [replaceOnImport, setReplaceOnImport] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const lists = useQuery({
     queryKey: ['price-lists'],
@@ -148,6 +154,7 @@ export default function PriceListsPage() {
 
   useEffect(() => {
     setCategory(null)
+    setSelectedIds([])
   }, [listId])
 
   useEffect(() => {
@@ -155,6 +162,10 @@ export default function PriceListsPage() {
     const first = detail.data.categories?.[0] ?? ''
     setCategory(first)
   }, [bootstrapping, detail.isSuccess, detail.data?.categories])
+
+  useEffect(() => {
+    setSelectedIds([])
+  }, [category, search.debouncedQ, detail.dataUpdatedAt])
 
   const manage = canManage && (detail.data?.can_manage ?? canManage)
   const items = detail.data?.items ?? []
@@ -167,7 +178,9 @@ export default function PriceListsPage() {
 
   const priceColCount =
     (visible.super_wholesale ? 1 : 0) + (visible.retail ? 1 : 0) + (visible.wholesale ? 1 : 0)
-  const colSpan = 6 + priceColCount + (manage ? 1 : 0)
+  const colSpan = 6 + priceColCount + (manage ? 2 : 0)
+  const allVisibleSelected = items.length > 0 && items.every((item) => selectedIds.includes(item.id))
+  const someSelected = selectedIds.length > 0
 
   const categories = useMemo(() => {
     const fromApi = detail.data?.categories ?? []
@@ -223,6 +236,92 @@ export default function PriceListsPage() {
     onError: msg.fromErr,
   })
 
+  const bulkDelete = useMutation({
+    mutationFn: async (ids: number[]) => {
+      if (!listId) throw new Error('no list')
+      return api.post(`/price-lists/${listId}/items/bulk-delete`, { ids })
+    },
+    onSuccess: (res) => {
+      const deleted = Number(res.data?.data?.deleted ?? selectedIds.length)
+      msg.setMessage(t('priceLists.bulkDeleted', { count: deleted }))
+      setSelectedIds([])
+      void qc.invalidateQueries({ queryKey: ['price-lists'] })
+    },
+    onError: msg.fromErr,
+  })
+
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds(items.map((item) => item.id))
+  }
+
+  async function downloadTemplate() {
+    if (!listId || downloadingTemplate) return
+    setDownloadingTemplate(true)
+    try {
+      await downloadExcelExport(
+        `/price-lists/${listId}/items/template`,
+        undefined,
+        `قالب-قائمة-أسعار.xlsx`,
+      )
+    } catch (err) {
+      msg.fromErr(err)
+    } finally {
+      setDownloadingTemplate(false)
+    }
+  }
+
+  async function onImportFile(file: File | undefined) {
+    if (!file || !listId || importing) return
+    if (replaceOnImport && !window.confirm(t('priceLists.confirmReplaceImport'))) {
+      if (importInputRef.current) importInputRef.current.value = ''
+      return
+    }
+    setImporting(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('replace', replaceOnImport ? '1' : '0')
+      const res = await api.post(`/price-lists/${listId}/items/import`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      msg.setMessage(res.data?.message || t('priceLists.imported'))
+      setSelectedIds([])
+      void qc.invalidateQueries({ queryKey: ['price-lists'] })
+    } catch (err: unknown) {
+      const ax = err as {
+        response?: {
+          data?: {
+            message?: string
+            data?: { imported?: number; errors?: { row: number; message: string }[] }
+          }
+        }
+      }
+      const partial = ax.response?.data?.data
+      if (partial && typeof partial.imported === 'number' && partial.imported > 0) {
+        msg.setMessage(ax.response?.data?.message || t('priceLists.imported'))
+        void qc.invalidateQueries({ queryKey: ['price-lists'] })
+      } else {
+        const firstError = partial?.errors?.[0]
+        if (firstError) {
+          msg.setError(`صف ${firstError.row}: ${firstError.message}`)
+        } else {
+          msg.fromErr(err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })
+        }
+      }
+    } finally {
+      setImporting(false)
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
+
   function openCreate() {
     setEditingId(null)
     setForm({ ...emptyForm(), category: category || '' })
@@ -272,10 +371,37 @@ export default function PriceListsPage() {
         subtitle={subtitle}
         actions={
           manage ? (
-            <Button type="button" onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              {t('priceLists.addItem')}
-            </Button>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!listId || downloadingTemplate}
+                onClick={() => void downloadTemplate()}
+              >
+                <FileDown className="h-4 w-4" />
+                {downloadingTemplate ? t('common.exporting') : t('priceLists.downloadTemplate')}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!listId || importing}
+                onClick={() => importInputRef.current?.click()}
+              >
+                <Upload className="h-4 w-4" />
+                {importing ? t('priceLists.importing') : t('priceLists.importFromTemplate')}
+              </Button>
+              <Button type="button" onClick={openCreate}>
+                <Plus className="h-4 w-4" />
+                {t('priceLists.addItem')}
+              </Button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                className="hidden"
+                onChange={(e) => void onImportFile(e.target.files?.[0])}
+              />
+            </div>
           ) : undefined
         }
       />
@@ -329,6 +455,40 @@ export default function PriceListsPage() {
           </div>
         </div>
 
+        {manage ? (
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-mist/60 px-3 py-2">
+            <label className="inline-flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={replaceOnImport}
+                onChange={(e) => setReplaceOnImport(e.target.checked)}
+              />
+              {t('priceLists.replaceOnImport')}
+            </label>
+            <span className="text-xs text-black/50">{t('priceLists.importHint')}</span>
+            {someSelected ? (
+              <div className="ms-auto flex flex-wrap items-center gap-2">
+                <span className="text-sm text-ink">
+                  {t('priceLists.selectedCount', { count: selectedIds.length })}
+                </span>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={bulkDelete.isPending}
+                  onClick={() => {
+                    if (window.confirm(t('priceLists.confirmBulkDelete', { count: selectedIds.length }))) {
+                      bulkDelete.mutate(selectedIds)
+                    }
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t('priceLists.deleteSelected')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {showLoading ? (
           <div className="skeleton h-40 w-full rounded-xl" />
         ) : items.length === 0 ? (
@@ -338,6 +498,16 @@ export default function PriceListsPage() {
             <table className="data-table price-list-table text-sm">
               <thead>
                 <tr className="bg-mist text-right text-black/70">
+                  {manage ? (
+                    <th className="w-10 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAll}
+                        aria-label={t('priceLists.selectAll')}
+                      />
+                    </th>
+                  ) : null}
                   <th className="whitespace-nowrap">{t('priceLists.rowNo')}</th>
                   <th>{t('priceLists.model')}</th>
                   <th className="whitespace-nowrap">{t('priceLists.productLink')}</th>
@@ -360,12 +530,35 @@ export default function PriceListsPage() {
                 {items.map((item) =>
                   item.is_category_header ? (
                     <tr key={item.id} className="bg-teal-soft">
-                      <td colSpan={colSpan} className="!py-2 text-sm font-bold text-teal-dark">
+                      {manage ? (
+                        <td className="!py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => toggleSelect(item.id)}
+                            aria-label={t('priceLists.selectRow')}
+                          />
+                        </td>
+                      ) : null}
+                      <td colSpan={colSpan - (manage ? 1 : 0)} className="!py-2 text-sm font-bold text-teal-dark">
                         {item.model_no || item.category}
                       </td>
                     </tr>
                   ) : (
-                    <tr key={item.id} className="hover:bg-teal-soft/40">
+                    <tr
+                      key={item.id}
+                      className={`hover:bg-teal-soft/40 ${selectedIds.includes(item.id) ? 'bg-teal-soft/50' : ''}`}
+                    >
+                      {manage ? (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(item.id)}
+                            onChange={() => toggleSelect(item.id)}
+                            aria-label={t('priceLists.selectRow')}
+                          />
+                        </td>
+                      ) : null}
                       <td className="tabular-nums text-black/55">{item.row_no}</td>
                       <td className="font-semibold text-ink">{item.model_no}</td>
                       <td className="whitespace-nowrap">

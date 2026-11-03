@@ -359,7 +359,20 @@
     "currency": "Currency",
     "updatedBy": "Last updated by",
     "isCategoryHeader": "Category header",
-    "active": "Active"
+    "active": "Active",
+    "selectAll": "Select all",
+    "selectRow": "Select row",
+    "selectedCount": "Selected: {{count}}",
+    "deleteSelected": "Delete selected",
+    "confirmBulkDelete": "Delete {{count}} selected item(s) from the price list?",
+    "bulkDeleted": "Deleted {{count}} item(s)",
+    "downloadTemplate": "Download template",
+    "importFromTemplate": "Import from template",
+    "importing": "Importing...",
+    "imported": "Items imported",
+    "replaceOnImport": "Replace all items on import",
+    "confirmReplaceImport": "All current items will be deleted, then the file will be imported. Continue?",
+    "importHint": "Updates match by model number, or enable replace to clear the list first"
   },
   "printInvoices": {
     "title": "Print Invoices",

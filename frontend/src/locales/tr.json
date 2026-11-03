@@ -357,8 +357,21 @@
     "currency": "Para birimi",
     "updatedBy": "Son güncelleyen",
     "isCategoryHeader": "Kategori başlığı",
-    "active": "Aktif"
-  },
+    "active": "Aktif",
+    "selectAll": "Tümünü seç",
+    "selectRow": "Satırı seç",
+    "selectedCount": "Seçili: {{count}}",
+    "deleteSelected": "Seçilenleri sil",
+    "confirmBulkDelete": "{{count}} seçili kalem fiyat listesinden silinsin mi?",
+    "bulkDeleted": "{{count}} kalem silindi",
+    "downloadTemplate": "Şablonu indir",
+    "importFromTemplate": "Şablondan yükle",
+    "importing": "İçe aktarılıyor...",
+    "imported": "Kalemler içe aktarıldı",
+    "replaceOnImport": "İçe aktarırken tüm kalemleri değiştir",
+    "confirmReplaceImport": "Mevcut tüm kalemler silinip dosya içe aktarılacak. Devam?",
+    "importHint": "Model numarasına göre günceller; önce temizlemek için değiştirmeyi açın"
+  }
   "printInvoices": {
     "title": "Yazdırma Faturaları",
     "subtitle": "Yalnızca yazdırmak için fatura — satış veya satın almaya kaydedilmez",

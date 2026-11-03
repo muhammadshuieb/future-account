@@ -359,7 +359,20 @@
     "currency": "العملة",
     "updatedBy": "آخر تعديل بواسطة",
     "isCategoryHeader": "عنوان فئة",
-    "active": "نشط"
+    "active": "نشط",
+    "selectAll": "تحديد الكل",
+    "selectRow": "تحديد الصف",
+    "selectedCount": "محدد: {{count}}",
+    "deleteSelected": "حذف المحدد",
+    "confirmBulkDelete": "حذف {{count}} بنداً محدداً من قائمة الأسعار؟",
+    "bulkDeleted": "تم حذف {{count}} بنداً",
+    "downloadTemplate": "تحميل القالب",
+    "importFromTemplate": "تحميل من قالب",
+    "importing": "جاري الاستيراد...",
+    "imported": "تم استيراد البنود",
+    "replaceOnImport": "استبدال كل البنود عند الاستيراد",
+    "confirmReplaceImport": "سيتم حذف كل بنود القائمة الحالية ثم استيراد الملف. المتابعة؟",
+    "importHint": "حدّث البنود حسب رقم الموديل، أو فعّل الاستبدال لمسح القائمة أولاً"
   },
   "printInvoices": {
     "title": "فواتير الطباعة",
