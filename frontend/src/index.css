@@ -2218,7 +2218,7 @@ textarea {
   }
 }
 
-/* ?? Cash vouchers (ÓäÏ ŞÈÖ / ÓäÏ ÏİÚ) — half A4 ?? */
+/* Cash vouchers (receipt / payment) - half A4 */
 .voucher-print {
   display: flex;
   flex-direction: column;
