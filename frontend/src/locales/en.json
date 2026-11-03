@@ -20,6 +20,7 @@
     "quotes": "Price Quotes",
     "priceLists": "Price List",
     "printInvoices": "Print Invoices",
+    "vouchers": "Vouchers",
     "purchases": "Purchases",
     "warehouse": "Warehouse",
     "warehouseApprovals": "Warehouse Approvals",
@@ -388,6 +389,29 @@
     "invalid": "Invalid invoice",
     "loadFailed": "Could not load print invoice",
     "noPermission": "You do not have permission to view print invoices"
+  },
+  "vouchers": {
+    "subtitle": "Receipt and payment vouchers for printing only — no accounting link",
+    "receiptVoucher": "Receipt Voucher",
+    "paymentVoucher": "Payment Voucher",
+    "printOnlyHint": "Print-only half A4 document — not saved and not linked to cash or journals.",
+    "receivedFrom": "Received from",
+    "paidTo": "Paid to",
+    "partyPlaceholder": "Customer, supplier, or other party",
+    "method": "Payment method",
+    "methods": {
+      "cash": "Cash",
+      "cheque": "Cheque",
+      "transfer": "Transfer"
+    },
+    "description": "Description",
+    "descriptionPlaceholder": "Reason for receipt or payment",
+    "previewHint": "Half A4 preview",
+    "printPreviewHint": "Half A4 preview — print voucher",
+    "printDataMissing": "No voucher data to print — go back to Vouchers, fill the form, then print.",
+    "receiverSign": "Received by",
+    "payerSign": "Paid to",
+    "accountantSign": "Accountant"
   },
   "purchases": {
     "title": "Purchases",

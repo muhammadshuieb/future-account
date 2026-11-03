@@ -20,6 +20,7 @@
     "quotes": "Fiyat Teklifleri",
     "priceLists": "Fiyat Listesi",
     "printInvoices": "Yazdırma Faturaları",
+    "vouchers": "Fişler",
     "purchases": "Satın Alma",
     "warehouse": "Depo",
     "warehouseApprovals": "Depo Onayları",
@@ -386,6 +387,29 @@
     "invalid": "Geçersiz fatura",
     "loadFailed": "Yazdırma faturası yüklenemedi",
     "noPermission": "Yazdırma faturalarını görüntüleme yetkiniz yok"
+  },
+  "vouchers": {
+    "subtitle": "Tahsilat ve ödeme fişleri yalnızca yazdırma için — muhasebe bağlantısı yok",
+    "receiptVoucher": "Tahsilat Fişi",
+    "paymentVoucher": "Ödeme Fişi",
+    "printOnlyHint": "Yalnızca yazdırma; yarım A4 — kaydedilmez, kasa veya yevmiyeye bağlanmaz.",
+    "receivedFrom": "Alınan",
+    "paidTo": "Ödenen",
+    "partyPlaceholder": "Müşteri, tedarikçi veya diğer taraf",
+    "method": "Ödeme yöntemi",
+    "methods": {
+      "cash": "Nakit",
+      "cheque": "Çek",
+      "transfer": "Havale"
+    },
+    "description": "Açıklama",
+    "descriptionPlaceholder": "Tahsilat veya ödeme nedeni",
+    "previewHint": "Yarım A4 önizleme",
+    "printPreviewHint": "Yarım A4 önizleme — fiş yazdırma",
+    "printDataMissing": "Yazdırılacak fiş verisi yok — Fişler sayfasına dönüp formu doldurun, sonra yazdırın.",
+    "receiverSign": "Teslim alan",
+    "payerSign": "Ödenen",
+    "accountantSign": "Muhasebeci"
   },
   "purchases": {
     "title": "Satın Alma",

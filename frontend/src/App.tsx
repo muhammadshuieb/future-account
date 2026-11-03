@@ -21,6 +21,7 @@ const SalesPage = lazy(() => import('@/pages/SalesPage'))
 const QuotesPage = lazy(() => import('@/pages/QuotesPage'))
 const PriceListsPage = lazy(() => import('@/pages/PriceListsPage'))
 const PrintInvoicesPage = lazy(() => import('@/pages/PrintInvoicesPage'))
+const VouchersPage = lazy(() => import('@/pages/VouchersPage'))
 const PurchasesPage = lazy(() => import('@/pages/PurchasesPage'))
 const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
 const CashBanksPage = lazy(() => import('@/pages/CashBanksPage'))
@@ -33,6 +34,7 @@ const CompaniesPage = lazy(() => import('@/pages/CompaniesPage'))
 const SalesInvoicePrintPage = lazy(() => import('@/pages/SalesInvoicePrintPage'))
 const SalesQuotePrintPage = lazy(() => import('@/pages/SalesQuotePrintPage'))
 const PrintInvoicePrintPage = lazy(() => import('@/pages/PrintInvoicePrintPage'))
+const VoucherPrintPage = lazy(() => import('@/pages/VoucherPrintPage'))
 const PurchaseInvoicePrintPage = lazy(() => import('@/pages/PurchaseInvoicePrintPage'))
 const PartnerStatementPrintPage = lazy(() => import('@/pages/PartnerStatementPrintPage'))
 const FtthDailyReportPrintPage = lazy(() => import('@/pages/FtthDailyReportPrintPage'))
@@ -98,6 +100,7 @@ export default function App() {
               <Route path="/print/sales-invoices/:id" element={<SalesInvoicePrintPage />} />
               <Route path="/print/sales-quotes/:id" element={<SalesQuotePrintPage />} />
               <Route path="/print/print-invoices/:id" element={<PrintInvoicePrintPage />} />
+              <Route path="/print/vouchers" element={<VoucherPrintPage />} />
               <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />
               <Route path="/print/customers/:id/statement" element={<PartnerStatementPrintPage kind="customers" />} />
               <Route path="/print/suppliers/:id/statement" element={<PartnerStatementPrintPage kind="suppliers" />} />
@@ -119,6 +122,7 @@ export default function App() {
                 <Route path="quotes" element={<QuotesPage />} />
                 <Route path="price-lists" element={<PriceListsPage />} />
                 <Route path="print-invoices" element={<PrintInvoicesPage />} />
+                <Route path="vouchers" element={<VouchersPage />} />
                 <Route path="purchases" element={<PurchasesPage />} />
                 <Route path="warehouse" element={<WarehousePage />} />
                 <Route path="warehouse-approvals" element={<WarehouseApprovalsPage />} />

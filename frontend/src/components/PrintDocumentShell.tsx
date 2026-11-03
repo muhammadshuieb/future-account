@@ -21,6 +21,10 @@ type Props = {
   whatsapp?: WhatsAppProps | null
   /** When false, hide brand picker (e.g. internal reports that stay Syna-only). Default true. */
   brandSelectable?: boolean
+  /** Extra classes on the outer print-document wrapper (e.g. half-A4 voucher). */
+  documentClassName?: string
+  /** Extra classes on the print-sheet (e.g. print-sheet--half-a4). */
+  sheetClassName?: string
 }
 
 function PrintDocumentToolbar({
@@ -107,7 +111,15 @@ function PrintDocumentToolbar({
   )
 }
 
-function PrintDocumentShellInner({ hint, fileName, children, whatsapp, brandSelectable }: Props & { brandSelectable: boolean }) {
+function PrintDocumentShellInner({
+  hint,
+  fileName,
+  children,
+  whatsapp,
+  brandSelectable,
+  documentClassName = '',
+  sheetClassName = '',
+}: Props & { brandSelectable: boolean }) {
   const [withStamp, setWithStamp] = useState(false)
   const pendingPrint = useRef<'plain' | 'stamp' | null>(null)
   const stampImgReady = useRef(false)
@@ -157,7 +169,7 @@ function PrintDocumentShellInner({ hint, fileName, children, whatsapp, brandSele
   )
 
   return (
-    <div className="print-document min-h-0 p-4 text-black" dir="rtl">
+    <div className={`print-document min-h-0 p-4 text-black ${documentClassName}`.trim()} dir="rtl">
       <PrintDocumentToolbar
         hint={hint}
         fileName={fileName}
@@ -168,7 +180,7 @@ function PrintDocumentShellInner({ hint, fileName, children, whatsapp, brandSele
         printPlain={printPlain}
         printWithStamp={printWithStamp}
       />
-      <div className="print-sheet">
+      <div className={`print-sheet ${sheetClassName}`.trim()}>
         <StampPrintContext.Provider value={stampCtx}>
           <div className="print-area" data-print-ready="1" data-document-brand={brandId}>
             {children}
@@ -186,6 +198,8 @@ export default function PrintDocumentShell({
   children,
   whatsapp,
   brandSelectable = true,
+  documentClassName,
+  sheetClassName,
 }: Props) {
   const initialFromUrl = (() => {
     if (typeof window === 'undefined') return undefined
@@ -200,6 +214,8 @@ export default function PrintDocumentShell({
         fileName={fileName}
         whatsapp={whatsapp}
         brandSelectable={brandSelectable}
+        documentClassName={documentClassName}
+        sheetClassName={sheetClassName}
       >
         {children}
       </PrintDocumentShellInner>

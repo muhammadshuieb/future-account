@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   Receipt,
+  NotebookPen,
   Cable,
   Tags,
 } from 'lucide-react'
@@ -65,6 +66,7 @@ export const navGroups: NavGroup[] = [
       { to: '/quotes', key: 'quotes', icon: FileSpreadsheet, permission: 'quotes.view' },
       { to: '/price-lists', key: 'priceLists', icon: Tags, permission: 'price_lists.view' },
       { to: '/print-invoices', key: 'printInvoices', icon: Receipt, permission: 'print_invoices.view' },
+      { to: '/vouchers', key: 'vouchers', icon: NotebookPen, permission: 'cash.view' },
       { to: '/purchases', key: 'purchases', icon: Truck, permission: 'purchases.view' },
       { to: '/warehouse', key: 'warehouse', icon: Warehouse, permission: 'warehouse.view' },
       { to: '/warehouse-approvals', key: 'warehouseApprovals', icon: ClipboardCheck, permission: 'warehouse.approvals.view_own' },

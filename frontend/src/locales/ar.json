@@ -20,6 +20,7 @@
     "quotes": "عروض الأسعار",
     "priceLists": "قائمة الأسعار",
     "printInvoices": "فواتير الطباعة",
+    "vouchers": "سندات",
     "purchases": "المشتريات",
     "warehouse": "المخازن",
     "warehouseApprovals": "موافقات المخزن",
@@ -388,6 +389,29 @@
     "invalid": "فاتورة غير صالحة",
     "loadFailed": "تعذر تحميل فاتورة الطباعة",
     "noPermission": "ليس لديك صلاحية عرض فواتير الطباعة"
+  },
+  "vouchers": {
+    "subtitle": "سند قبض وسند دفع للطباعة فقط — بدون ربط محاسبي",
+    "receiptVoucher": "سند قبض",
+    "paymentVoucher": "سند دفع",
+    "printOnlyHint": "المستند للطباعة فقط بحجم نصف صفحة A4 — لا يُحفظ ولا يُربط بالصندوق أو القيود.",
+    "receivedFrom": "استلمنا من",
+    "paidTo": "دفعنا إلى",
+    "partyPlaceholder": "اسم العميل أو المورد أو أي طرف",
+    "method": "طريقة الدفع",
+    "methods": {
+      "cash": "نقداً",
+      "cheque": "شيك",
+      "transfer": "تحويل"
+    },
+    "description": "البيان",
+    "descriptionPlaceholder": "سبب القبض أو الدفع",
+    "previewHint": "معاينة نصف A4",
+    "printPreviewHint": "معاينة نصف A4 — طباعة السند",
+    "printDataMissing": "لا توجد بيانات سند للطباعة — ارجع لصفحة السندات واملأ النموذج ثم اطبع.",
+    "receiverSign": "المستلم",
+    "payerSign": "المدفوع له",
+    "accountantSign": "المحاسب"
   },
   "purchases": {
     "title": "المشتريات",
