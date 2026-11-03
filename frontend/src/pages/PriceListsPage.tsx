@@ -271,8 +271,8 @@ export default function PriceListsPage() {
         undefined,
         `قالب-قائمة-أسعار.xlsx`,
       )
-    } catch (err) {
-      msg.fromErr(err)
+    } catch (err: unknown) {
+      msg.fromErr(err as { response?: { data?: { message?: string; errors?: Record<string, string[]> } } })
     } finally {
       setDownloadingTemplate(false)
     }
