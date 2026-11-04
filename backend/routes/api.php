@@ -97,6 +97,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Excel purchase invoice lines — preview only (does not save the invoice)
     Route::get('imports/purchase-invoices/lines/template', [PurchaseInvoiceImportController::class, 'template']);
     Route::post('imports/purchase-invoices/lines/preview', [PurchaseInvoiceImportController::class, 'preview']);
+    // Same Excel template/preview as purchase invoices — fills return form lines before save.
+    Route::get('imports/purchase-returns/lines/template', [PurchaseInvoiceImportController::class, 'template']);
+    Route::post('imports/purchase-returns/lines/preview', [PurchaseInvoiceImportController::class, 'preview']);
 
     // Backups (admin)
     Route::get('backups/status', [BackupController::class, 'status']);

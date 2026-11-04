@@ -287,7 +287,7 @@ export default function PurchasesPage() {
     setInv((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
   }
 
-  const applyImportedLines = (result: PurchaseInvoiceLinesPreview) => {
+  const mapImportedLines = (result: PurchaseInvoiceLinesPreview): InvoiceLineDraft[] => {
     const extras: ProductRow[] = []
     const newLines: InvoiceLineDraft[] = result.lines.map((line) => {
       if (line.product_id) {
@@ -317,12 +317,34 @@ export default function PurchasesPage() {
         return [...map.values()]
       })
     }
+    return newLines
+  }
+
+  const applyImportedLines = (result: PurchaseInvoiceLinesPreview) => {
+    const newLines = mapImportedLines(result)
     invLinesScroll.markPending()
     setInv((prev) => {
       const keep = prev.lines.filter((l) => !isBlankInvoiceLine(l))
       return {
         ...prev,
         lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyInvoiceLine()]),
+      }
+    })
+    setImportNotice({
+      imported: result.lines.length,
+      unmatched: result.unmatched,
+      errors: result.errors || [],
+    })
+  }
+
+  const applyImportedReturnLines = (result: PurchaseInvoiceLinesPreview) => {
+    const newLines = mapImportedLines(result)
+    retLinesScroll.markPending()
+    setRet((prev) => {
+      const keep = prev.lines.filter((l) => !isBlankInvoiceLine(l))
+      return {
+        ...prev,
+        lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyReturnLine()]),
       }
     })
     setImportNotice({
@@ -519,6 +541,9 @@ export default function PurchasesPage() {
 
   const saveRet = useMutation({
     mutationFn: () => {
+      if (ret.lines.some((l) => l.unmatched_label && !l.product_id)) {
+        throw { response: { data: { message: t('purchases.importBlockedUnmatched') } } }
+      }
       const filledLines = ret.lines.filter((l) => l.product_id)
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
@@ -748,7 +773,7 @@ export default function PurchasesPage() {
         />
       }
     >
-      {importNotice && (
+      {importNotice && tab === 'invoices' && (
         <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-2 text-xs text-teal">
           <p>{t('purchases.importSummary', { imported: importNotice.imported })}</p>
           {importNotice.unmatched > 0 && (
@@ -865,14 +890,40 @@ export default function PurchasesPage() {
   )
 
   const returnLinesEditor = (
-    <FormSection title={t('common.lines')}>
+    <FormSection
+      title={t('common.lines')}
+      actions={
+        <PurchaseInvoiceExcelImportButtons
+          templatePath="/imports/purchase-returns/lines/template"
+          previewPath="/imports/purchase-returns/lines/preview"
+          fileName="purchase-return-lines-template.xlsx"
+          onImported={(result) => {
+            msg.setError('')
+            applyImportedReturnLines(result)
+          }}
+          onError={(message) => msg.setError(message)}
+        />
+      }
+    >
+      {importNotice && tab === 'returns' && (
+        <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-2 text-xs text-teal">
+          <p>{t('purchases.importReturnSummary', { imported: importNotice.imported })}</p>
+          {importNotice.unmatched > 0 && (
+            <p className="mt-1 text-amber-800">{t('purchases.importUnmatchedCount', { count: importNotice.unmatched })}</p>
+          )}
+          {importNotice.errors.map((err) => (
+            <p key={err.row} className="mt-1 text-rose-700">{t('purchases.importRowError', { row: err.row, message: err.message })}</p>
+          ))}
+        </div>
+      )}
       {ret.lines.map((line, index) => {
         const product = productCatalog.find((p) => String(p.id) === line.product_id)
         const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_cost) || 0))
+        const unmatched = Boolean(line.unmatched_label && !line.product_id)
         return (
           <div
             key={index}
-            className="form-line-card"
+            className={`form-line-card${unmatched ? ' border-amber-400' : ''}`}
             ref={index === ret.lines.length - 1 ? retLinesScroll.setLastLineRef : undefined}
           >
             <div className="form-line-card-header">
@@ -883,6 +934,14 @@ export default function PurchasesPage() {
                 </button>
               )}
             </div>
+            {unmatched && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {t('purchases.importUnmatchedLine', { label: line.unmatched_label })}
+              </p>
+            )}
+            {line.import_notes && (
+              <p className="text-xs text-black/55">{t('purchases.importLineNotes', { notes: line.import_notes })}</p>
+            )}
             <ProductVariantSelect
               products={productCatalog}
               value={line.product_id}
@@ -891,7 +950,10 @@ export default function PurchasesPage() {
                 const productChanged = productId !== line.product_id
                 updateRetLine(index, {
                   product_id: productId,
-                  unit_cost: productChanged && selected ? String(selected.cost_price) : line.unit_cost,
+                  unmatched_label: productId ? undefined : line.unmatched_label,
+                  unit_cost: productChanged && selected
+                    ? (line.unmatched_label && line.unit_cost ? line.unit_cost : String(selected.cost_price))
+                    : line.unit_cost,
                   serial_no: selected?.track_serial ? line.serial_no : '',
                   batch_no: selected?.track_batch ? line.batch_no : '',
                 })

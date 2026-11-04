@@ -469,6 +469,7 @@
     "importTemplateFailed": "Could not download the import template.",
     "importModelHint": "Match by model first: if the model is found in the catalog, name, brand, code, and cost are filled automatically. Name/brand/code help disambiguate duplicates, or work as fallback when model is empty.",
     "importSummary": "Loaded {{imported}} lines into the form — review them, then click Save. The invoice is not saved yet.",
+    "importReturnSummary": "Loaded {{imported}} lines into the return — review them, then click Save. The return is not saved yet.",
     "importUnmatchedCount": "{{count}} line(s) did not match the catalog — pick the product manually.",
     "importUnmatchedLine": "This row did not match the product catalog: {{label}} — select a product before saving.",
     "importUnknownProduct": "Unknown product",

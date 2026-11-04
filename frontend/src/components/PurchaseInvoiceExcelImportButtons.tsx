@@ -32,11 +32,24 @@ export type PurchaseInvoiceLinesPreview = {
 
 type Props = {
   disabled?: boolean
+  /** API path for template download (default: purchase invoice lines). */
+  templatePath?: string
+  /** API path for Excel preview/import (default: purchase invoice lines). */
+  previewPath?: string
+  /** Preferred downloaded filename. */
+  fileName?: string
   onImported?: (result: PurchaseInvoiceLinesPreview) => void
   onError?: (message: string) => void
 }
 
-export default function PurchaseInvoiceExcelImportButtons({ disabled, onImported, onError }: Props) {
+export default function PurchaseInvoiceExcelImportButtons({
+  disabled,
+  templatePath = '/imports/purchase-invoices/lines/template',
+  previewPath = '/imports/purchase-invoices/lines/preview',
+  fileName = 'purchase-invoice-lines-template.xlsx',
+  onImported,
+  onError,
+}: Props) {
   const { t } = useTranslation()
   const inputRef = useRef<HTMLInputElement>(null)
   const [downloading, setDownloading] = useState(false)
@@ -46,11 +59,7 @@ export default function PurchaseInvoiceExcelImportButtons({ disabled, onImported
     if (downloading || disabled) return
     setDownloading(true)
     try {
-      await downloadExcelExport(
-        '/imports/purchase-invoices/lines/template',
-        undefined,
-        'purchase-invoice-lines-template.xlsx',
-      )
+      await downloadExcelExport(templatePath, undefined, fileName)
     } catch (err) {
       console.error(err)
       onError?.(t('purchases.importTemplateFailed'))
@@ -65,7 +74,7 @@ export default function PurchaseInvoiceExcelImportButtons({ disabled, onImported
     try {
       const form = new FormData()
       form.append('file', file)
-      const res = await api.post('/imports/purchase-invoices/lines/preview', form, {
+      const res = await api.post(previewPath, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       const result = res.data.data as PurchaseInvoiceLinesPreview
