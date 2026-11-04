@@ -728,7 +728,7 @@ export default function PurchasesPage() {
     id: number
     invoice_number?: string
     supplier_id?: number
-    supplier?: { id?: number }
+    supplier?: { id?: number; name?: string; phone?: string }
     warehouse_id?: number
     currency?: string
     exchange_rate?: number | string
