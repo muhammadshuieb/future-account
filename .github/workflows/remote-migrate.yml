@@ -1,0 +1,25 @@
+name: Remote migrate
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Migrate on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            echo "HEAD=$(git rev-parse --short HEAD)"
+            ls -la backend/database/migrations/2026_11_04_000300_add_cost_extras_to_purchase_returns.php || true
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan migrate:status | tail -n 30
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan migrate --force -v
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='echo implode(",", Schema::getColumnListing("purchase_returns")).PHP_EOL;'
