@@ -1,0 +1,50 @@
+name: Remote probe PI-21
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe invoice PI-2026-00021
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          command_timeout: 5m
+          script: |
+            set -euo pipefail
+            cd /opt/future-account
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml --env-file .env.prod exec -T backend php artisan tinker --execute='
+            $inv=\App\Models\PurchaseInvoice::query()->with("lines")->where("invoice_number","PI-2026-00021")->first();
+            if(!$inv){ echo "NOT_FOUND\n"; return; }
+            echo "id={$inv->id}\n";
+            echo "status={$inv->status}\n";
+            echo "currency={$inv->currency} rate={$inv->exchange_rate}\n";
+            echo "subtotal={$inv->subtotal}\n";
+            echo "discount={$inv->discount_amount}\n";
+            echo "tax={$inv->tax_amount}\n";
+            echo "customs={$inv->customs_amount}\n";
+            echo "transport={$inv->transport_fees}\n";
+            echo "fines={$inv->fines_amount}\n";
+            echo "other={$inv->other_fees}\n";
+            echo "extras=".$inv->extrasTotal()."\n";
+            echo "total={$inv->total}\n";
+            echo "paid={$inv->paid_amount}\n";
+            $lineSum=0.0;
+            foreach($inv->lines as $l){
+              $lt=round((float)$l->quantity*(float)$l->unit_cost,2);
+              $lineSum+=$lt;
+              echo "LINE id={$l->id} product={$l->product_id} qty={$l->quantity} cost={$l->unit_cost} tax_rate={$l->tax_rate} line_total={$l->line_total} calc={$lt}\n";
+            }
+            echo "line_sum={$lineSum}\n";
+            echo "calc_total_without_discount=".round($lineSum+$inv->extrasTotal()+(float)$inv->tax_amount,2)."\n";
+            echo "calc_total_with_discount=".round($lineSum+$inv->extrasTotal()+(float)$inv->tax_amount-(float)$inv->discount_amount,2)."\n";
+            $rets=\App\Models\PurchaseReturn::query()->where("purchase_invoice_id",$inv->id)->orderBy("id")->get();
+            foreach($rets as $r){
+              echo "RET {$r->return_number} status={$r->status} total={$r->total} customs={$r->customs_amount} transport={$r->transport_fees} fines={$r->fines_amount} other={$r->other_fees}\n";
+            }
+            '
