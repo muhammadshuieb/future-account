@@ -172,6 +172,10 @@ export default function PurchasesPage() {
     currency: 'USD',
     exchange_rate: '1',
     status: 'posted',
+    customs_amount: '',
+    transport_fees: '',
+    fines_amount: '',
+    other_fees: '',
     lines: [emptyReturnLine()] as InvoiceLineDraft[],
   })
   const retLinesScroll = useScrollToLastLine(ret.lines.length)
@@ -274,6 +278,13 @@ export default function PurchasesPage() {
   const retLineSub = round2(
     ret.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_cost) || 0), 0),
   )
+  const retExtrasSum = round2(
+    (Number(ret.customs_amount) || 0)
+    + (Number(ret.transport_fees) || 0)
+    + (Number(ret.fines_amount) || 0)
+    + (Number(ret.other_fees) || 0),
+  )
+  const retEstTotal = round2(retLineSub + retExtrasSum)
 
   const updateInvLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
     setInv((prev) => ({
@@ -443,6 +454,10 @@ export default function PurchasesPage() {
       currency: baseCurrency || 'USD',
       exchange_rate: '1',
       status: 'posted',
+      customs_amount: '',
+      transport_fees: '',
+      fines_amount: '',
+      other_fees: '',
       lines: [emptyReturnLine()],
     })
     setPay({
@@ -545,8 +560,8 @@ export default function PurchasesPage() {
         throw { response: { data: { message: t('purchases.importBlockedUnmatched') } } }
       }
       const filledLines = ret.lines.filter((l) => l.product_id)
-      if (filledLines.length === 0) {
-        throw { response: { data: { message: t('common.linesRequired') } } }
+      if (filledLines.length === 0 && retExtrasSum <= 0) {
+        throw { response: { data: { message: t('purchases.returnLinesOrFeesRequired') } } }
       }
       return api.post('/purchase-returns', {
         return_date: ret.return_date,
@@ -556,6 +571,10 @@ export default function PurchasesPage() {
         currency: ret.currency,
         exchange_rate: ret.exchange_rate ? Number(ret.exchange_rate) : undefined,
         status: ret.status,
+        customs_amount: ret.customs_amount ? Number(ret.customs_amount) : 0,
+        transport_fees: ret.transport_fees ? Number(ret.transport_fees) : 0,
+        fines_amount: ret.fines_amount ? Number(ret.fines_amount) : 0,
+        other_fees: ret.other_fees ? Number(ret.other_fees) : 0,
         lines: filledLines.map((l) => ({
           product_id: Number(l.product_id),
           quantity: Number(l.quantity),
@@ -569,34 +588,47 @@ export default function PurchasesPage() {
     onError: msg.fromErr,
   })
 
-  async function loadPurchaseReturnLinesFromInvoice(invoiceId: string) {
+  type InvoiceReturnSource = {
+    supplier_id?: number
+    supplier?: { id?: number }
+    warehouse_id?: number
+    warehouse?: { id?: number }
+    currency?: string
+    exchange_rate?: number | string
+    customs_amount?: number | string
+    transport_fees?: number | string
+    fines_amount?: number | string
+    other_fees?: number | string
+    lines?: {
+      product_id?: number
+      product?: { id?: number }
+      quantity?: number
+      unit_cost?: number
+      batch_no?: string
+      serial_no?: string
+    }[]
+    items?: {
+      product_id?: number
+      product?: { id?: number }
+      quantity?: number
+      unit_cost?: number
+      batch_no?: string
+      serial_no?: string
+    }[]
+  }
+
+  function moneyField(v: number | string | null | undefined): string {
+    if (v === null || v === undefined || v === '') return ''
+    const n = Number(v)
+    return Number.isFinite(n) && n > 0 ? String(n) : ''
+  }
+
+  async function loadPurchaseReturnFromInvoice(invoiceId: string, opts?: { includeFees?: boolean }) {
     if (!invoiceId) return
+    const includeFees = opts?.includeFees ?? true
     try {
       const res = await api.get(`/purchase-invoices/${invoiceId}`)
-      const d = res.data.data as {
-        supplier_id?: number
-        supplier?: { id?: number }
-        warehouse_id?: number
-        warehouse?: { id?: number }
-        currency?: string
-        exchange_rate?: number | string
-        lines?: {
-          product_id?: number
-          product?: { id?: number }
-          quantity?: number
-          unit_cost?: number
-          batch_no?: string
-          serial_no?: string
-        }[]
-        items?: {
-          product_id?: number
-          product?: { id?: number }
-          quantity?: number
-          unit_cost?: number
-          batch_no?: string
-          serial_no?: string
-        }[]
-      }
+      const d = res.data.data as InvoiceReturnSource
       const items = d.lines || d.items || []
       setRet((prev) => ({
         ...prev,
@@ -606,6 +638,10 @@ export default function PurchasesPage() {
         exchange_rate: d.exchange_rate != null && d.exchange_rate !== ''
           ? String(d.exchange_rate)
           : prev.exchange_rate,
+        customs_amount: includeFees ? moneyField(d.customs_amount) : prev.customs_amount,
+        transport_fees: includeFees ? moneyField(d.transport_fees) : prev.transport_fees,
+        fines_amount: includeFees ? moneyField(d.fines_amount) : prev.fines_amount,
+        other_fees: includeFees ? moneyField(d.other_fees) : prev.other_fees,
         lines: items.length
           ? items.map((line) => ({
               product_id: String(line.product_id || line.product?.id || ''),
@@ -619,6 +655,20 @@ export default function PurchasesPage() {
     } catch {
       // Keep manual lines if invoice detail cannot be loaded.
     }
+  }
+
+  async function loadPurchaseReturnLinesFromInvoice(invoiceId: string) {
+    return loadPurchaseReturnFromInvoice(invoiceId, { includeFees: true })
+  }
+
+  async function returnFullInvoice() {
+    if (!ret.purchase_invoice_id) {
+      msg.setError(t('purchases.selectInvoiceForFullReturn'))
+      return
+    }
+    msg.setError('')
+    await loadPurchaseReturnFromInvoice(ret.purchase_invoice_id, { includeFees: true })
+    msg.setMessage(t('purchases.fullInvoiceLoaded'))
   }
 
   const convertReq = useMutation({
@@ -992,8 +1042,18 @@ export default function PurchasesPage() {
         <Button type="button" variant="secondary" onClick={addRetLine}>{t('common.addLine')}</Button>
       </div>
       <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p>
+          <span className="text-black/55">{t('common.subtotal')}: </span>
+          <span className="tabular-nums">{formatMoney(retLineSub, ret.currency)}</span>
+        </p>
+        {retExtrasSum > 0 && (
+          <p>
+            <span className="text-black/55">{t('purchases.extrasTotal')}: </span>
+            <span className="tabular-nums">{formatMoney(retExtrasSum, ret.currency)}</span>
+          </p>
+        )}
         <p className="font-bold">
-          {t('common.total')}: <span className="tabular-nums">{formatMoney(retLineSub, ret.currency)}</span>
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(retEstTotal, ret.currency)}</span>
         </p>
       </div>
     </FormSection>
@@ -1609,10 +1669,19 @@ export default function PurchasesPage() {
                       value={ret.purchase_invoice_id}
                       onChange={(e) => {
                         const id = e.target.value
-                        setRet((prev) => ({ ...prev, purchase_invoice_id: id }))
+                        setRet((prev) => ({
+                          ...prev,
+                          purchase_invoice_id: id,
+                          ...(id ? {} : {
+                            customs_amount: '',
+                            transport_fees: '',
+                            fines_amount: '',
+                            other_fees: '',
+                            lines: [emptyReturnLine()],
+                          }),
+                        }))
                         applyInvoiceCurrency(id, setRet)
                         if (id) void loadPurchaseReturnLinesFromInvoice(id)
-                        else setRet((prev) => ({ ...prev, lines: [emptyReturnLine()] }))
                       }}
                     >
                       <option value="">—</option>
@@ -1620,8 +1689,33 @@ export default function PurchasesPage() {
                     </select>
                   </Field>
                 </div>
+                {ret.purchase_invoice_id ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={() => void returnFullInvoice()}>
+                      {t('purchases.returnFullInvoice')}
+                    </Button>
+                    <p className="w-full text-right text-xs text-black/55">{t('purchases.returnFullInvoiceHint')}</p>
+                  </div>
+                ) : null}
                 <DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />
                 {returnLinesEditor}
+                <FormSection title={t('purchases.returnFees')}>
+                  <p className="text-xs text-black/55">{t('purchases.returnFeesHint')}</p>
+                  <div className="form-grid-4">
+                    <Field label={t('purchases.shippingFees')}>
+                      <NumericInput value={ret.customs_amount} onChange={(v) => setRet((prev) => ({ ...prev, customs_amount: v }))} />
+                    </Field>
+                    <Field label={t('purchases.transportFees')}>
+                      <NumericInput value={ret.transport_fees} onChange={(v) => setRet((prev) => ({ ...prev, transport_fees: v }))} />
+                    </Field>
+                    <Field label={t('purchases.fines')}>
+                      <NumericInput value={ret.fines_amount} onChange={(v) => setRet((prev) => ({ ...prev, fines_amount: v }))} />
+                    </Field>
+                    <Field label={t('purchases.otherFees')}>
+                      <NumericInput value={ret.other_fees} onChange={(v) => setRet((prev) => ({ ...prev, other_fees: v }))} />
+                    </Field>
+                  </div>
+                </FormSection>
               </FormStack>
             )}
             {tab === 'payments' && (

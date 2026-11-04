@@ -510,11 +510,13 @@ class ExcelExportService
     {
         $q = PurchaseReturn::query()->with('supplier')->orderByDesc('id');
         $this->applyDateFilter($q, 'return_date', $request);
-        $book->addSheet('مرتجعات المشتريات', ['الرقم', 'التاريخ', 'المورد', 'العملة', 'الإجمالي', 'الحالة'],
-            $q->get()->map(fn ($r) => [
-                $r->return_number, optional($r->return_date)?->format('Y-m-d'), $r->supplier?->name,
-                $r->currency, $r->total, $r->status,
-            ])->all());
+        $book->addSheet('مرتجعات المشتريات', [
+            'الرقم', 'التاريخ', 'المورد', 'العملة', 'جمارك/شحن', 'أجور نقل', 'مخالفات', 'أجور أخرى', 'الإجمالي', 'الحالة',
+        ], $q->get()->map(fn ($r) => [
+            $r->return_number, optional($r->return_date)?->format('Y-m-d'), $r->supplier?->name,
+            $r->currency, $r->customs_amount, $r->transport_fees, $r->fines_amount, $r->other_fees,
+            $r->total, $r->status,
+        ])->all());
     }
 
     protected function sheetSupplierPayments(ExcelWorkbook $book, Request $request): void

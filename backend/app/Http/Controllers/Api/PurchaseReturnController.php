@@ -35,7 +35,11 @@ class PurchaseReturnController extends ApiController
             'currency' => ['nullable', 'string', 'max:8'],
             'exchange_rate' => ['nullable', 'numeric', 'gt:0'],
             'status' => ['nullable', 'in:draft,posted'],
-            'lines' => ['required', 'array', 'min:1'],
+            'customs_amount' => ['nullable', 'numeric', 'min:0'],
+            'transport_fees' => ['nullable', 'numeric', 'min:0'],
+            'fines_amount' => ['nullable', 'numeric', 'min:0'],
+            'other_fees' => ['nullable', 'numeric', 'min:0'],
+            'lines' => ['nullable', 'array'],
             'lines.*.product_id' => ['required', 'exists:products,id'],
             'lines.*.quantity' => ['required', 'numeric', 'gt:0'],
             'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
@@ -43,7 +47,7 @@ class PurchaseReturnController extends ApiController
             'lines.*.serial_no' => ['nullable', 'string', 'max:64'],
         ]);
 
-        return $this->ok($this->purchases->createReturn($data, $data['lines'], $request->user()), 201);
+        return $this->ok($this->purchases->createReturn($data, $data['lines'] ?? [], $request->user()), 201);
     }
 
     public function post(PurchaseReturn $purchaseReturn): JsonResponse

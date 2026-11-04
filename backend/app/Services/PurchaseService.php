@@ -620,11 +620,17 @@ class PurchaseService
     public function createReturn(array $data, array $lines, User $user): PurchaseReturn
     {
         return DB::transaction(function () use ($data, $lines, $user) {
-            $total = 0;
+            $extras = $this->normalizeExtras($data);
+            $extrasSum = round(
+                $extras['customs_amount'] + $extras['transport_fees'] + $extras['fines_amount'] + $extras['other_fees'],
+                2
+            );
+
+            $lineSubtotal = 0;
             $normalized = [];
             foreach ($lines as $line) {
                 $lt = round((float) $line['quantity'] * (float) $line['unit_cost'], 2);
-                $total += $lt;
+                $lineSubtotal += $lt;
                 $normalized[] = [
                     'product_id' => $line['product_id'],
                     'quantity' => $line['quantity'],
@@ -634,6 +640,14 @@ class PurchaseService
                     'serial_no' => $line['serial_no'] ?? null,
                 ];
             }
+
+            if ($normalized === [] && $extrasSum <= 0) {
+                throw ValidationException::withMessages([
+                    'lines' => ['أضف بنوداً أو أجور مرتجعة (شحن/نقل/مخالفات/أخرى).'],
+                ]);
+            }
+
+            $total = round($lineSubtotal + $extrasSum, 2);
 
             $fx = $this->currencies->resolveDocumentFx(
                 $total,
@@ -653,6 +667,10 @@ class PurchaseService
                 'exchange_rate' => $fx['exchange_rate'],
                 'base_amount' => $fx['base_amount'],
                 'total' => $total,
+                'customs_amount' => $extras['customs_amount'],
+                'transport_fees' => $extras['transport_fees'],
+                'fines_amount' => $extras['fines_amount'],
+                'other_fees' => $extras['other_fees'],
                 'created_by' => $user->id,
             ]);
 
@@ -692,19 +710,46 @@ class PurchaseService
                 ['account_id' => $inventory->id, 'debit' => 0, 'credit' => (float) ($ret->base_amount ?: $ret->total)],
             ], $user);
 
-            if ($ret->warehouse_id) {
+            if ($ret->warehouse_id && $ret->lines->isNotEmpty()) {
                 $returnRate = (float) ($ret->exchange_rate ?: 1);
+                $extrasDoc = $ret->extrasTotal();
+                $lineWeights = [];
+                $weightSum = 0.0;
+                foreach ($ret->lines as $line) {
+                    $lineSub = round((float) $line->quantity * (float) $line->unit_cost, 2);
+                    $lineWeights[$line->id] = $lineSub;
+                    $weightSum += $lineSub;
+                }
+
+                $allocatedAdj = 0.0;
+                $lineIds = $ret->lines->pluck('id')->all();
+                $lastLineId = $lineIds === [] ? null : $lineIds[array_key_last($lineIds)];
 
                 foreach ($ret->lines as $line) {
+                    $qty = (float) $line->quantity;
+                    $lineSub = $lineWeights[$line->id] ?? 0.0;
+
+                    if ($extrasDoc > 0.00001 && $qty > 0 && $weightSum > 0) {
+                        if ($line->id === $lastLineId) {
+                            $lineAdj = round($extrasDoc - $allocatedAdj, 2);
+                        } else {
+                            $lineAdj = round($extrasDoc * ($lineSub / $weightSum), 2);
+                            $allocatedAdj += $lineAdj;
+                        }
+                        $docUnitCost = round(($lineSub + $lineAdj) / $qty, 4);
+                    } else {
+                        $docUnitCost = (float) $line->unit_cost;
+                    }
+
                     $this->inventory->adjustStock(
                         $ret->warehouse_id,
                         $line->product_id,
-                        -((float) $line->quantity),
+                        -($qty),
                         'out',
                         $user,
                         [
                             'movement_date' => $ret->return_date->toDateString(),
-                            'unit_cost' => round((float) $line->unit_cost * ($returnRate > 0 ? $returnRate : 1), 4),
+                            'unit_cost' => round($docUnitCost * ($returnRate > 0 ? $returnRate : 1), 4),
                             'reference_type' => $ret::class,
                             'reference_id' => $ret->id,
                             'journal_entry_id' => $entry->id,
@@ -1890,11 +1935,17 @@ class PurchaseService
      */
     protected function statementReturnDetail(PurchaseReturn $ret): array
     {
+        $lineSubtotal = round((float) $ret->lines->sum(fn (PurchaseReturnLine $line) => (float) $line->line_total), 2);
+
         return [
             'payment_type' => null,
-            'subtotal' => (float) $ret->total,
+            'subtotal' => $lineSubtotal,
             'discount_amount' => 0.0,
             'tax_amount' => 0.0,
+            'customs_amount' => (float) ($ret->customs_amount ?? 0),
+            'transport_fees' => (float) ($ret->transport_fees ?? 0),
+            'fines_amount' => (float) ($ret->fines_amount ?? 0),
+            'other_fees' => (float) ($ret->other_fees ?? 0),
             'total' => (float) $ret->total,
             'paid_amount' => null,
             'applied_amount' => (float) ($ret->applied_amount ?? 0),
