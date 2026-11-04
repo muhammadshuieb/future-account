@@ -617,6 +617,58 @@ class PurchaseService
         return (float) $this->supplierStatement($supplier)['balance'];
     }
 
+    /**
+     * One-click full purchase return: all invoice lines + landed-cost extras, posted.
+     */
+    public function createFullReturnFromInvoice(PurchaseInvoice $invoice, User $user, ?string $returnDate = null): PurchaseReturn
+    {
+        if ($invoice->status !== 'posted') {
+            throw ValidationException::withMessages([
+                'purchase_invoice_id' => ['يمكن إرجاع الفواتير المرحّلة فقط.'],
+            ]);
+        }
+
+        $invoice->loadMissing('lines');
+
+        $already = (float) PurchaseReturn::query()
+            ->where('purchase_invoice_id', $invoice->id)
+            ->where('status', 'posted')
+            ->sum('total');
+        if ($already + 0.001 >= (float) $invoice->total) {
+            throw ValidationException::withMessages([
+                'purchase_invoice_id' => ['تم إرجاع هذه الفاتورة بالكامل مسبقاً.'],
+            ]);
+        }
+
+        $lines = $invoice->lines->map(static fn (PurchaseInvoiceLine $line) => [
+            'product_id' => $line->product_id,
+            'quantity' => (float) $line->quantity,
+            'unit_cost' => (float) $line->unit_cost,
+            'batch_no' => $line->batch_no,
+            'serial_no' => $line->serial_no,
+        ])->all();
+
+        if ($lines === [] && $invoice->extrasTotal() <= 0) {
+            throw ValidationException::withMessages([
+                'lines' => ['الفاتورة لا تحتوي بنوداً أو أجوراً للإرجاع.'],
+            ]);
+        }
+
+        return $this->createReturn([
+            'return_date' => $returnDate ?: now()->timezone(config('app.timezone', 'Asia/Damascus'))->toDateString(),
+            'supplier_id' => $invoice->supplier_id,
+            'purchase_invoice_id' => $invoice->id,
+            'warehouse_id' => $invoice->warehouse_id,
+            'currency' => $invoice->currency,
+            'exchange_rate' => $invoice->exchange_rate !== null ? (float) $invoice->exchange_rate : null,
+            'customs_amount' => (float) ($invoice->customs_amount ?? 0),
+            'transport_fees' => (float) ($invoice->transport_fees ?? 0),
+            'fines_amount' => (float) ($invoice->fines_amount ?? 0),
+            'other_fees' => (float) ($invoice->other_fees ?? 0),
+            'status' => 'posted',
+        ], $lines, $user);
+    }
+
     public function createReturn(array $data, array $lines, User $user): PurchaseReturn
     {
         return DB::transaction(function () use ($data, $lines, $user) {

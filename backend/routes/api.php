@@ -239,6 +239,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('purchase-returns', [PurchaseReturnController::class, 'index']);
     Route::post('purchase-returns', [PurchaseReturnController::class, 'store']);
+    Route::post('purchase-invoices/{purchaseInvoice}/full-return', [PurchaseReturnController::class, 'storeFullFromInvoice']);
     Route::post('purchase-returns/{purchaseReturn}/post', [PurchaseReturnController::class, 'post']);
     Route::delete('purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
 

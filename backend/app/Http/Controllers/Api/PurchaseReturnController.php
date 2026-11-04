@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\PurchaseInvoice;
 use App\Models\PurchaseReturn;
 use App\Services\PurchaseService;
 use App\Support\ListSearch;
@@ -48,6 +49,22 @@ class PurchaseReturnController extends ApiController
         ]);
 
         return $this->ok($this->purchases->createReturn($data, $data['lines'] ?? [], $request->user()), 201);
+    }
+
+    public function storeFullFromInvoice(Request $request, PurchaseInvoice $purchaseInvoice): JsonResponse
+    {
+        $this->authorizePermission('purchases.manage');
+        $data = $request->validate([
+            'return_date' => ['nullable', 'date'],
+        ]);
+
+        $ret = $this->purchases->createFullReturnFromInvoice(
+            $purchaseInvoice,
+            $request->user(),
+            $data['return_date'] ?? null,
+        );
+
+        return $this->ok($ret->load(['lines.product', 'supplier', 'warehouse', 'allocations.invoice']), 201);
     }
 
     public function post(PurchaseReturn $purchaseReturn): JsonResponse

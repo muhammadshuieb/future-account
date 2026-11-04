@@ -70,6 +70,7 @@ export default function PurchasesPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canEditInvoices = hasPermission('purchases.invoices.edit')
+  const canManagePurchases = hasPermission('purchases.manage')
   const [tab, setTab] = useState('invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
@@ -669,6 +670,28 @@ export default function PurchasesPage() {
     msg.setError('')
     await loadPurchaseReturnFromInvoice(ret.purchase_invoice_id, { includeFees: true })
     msg.setMessage(t('purchases.fullInvoiceLoaded'))
+  }
+
+  const fullReturnInvoice = useMutation({
+    mutationFn: async (payload: { invoiceId: number; return_date?: string }) => {
+      return api.post(`/purchase-invoices/${payload.invoiceId}/full-return`, {
+        return_date: payload.return_date || todayYmd(),
+      })
+    },
+    onSuccess: (res) => {
+      const number = res.data?.data?.return_number as string | undefined
+      msg.setMessage(number ? t('purchases.fullReturnPosted', { number }) : t('purchases.returnPosted'))
+      invalidate()
+      closeModal()
+      setTab('returns')
+    },
+    onError: msg.fromErr,
+  })
+
+  function confirmFullReturn(invoiceId: number, invoiceNumber?: string, returnDate?: string) {
+    const label = invoiceNumber || String(invoiceId)
+    if (!window.confirm(t('purchases.confirmFullReturn', { number: label }))) return
+    fullReturnInvoice.mutate({ invoiceId, return_date: returnDate })
   }
 
   const convertReq = useMutation({
@@ -1368,6 +1391,19 @@ export default function PurchasesPage() {
                           {t('purchases.payRemaining')}
                         </button>
                       )}
+                      {canManagePurchases && i.status === 'posted' && (
+                        <button
+                          type="button"
+                          className="text-xs text-amber-800"
+                          disabled={fullReturnInvoice.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            confirmFullReturn(i.id, i.invoice_number)
+                          }}
+                        >
+                          {t('purchases.returnFullInvoice')}
+                        </button>
+                      )}
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
                         : <span className="text-xs text-black/40" title={t('common.cannotDeletePosted')}>{t('common.delete')}</span>}
@@ -1690,11 +1726,34 @@ export default function PurchasesPage() {
                   </Field>
                 </div>
                 {ret.purchase_invoice_id ? (
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button type="button" variant="secondary" onClick={() => void returnFullInvoice()}>
-                      {t('purchases.returnFullInvoice')}
-                    </Button>
-                    <p className="w-full text-right text-xs text-black/55">{t('purchases.returnFullInvoiceHint')}</p>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void returnFullInvoice()}
+                      >
+                        {t('purchases.loadFullInvoice')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        disabled={fullReturnInvoice.isPending}
+                        onClick={() => {
+                          const invMeta = (invoices.data || []).find(
+                            (i: { id: number; invoice_number: string }) => String(i.id) === String(ret.purchase_invoice_id),
+                          ) as { id: number; invoice_number: string } | undefined
+                          confirmFullReturn(
+                            Number(ret.purchase_invoice_id),
+                            invMeta?.invoice_number,
+                            ret.return_date,
+                          )
+                        }}
+                      >
+                        {fullReturnInvoice.isPending ? t('common.loading') : t('purchases.returnFullInvoiceNow')}
+                      </Button>
+                    </div>
+                    <p className="max-w-xl text-right text-xs text-black/55">{t('purchases.returnFullInvoiceHint')}</p>
                   </div>
                 ) : null}
                 <DocumentCurrencyFields state={ret} setState={setRet} currencies={currencyList} baseCurrency={baseCurrency} />
