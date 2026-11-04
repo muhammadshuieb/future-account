@@ -466,6 +466,8 @@
     "returnFeesHint": "Return shipping, transport, fines, and other fees in full or partially — added to the return total",
     "returnFullInvoice": "Full return",
     "returnFullInvoiceNow": "Return full invoice now",
+    "createReturnFromInvoice": "Create return",
+    "returnFromInvoiceReady": "Return drafted from invoice {{number}} — adjust quantities if needed, then save",
     "loadFullInvoice": "Fill from invoice",
     "returnFullInvoiceHint": "Full return: creates a posted return with all lines and fees. Fill from invoice: loads the form for review before saving.",
     "confirmFullReturn": "Return invoice {{number}} in full (all lines and fees) and post the return now?",

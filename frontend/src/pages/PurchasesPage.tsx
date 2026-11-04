@@ -723,6 +723,42 @@ export default function PurchasesPage() {
     fullReturnInvoice.mutate({ invoiceId, return_date: returnDate })
   }
 
+  /** Open create-return form prefilled from a posted purchase invoice. */
+  async function openReturnFromInvoice(invoice: {
+    id: number
+    invoice_number?: string
+    supplier_id?: number
+    supplier?: { id?: number }
+    warehouse_id?: number
+    currency?: string
+    exchange_rate?: number | string
+  }) {
+    setImportNotice(null)
+    setCatalogExtra([])
+    setSelectedId(null)
+    setSelectedRow(null)
+    setTab('returns')
+    setRet({
+      return_date: todayYmd(),
+      supplier_id: String(invoice.supplier_id || invoice.supplier?.id || ''),
+      warehouse_id: String(invoice.warehouse_id || defaultWarehouseId || ''),
+      purchase_invoice_id: String(invoice.id),
+      currency: invoice.currency || baseCurrency || 'USD',
+      exchange_rate: invoice.exchange_rate != null && invoice.exchange_rate !== ''
+        ? String(invoice.exchange_rate)
+        : '1',
+      status: 'posted',
+      customs_amount: '',
+      transport_fees: '',
+      fines_amount: '',
+      other_fees: '',
+      lines: [emptyReturnLine()],
+    })
+    setModal('create')
+    await loadPurchaseReturnFromInvoice(String(invoice.id), { includeFees: true })
+    msg.setMessage(t('purchases.returnFromInvoiceReady', { number: invoice.invoice_number || String(invoice.id) }))
+  }
+
   const convertReq = useMutation({
     mutationFn: (id: number) => api.post(`/purchase-requests/${id}/convert-to-order`),
     onSuccess: () => { msg.setMessage(t('purchases.convertedToOrder')); invalidate() },
@@ -1421,17 +1457,29 @@ export default function PurchasesPage() {
                         </button>
                       )}
                       {canManagePurchases && i.status === 'posted' && (
-                        <button
-                          type="button"
-                          className="text-xs text-amber-800"
-                          disabled={fullReturnInvoice.isPending}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            confirmFullReturn(i.id, i.invoice_number)
-                          }}
-                        >
-                          {t('purchases.returnFullInvoice')}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="text-xs text-teal"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void openReturnFromInvoice(i)
+                            }}
+                          >
+                            {t('purchases.createReturnFromInvoice')}
+                          </button>
+                          <button
+                            type="button"
+                            className="text-xs text-amber-800"
+                            disabled={fullReturnInvoice.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              confirmFullReturn(i.id, i.invoice_number)
+                            }}
+                          >
+                            {t('purchases.returnFullInvoice')}
+                          </button>
+                        </>
                       )}
                       {canDeletePurchase('invoices', i.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('invoices', i.id, i.status) }}>{t('common.delete')}</button>
@@ -1566,6 +1614,48 @@ export default function PurchasesPage() {
                     >
                       {t('purchases.payRemaining')}
                     </Button>
+                  )}
+                  {canManagePurchases
+                    && String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || '') === 'posted'
+                    && (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          const src = (detail.data || selectedRow || {}) as {
+                            id?: number
+                            invoice_number?: string
+                            supplier_id?: number
+                            supplier?: { id?: number }
+                            warehouse_id?: number
+                            currency?: string
+                            exchange_rate?: number | string
+                          }
+                          void openReturnFromInvoice({
+                            id: selectedId,
+                            invoice_number: src.invoice_number,
+                            supplier_id: src.supplier_id,
+                            supplier: src.supplier,
+                            warehouse_id: src.warehouse_id,
+                            currency: src.currency,
+                            exchange_rate: src.exchange_rate,
+                          })
+                        }}
+                      >
+                        {t('purchases.createReturnFromInvoice')}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        disabled={fullReturnInvoice.isPending}
+                        onClick={() => {
+                          const number = (detail.data as { invoice_number?: string } | undefined)?.invoice_number
+                            || (selectedRow as { invoice_number?: string } | null)?.invoice_number
+                          confirmFullReturn(selectedId, number)
+                        }}
+                      >
+                        {fullReturnInvoice.isPending ? t('common.loading') : t('purchases.returnFullInvoice')}
+                      </Button>
+                    </>
                   )}
                   <Button variant="secondary" onClick={() => printInvoice(selectedId)}><Printer size={16} /> {t('common.print')}</Button>
                   <PdfExportButton

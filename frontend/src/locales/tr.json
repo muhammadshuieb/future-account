@@ -464,6 +464,8 @@
     "returnFeesHint": "Kargo, nakliye, ceza ve diğer ücretleri tamamen veya kısmen iade edin — iade toplamına eklenir",
     "returnFullInvoice": "Tam iade",
     "returnFullInvoiceNow": "Faturanın tamamını şimdi iade et",
+    "createReturnFromInvoice": "İade oluştur",
+    "returnFromInvoiceReady": "{{number}} faturasından iade hazırlandı — gerekirse miktarları düzenleyip kaydedin",
     "loadFullInvoice": "Faturadan doldur",
     "returnFullInvoiceHint": "Tam iade: tüm kalem ve ücretlerle onaylanmış iade oluşturur. Faturadan doldur: kaydetmeden önce formu yükler.",
     "confirmFullReturn": "{{number}} faturasını tüm kalem ve ücretleriyle hemen iade edip onaylansın mı?",
