@@ -11,7 +11,7 @@ class PurchaseReturnLine extends Model
 
     protected function casts(): array
     {
-        return ['quantity' => 'decimal:3', 'unit_cost' => 'decimal:2', 'line_total' => 'decimal:2'];
+        return ['quantity' => 'decimal:3', 'unit_cost' => 'decimal:6', 'line_total' => 'decimal:2'];
     }
 
     public function product(): BelongsTo { return $this->belongsTo(Product::class); }

@@ -640,10 +640,10 @@ class PurchaseService
             ]);
         }
 
-        $lines = $invoice->lines->map(static fn (PurchaseInvoiceLine $line) => [
+        $lines = $invoice->lines->map(fn (PurchaseInvoiceLine $line) => [
             'product_id' => $line->product_id,
             'quantity' => (float) $line->quantity,
-            'unit_cost' => (float) $line->unit_cost,
+            'unit_cost' => $this->effectiveInvoiceLineUnitCost($line),
             'batch_no' => $line->batch_no,
             'serial_no' => $line->serial_no,
         ])->all();
@@ -768,7 +768,7 @@ class PurchaseService
                 $lineWeights = [];
                 $weightSum = 0.0;
                 foreach ($ret->lines as $line) {
-                    $lineSub = round((float) $line->quantity * (float) $line->unit_cost, 2);
+                    $lineSub = round((float) ($line->line_total ?: ((float) $line->quantity * (float) $line->unit_cost)), 2);
                     $lineWeights[$line->id] = $lineSub;
                     $weightSum += $lineSub;
                 }
@@ -1416,6 +1416,33 @@ class PurchaseService
         }
 
         return $out;
+    }
+
+    /**
+     * Prefer the stored line_total when qty×unit_cost diverges (legacy 2-decimal unit_cost rounding).
+     */
+    protected function effectiveInvoiceLineUnitCost(PurchaseInvoiceLine $line): float
+    {
+        $qty = (float) $line->quantity;
+        $stored = (float) $line->unit_cost;
+        if ($qty <= 0) {
+            return $stored;
+        }
+
+        $taxRate = (float) ($line->tax_rate ?? 0);
+        $lineTotal = round((float) $line->line_total, 2);
+        $fromUnit = round($qty * $stored, 2);
+
+        // When tax is present, line_total includes tax — keep stored unit cost.
+        if ($taxRate > 0.00001) {
+            return $stored;
+        }
+
+        if (abs($fromUnit - $lineTotal) > 0.001) {
+            return round($lineTotal / $qty, 6);
+        }
+
+        return $stored;
     }
 
     /** Optional invoice-level discount (حسم); must be >= 0 and <= subtotal. */

@@ -605,6 +605,8 @@ export default function PurchasesPage() {
       product?: { id?: number }
       quantity?: number
       unit_cost?: number
+      line_total?: number
+      tax_rate?: number
       batch_no?: string
       serial_no?: string
     }[]
@@ -613,6 +615,8 @@ export default function PurchasesPage() {
       product?: { id?: number }
       quantity?: number
       unit_cost?: number
+      line_total?: number
+      tax_rate?: number
       batch_no?: string
       serial_no?: string
     }[]
@@ -622,6 +626,31 @@ export default function PurchasesPage() {
     if (v === null || v === undefined || v === '') return ''
     const n = Number(v)
     return Number.isFinite(n) && n > 0 ? String(n) : ''
+  }
+
+  /** Match invoice line_total when legacy unit_cost was rounded to 2 decimals. */
+  function returnUnitCostFromInvoiceLine(line: {
+    quantity?: number
+    unit_cost?: number
+    line_total?: number
+    tax_rate?: number
+  }): string {
+    const qty = Number(line.quantity) || 0
+    const stored = Number(line.unit_cost)
+    const lineTotal = Number(line.line_total)
+    const taxRate = Number(line.tax_rate) || 0
+    if (
+      qty > 0
+      && Number.isFinite(lineTotal)
+      && taxRate <= 0
+      && Number.isFinite(stored)
+      && Math.abs(round2(qty * stored) - round2(lineTotal)) > 0.001
+    ) {
+      const derived = lineTotal / qty
+      const fixed = derived.toFixed(6).replace(/\.?0+$/, '')
+      return fixed || String(derived)
+    }
+    return line.unit_cost != null && line.unit_cost !== undefined ? String(line.unit_cost) : ''
   }
 
   async function loadPurchaseReturnFromInvoice(invoiceId: string, opts?: { includeFees?: boolean }) {
@@ -647,7 +676,7 @@ export default function PurchasesPage() {
           ? items.map((line) => ({
               product_id: String(line.product_id || line.product?.id || ''),
               quantity: String(line.quantity || 1),
-              unit_cost: String(line.unit_cost || ''),
+              unit_cost: returnUnitCostFromInvoiceLine(line),
               batch_no: line.batch_no || '',
               serial_no: line.serial_no || '',
             }))

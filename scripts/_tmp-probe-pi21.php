@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\PurchaseInvoice;
-use App\Models\PurchaseReturn;
+use App\Services\PurchaseService;
 
 require '/var/www/html/vendor/autoload.php';
 $app = require '/var/www/html/bootstrap/app.php';
@@ -13,32 +13,32 @@ if (! $inv) {
     exit(0);
 }
 
-echo "id={$inv->id}\n";
-echo "status={$inv->status}\n";
-echo "currency={$inv->currency} rate={$inv->exchange_rate}\n";
+$svc = app(PurchaseService::class);
+$ref = new ReflectionClass($svc);
+$method = $ref->getMethod('effectiveInvoiceLineUnitCost');
+$method->setAccessible(true);
+
+$lineSumStored = 0.0;
+$lineSumEffective = 0.0;
+$mismatches = 0;
+foreach ($inv->lines as $l) {
+    $storedCalc = round((float) $l->quantity * (float) $l->unit_cost, 2);
+    $effective = (float) $method->invoke($svc, $l);
+    $effCalc = round((float) $l->quantity * $effective, 2);
+    $lineSumStored += $storedCalc;
+    $lineSumEffective += $effCalc;
+    if (abs($storedCalc - (float) $l->line_total) > 0.001) {
+        $mismatches++;
+        echo "MISMATCH id={$l->id} qty={$l->quantity} unit={$l->unit_cost} line_total={$l->line_total} stored_calc={$storedCalc} effective={$effective} eff_calc={$effCalc}\n";
+    }
+}
+
+$extras = $inv->extrasTotal();
 echo "subtotal={$inv->subtotal}\n";
 echo "discount={$inv->discount_amount}\n";
-echo "tax={$inv->tax_amount}\n";
-echo "customs={$inv->customs_amount}\n";
-echo "transport={$inv->transport_fees}\n";
-echo "fines={$inv->fines_amount}\n";
-echo "other={$inv->other_fees}\n";
-echo 'extras='.$inv->extrasTotal()."\n";
-echo "total={$inv->total}\n";
-echo "paid={$inv->paid_amount}\n";
-
-$lineSum = 0.0;
-foreach ($inv->lines as $l) {
-    $lt = round((float) $l->quantity * (float) $l->unit_cost, 2);
-    $lineSum += $lt;
-    echo "LINE id={$l->id} product={$l->product_id} qty={$l->quantity} cost={$l->unit_cost} tax_rate={$l->tax_rate} line_total={$l->line_total} calc={$lt}\n";
-}
-echo "line_sum={$lineSum}\n";
-echo 'return_preview_lines_plus_extras='.round($lineSum + $inv->extrasTotal(), 2)."\n";
-echo 'invoice_total='.round((float) $inv->total, 2)."\n";
-echo 'diff='.round(($lineSum + $inv->extrasTotal()) - (float) $inv->total, 2)."\n";
-
-$rets = PurchaseReturn::query()->where('purchase_invoice_id', $inv->id)->orderBy('id')->get();
-foreach ($rets as $r) {
-    echo "RET {$r->return_number} status={$r->status} total={$r->total} customs={$r->customs_amount} transport={$r->transport_fees} fines={$r->fines_amount} other={$r->other_fees}\n";
-}
+echo "extras={$extras}\n";
+echo "invoice_total={$inv->total}\n";
+echo "mismatches={$mismatches}\n";
+echo "return_from_stored_unit=".round($lineSumStored + $extras, 2)."\n";
+echo "return_from_effective=".round($lineSumEffective + $extras, 2)."\n";
+echo 'match_invoice='.(abs(round($lineSumEffective + $extras, 2) - (float) $inv->total) < 0.02 ? 'YES' : 'NO')."\n";
