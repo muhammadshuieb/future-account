@@ -14,7 +14,9 @@ export type PurchaseInvoiceImportLine = {
   model?: string | null
   sku?: string | null
   quantity: number
-  unit_cost: number | null
+  unit_cost?: number | null
+  batch_no?: string | null
+  serial_no?: string | null
   notes: string
   matched: boolean
   match_reason?: string | null
@@ -38,6 +40,10 @@ type Props = {
   previewPath?: string
   /** Preferred downloaded filename. */
   fileName?: string
+  /** i18n namespace for button/hint/error strings (default: purchases). */
+  i18nPrefix?: 'purchases' | 'warehouse'
+  /** Optional hint override (defaults to `${i18nPrefix}.importModelHint`). */
+  hintKey?: string
   onImported?: (result: PurchaseInvoiceLinesPreview) => void
   onError?: (message: string) => void
 }
@@ -47,6 +53,8 @@ export default function PurchaseInvoiceExcelImportButtons({
   templatePath = '/imports/purchase-invoices/lines/template',
   previewPath = '/imports/purchase-invoices/lines/preview',
   fileName = 'purchase-invoice-lines-template.xlsx',
+  i18nPrefix = 'purchases',
+  hintKey,
   onImported,
   onError,
 }: Props) {
@@ -54,6 +62,7 @@ export default function PurchaseInvoiceExcelImportButtons({
   const inputRef = useRef<HTMLInputElement>(null)
   const [downloading, setDownloading] = useState(false)
   const [importing, setImporting] = useState(false)
+  const hint = hintKey || `${i18nPrefix}.importModelHint`
 
   async function downloadTemplate() {
     if (downloading || disabled) return
@@ -62,7 +71,7 @@ export default function PurchaseInvoiceExcelImportButtons({
       await downloadExcelExport(templatePath, undefined, fileName)
     } catch (err) {
       console.error(err)
-      onError?.(t('purchases.importTemplateFailed'))
+      onError?.(t(`${i18nPrefix}.importTemplateFailed`))
     } finally {
       setDownloading(false)
     }
@@ -79,7 +88,7 @@ export default function PurchaseInvoiceExcelImportButtons({
       })
       const result = res.data.data as PurchaseInvoiceLinesPreview
       if (!result?.lines?.length) {
-        onError?.(res.data.message || t('purchases.importEmpty'))
+        onError?.(res.data.message || t(`${i18nPrefix}.importEmpty`))
         return
       }
       onImported?.(result)
@@ -100,7 +109,7 @@ export default function PurchaseInvoiceExcelImportButtons({
         const first = ax.response?.data?.errors
           ? Object.values(ax.response.data.errors)[0]?.[0]
           : undefined
-        onError?.(first || ax.response?.data?.message || t('purchases.importFailed'))
+        onError?.(first || ax.response?.data?.message || t(`${i18nPrefix}.importFailed`))
       }
     } finally {
       setImporting(false)
@@ -118,7 +127,7 @@ export default function PurchaseInvoiceExcelImportButtons({
           onClick={() => void downloadTemplate()}
         >
           <FileDown size={16} />
-          {downloading ? t('common.exporting') : t('purchases.downloadImportTemplate')}
+          {downloading ? t('common.exporting') : t(`${i18nPrefix}.downloadImportTemplate`)}
         </Button>
         <Button
           type="button"
@@ -127,10 +136,10 @@ export default function PurchaseInvoiceExcelImportButtons({
           onClick={() => inputRef.current?.click()}
         >
           <Upload size={16} />
-          {importing ? t('purchases.importing') : t('purchases.importFromExcel')}
+          {importing ? t(`${i18nPrefix}.importing`) : t(`${i18nPrefix}.importFromExcel`)}
         </Button>
       </div>
-      <p className="max-w-md text-right text-xs text-black/55 dark:text-white/50">{t('purchases.importModelHint')}</p>
+      <p className="max-w-md text-right text-xs text-black/55 dark:text-white/50">{t(hint)}</p>
       <input
         ref={inputRef}
         type="file"

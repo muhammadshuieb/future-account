@@ -48,6 +48,7 @@ use App\Http\Controllers\Api\SupplierPaymentController;
 use App\Http\Controllers\Api\UnitController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseApprovalController;
+use App\Http\Controllers\Api\WarehouseTransferImportController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Controllers\Api\WarehouseDashboardController;
 use App\Http\Controllers\Api\WhatsAppController;
@@ -93,6 +94,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Excel product import (warehouse)
     Route::get('imports/products/template', [ProductImportController::class, 'template']);
     Route::post('imports/products', [ProductImportController::class, 'import']);
+
+    // Excel warehouse-transfer lines — preview only (does not save the transfer)
+    Route::get('imports/warehouse-transfers/lines/template', [WarehouseTransferImportController::class, 'template']);
+    Route::post('imports/warehouse-transfers/lines/preview', [WarehouseTransferImportController::class, 'preview']);
 
     // Excel purchase invoice lines — preview only (does not save the invoice)
     Route::get('imports/purchase-invoices/lines/template', [PurchaseInvoiceImportController::class, 'template']);

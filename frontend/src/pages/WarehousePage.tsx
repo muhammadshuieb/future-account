@@ -7,9 +7,10 @@ import { useQueryTab } from '@/lib/useQueryTab'
 import BarcodeScanInput from '@/components/BarcodeScanInput'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import ProductExcelImportButtons from '@/components/ProductExcelImportButtons'
+import PurchaseInvoiceExcelImportButtons, { type PurchaseInvoiceLinesPreview } from '@/components/PurchaseInvoiceExcelImportButtons'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 import { excelModuleForWarehouseTab } from '@/lib/excelExport'
-import { Button, EmptyState, Field, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
+import { Button, EmptyState, Field, FormSection, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, Tabs, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
 import { productLabel } from '@/lib/productLabel'
 import { describeMatches, matchScannedProduct } from '@/lib/productScanMatch'
@@ -19,6 +20,19 @@ const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock'
 type Tab = (typeof WAREHOUSE_TABS)[number]
 
 type ProductRow = { id: number; name: string; brand?: string; model?: string; track_batch?: boolean; track_serial?: boolean }
+
+type TransferLineDraft = {
+  product_id: string
+  quantity: string
+  batch_no: string
+  serial_no: string
+  unmatched_label?: string
+  import_notes?: string
+}
+
+function emptyTransferLine(): TransferLineDraft {
+  return { product_id: '', quantity: '1', batch_no: '', serial_no: '' }
+}
 
 type StockLocation = { warehouse_id: number; warehouse_name: string; batch_no: string; quantity: number }
 
@@ -88,11 +102,8 @@ const emptyTr = {
   transfer_date: todayYmd(),
   from_warehouse_id: '',
   to_warehouse_id: '',
-  product_id: '',
-  quantity: '1',
-  batch_no: '',
-  serial_no: '',
   status: 'posted',
+  lines: [emptyTransferLine()] as TransferLineDraft[],
 }
 
 export default function WarehousePage() {
@@ -169,6 +180,13 @@ export default function WarehousePage() {
   const [cntForm, setCntForm] = useState(emptyCnt)
   const [trForm, setTrForm] = useState(emptyTr)
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
+  const [stockLineIndex, setStockLineIndex] = useState(0)
+  const [catalogExtra, setCatalogExtra] = useState<ProductRow[]>([])
+  const [importNotice, setImportNotice] = useState<{
+    imported: number
+    unmatched: number
+    errors: { row: number; message: string }[]
+  } | null>(null)
 
   const canManageDirectly = hasPermission('warehouse.manage')
   const canRequest = (permission: string) => canManageDirectly || hasPermission(permission)
@@ -181,8 +199,13 @@ export default function WarehousePage() {
     || (['categories', 'units'].includes(tab) && canManageDirectly)
   )
   const canAdd = canEditCurrent && !['stock', 'alerts'].includes(tab) && (tab !== 'warehouses' || canManageDirectly)
-  const productList = (products.data || []) as ProductRow[]
-  const trProduct = productList.find((p) => String(p.id) === trForm.product_id)
+  const productList = useMemo(() => {
+    const base = (products.data || []) as ProductRow[]
+    if (!catalogExtra.length) return base
+    const map = new Map(base.map((p) => [p.id, p]))
+    for (const p of catalogExtra) map.set(p.id, { ...map.get(p.id), ...p })
+    return [...map.values()]
+  }, [products.data, catalogExtra])
   const mvProduct = productList.find((p) => String(p.id) === mvForm.product_id)
   const cntProduct = productList.find((p) => String(p.id) === cntForm.product_id)
 
@@ -206,12 +229,17 @@ export default function WarehousePage() {
     setEditingId(null)
     setViewRow(null)
     setStockInfo(null)
+    setStockLineIndex(0)
+    setImportNotice(null)
   }
 
   function openCreate() {
     setEditingId(null)
     setViewRow(null)
     setStockInfo(null)
+    setStockLineIndex(0)
+    setImportNotice(null)
+    setCatalogExtra([])
     if (tab === 'warehouses') setWhForm(emptyWh)
     if (tab === 'products') {
       const whList = (warehouses.data || []) as { id: number }[]
@@ -221,9 +249,70 @@ export default function WarehousePage() {
     if (tab === 'categories') setCatForm(emptyCat)
     if (tab === 'units') setUnitForm(emptyUnit)
     if (tab === 'movements') setMvForm(emptyMv)
-    if (tab === 'transfers') setTrForm(emptyTr)
+    if (tab === 'transfers') setTrForm({ ...emptyTr, lines: [emptyTransferLine()] })
     if (tab === 'counts') setCntForm(emptyCnt)
     setModalOpen(true)
+  }
+
+  function updateTrLine(index: number, patch: Partial<TransferLineDraft>) {
+    setTrForm((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  function addTrLine() {
+    setTrForm((prev) => ({ ...prev, lines: [...prev.lines, emptyTransferLine()] }))
+  }
+
+  function removeTrLine(index: number) {
+    setTrForm((prev) => {
+      const lines = prev.lines.filter((_, i) => i !== index)
+      return { ...prev, lines: lines.length ? lines : [emptyTransferLine()] }
+    })
+    if (stockLineIndex === index) setStockInfo(null)
+  }
+
+  function applyImportedTransferLines(result: PurchaseInvoiceLinesPreview) {
+    const extras: ProductRow[] = []
+    const newLines: TransferLineDraft[] = result.lines.map((line) => {
+      if (line.product_id) {
+        extras.push({
+          id: line.product_id,
+          name: line.product_name || line.sku || '',
+          brand: line.brand || undefined,
+          model: line.model || undefined,
+        })
+      }
+      const labelParts = [line.product_code, line.product_name, line.brand, line.model].filter(Boolean)
+      return {
+        product_id: line.product_id ? String(line.product_id) : '',
+        quantity: line.quantity != null ? String(line.quantity) : '1',
+        batch_no: line.batch_no || '',
+        serial_no: line.serial_no || '',
+        unmatched_label: line.matched ? undefined : (labelParts.join(' / ') || t('warehouse.importUnknownProduct')),
+        import_notes: line.notes || line.warning || undefined,
+      }
+    })
+    if (extras.length) {
+      setCatalogExtra((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p]))
+        for (const p of extras) map.set(p.id, { ...map.get(p.id), ...p })
+        return [...map.values()]
+      })
+    }
+    setTrForm((prev) => {
+      const keep = prev.lines.filter((l) => l.product_id || l.unmatched_label || (l.quantity && l.quantity !== '1') || l.batch_no || l.serial_no)
+      return {
+        ...prev,
+        lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyTransferLine()]),
+      }
+    })
+    setImportNotice({
+      imported: result.imported,
+      unmatched: result.unmatched,
+      errors: result.errors || [],
+    })
   }
 
   async function handleProductBarcodeScan(code: string) {
@@ -440,19 +529,27 @@ export default function WarehousePage() {
   })
 
   const saveTr = useMutation({
-    mutationFn: () =>
-      api.post('/warehouse-transfers', {
+    mutationFn: () => {
+      if (trForm.lines.some((l) => l.unmatched_label && !l.product_id)) {
+        throw { response: { data: { message: t('warehouse.importBlockedUnmatched') } } }
+      }
+      const filled = trForm.lines.filter((l) => l.product_id)
+      if (!filled.length) {
+        throw { response: { data: { message: t('warehouse.transferLinesRequired') } } }
+      }
+      return api.post('/warehouse-transfers', {
         transfer_date: trForm.transfer_date,
         from_warehouse_id: Number(trForm.from_warehouse_id),
         to_warehouse_id: Number(trForm.to_warehouse_id),
         status: trForm.status,
-        lines: [{
-          product_id: Number(trForm.product_id),
-          quantity: Number(trForm.quantity),
-          batch_no: trForm.batch_no || undefined,
-          serial_no: trForm.serial_no || undefined,
-        }],
-      }),
+        lines: filled.map((line) => ({
+          product_id: Number(line.product_id),
+          quantity: Number(line.quantity),
+          batch_no: line.batch_no || undefined,
+          serial_no: line.serial_no || undefined,
+        })),
+      })
+    },
     onSuccess: (res) => {
       msg.setMessage(res.status === 202 ? t('approvals.submitted') : 'تم التحويل')
       closeModal()
@@ -1031,83 +1128,157 @@ export default function WarehousePage() {
         )}
       </Modal>
 
-      <Modal open={modalOpen && tab === 'transfers' && !viewRow} onClose={closeModal} title="تحويل بين مخازن" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveTr.isPending} onClick={() => saveTr.mutate()}>ترحيل التحويل</Button></>}>
+      <Modal open={modalOpen && tab === 'transfers' && !viewRow} onClose={closeModal} title="تحويل بين مخازن" size="xl" footer={<><Button variant="secondary" onClick={closeModal}>إلغاء</Button><Button variant="primary" disabled={saveTr.isPending} onClick={() => saveTr.mutate()}>ترحيل التحويل</Button></>}>
         <div className="form-stack">
-          <Field label="التاريخ"><input type="date" className={inputClass} value={trForm.transfer_date} onChange={(e) => setTrForm({ ...trForm, transfer_date: e.target.value })} /></Field>
-          <Field label="من">
-            <select
-              className={inputClass}
-              value={trForm.from_warehouse_id}
-              onChange={(e) => {
-                const from_warehouse_id = e.target.value
-                setTrForm((prev) => ({
-                  ...prev,
-                  from_warehouse_id,
-                  to_warehouse_id: prev.to_warehouse_id === from_warehouse_id ? '' : prev.to_warehouse_id,
-                }))
-                if (trForm.product_id && from_warehouse_id) {
-                  void refreshStock(trForm.product_id, from_warehouse_id, trForm.batch_no || undefined, {
-                    autofillBatch: true,
-                    onBatch: (batch) => setTrForm((prev) => ({ ...prev, batch_no: batch })),
-                  })
-                } else setStockInfo(null)
-              }}
-              required
-            >
-              <option value="">—</option>
-              {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
-          </Field>
-          <Field label="إلى"><select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required><option value="">—</option>{(transferTargets.data || []).filter((w) => String(w.id) !== trForm.from_warehouse_id).map((w) => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}</select></Field>
-          <ProductVariantSelect
-            products={productList}
-            value={trForm.product_id}
-            onChange={(product_id) => {
-                setTrForm((prev) => ({ ...prev, product_id, batch_no: '', serial_no: '' }))
-                if (product_id && trForm.from_warehouse_id) {
-                  void refreshStock(product_id, trForm.from_warehouse_id, undefined, {
-                    autofillBatch: true,
-                    onBatch: (batch) => setTrForm((prev) => ({ ...prev, batch_no: batch })),
-                  })
-                } else setStockInfo(null)
-            }}
-          />
-          <Field label="كمية">
-            <NumericInput value={trForm.quantity} onChange={(v) => setTrForm((prev) => ({ ...prev, quantity: v }))} />
-            {stockInfo && trForm.product_id && trForm.from_warehouse_id && (
-              <BatchStockHint
-                stockInfo={stockInfo}
-                batchNo={trForm.batch_no}
-                onSelectBatch={(batch) => {
-                  setTrForm((prev) => ({ ...prev, batch_no: batch }))
-                  void refreshStock(trForm.product_id, trForm.from_warehouse_id, batch)
-                }}
-              />
-            )}
-          </Field>
-          {trProduct?.track_batch && (
-            <Field label={t('common.batch')}>
-              <input
+          <div className="form-grid-3">
+            <Field label="التاريخ"><input type="date" className={inputClass} value={trForm.transfer_date} onChange={(e) => setTrForm({ ...trForm, transfer_date: e.target.value })} /></Field>
+            <Field label="من">
+              <select
                 className={inputClass}
-                value={trForm.batch_no}
+                value={trForm.from_warehouse_id}
                 onChange={(e) => {
-                  const batch_no = e.target.value
-                  setTrForm({ ...trForm, batch_no })
-                  if (trForm.product_id && trForm.from_warehouse_id) {
-                    void refreshStock(trForm.product_id, trForm.from_warehouse_id, batch_no || undefined)
-                  }
+                  const from_warehouse_id = e.target.value
+                  setTrForm((prev) => ({
+                    ...prev,
+                    from_warehouse_id,
+                    to_warehouse_id: prev.to_warehouse_id === from_warehouse_id ? '' : prev.to_warehouse_id,
+                  }))
+                  setStockInfo(null)
                 }}
                 required
+              >
+                <option value="">—</option>
+                {(warehouses.data || []).map((w: { id: number; name: string }) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
+            </Field>
+            <Field label="إلى">
+              <select className={inputClass} value={trForm.to_warehouse_id} onChange={(e) => setTrForm({ ...trForm, to_warehouse_id: e.target.value })} required>
+                <option value="">—</option>
+                {(transferTargets.data || []).filter((w) => String(w.id) !== trForm.from_warehouse_id).map((w) => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}
+              </select>
+            </Field>
+          </div>
+
+          <FormSection
+            title={t('common.lines')}
+            actions={
+              <PurchaseInvoiceExcelImportButtons
+                i18nPrefix="warehouse"
+                hintKey="warehouse.importTransferModelHint"
+                templatePath="/imports/warehouse-transfers/lines/template"
+                previewPath="/imports/warehouse-transfers/lines/preview"
+                fileName="warehouse-transfer-lines-template.xlsx"
+                onImported={(result) => {
+                  msg.setError('')
+                  applyImportedTransferLines(result)
+                  msg.setMessage(t('warehouse.importTransferSummary', { imported: result.imported }))
+                }}
+                onError={(message) => msg.setError(message)}
               />
-            </Field>
-          )}
-          {trProduct?.track_serial && (
-            <Field label={t('common.serial')}>
-              <input className={inputClass} value={trForm.serial_no} onChange={(e) => setTrForm({ ...trForm, serial_no: e.target.value })} required />
-            </Field>
-          )}
-          {trProduct?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}
-          {trProduct?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}
+            }
+          >
+            {importNotice && (
+              <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-2 text-xs text-teal">
+                <p>{t('warehouse.importTransferSummary', { imported: importNotice.imported })}</p>
+                {importNotice.unmatched > 0 && (
+                  <p className="mt-1 text-amber-800">{t('warehouse.importUnmatchedCount', { count: importNotice.unmatched })}</p>
+                )}
+                {importNotice.errors.map((err) => (
+                  <p key={err.row} className="mt-1 text-rose-700">{t('warehouse.importRowError', { row: err.row, message: err.message })}</p>
+                ))}
+              </div>
+            )}
+
+            {trForm.lines.map((line, index) => {
+              const product = productList.find((p) => String(p.id) === line.product_id)
+              const unmatched = Boolean(line.unmatched_label && !line.product_id)
+              const showStock = stockLineIndex === index && stockInfo && line.product_id && trForm.from_warehouse_id
+              return (
+                <div key={index} className={`rounded-lg border p-3 ${unmatched ? 'border-amber-300 bg-amber-50/40' : 'border-black/10'}`}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-black/55">{t('common.lineN', { n: index + 1 })}</p>
+                    {trForm.lines.length > 1 && (
+                      <button type="button" className="text-xs text-rose-600" onClick={() => removeTrLine(index)}>{t('common.removeLine')}</button>
+                    )}
+                  </div>
+                  {unmatched && (
+                    <p className="mb-2 text-xs text-amber-800">{t('warehouse.importUnmatchedLine')}: {line.unmatched_label}</p>
+                  )}
+                  {line.import_notes && (
+                    <p className="mb-2 text-xs text-black/50">{line.import_notes}</p>
+                  )}
+                  <div className="form-grid-2">
+                    <ProductVariantSelect
+                      products={productList}
+                      value={line.product_id}
+                      onChange={(product_id) => {
+                        setStockLineIndex(index)
+                        updateTrLine(index, { product_id, batch_no: '', serial_no: '', unmatched_label: undefined })
+                        if (product_id && trForm.from_warehouse_id) {
+                          void refreshStock(product_id, trForm.from_warehouse_id, undefined, {
+                            autofillBatch: true,
+                            onBatch: (batch) => updateTrLine(index, { batch_no: batch }),
+                          })
+                        } else setStockInfo(null)
+                      }}
+                    />
+                    <Field label="كمية">
+                      <NumericInput
+                        value={line.quantity}
+                        onChange={(v) => {
+                          setStockLineIndex(index)
+                          updateTrLine(index, { quantity: v })
+                        }}
+                      />
+                      {showStock && (
+                        <BatchStockHint
+                          stockInfo={stockInfo}
+                          batchNo={line.batch_no}
+                          onSelectBatch={(batch) => {
+                            updateTrLine(index, { batch_no: batch })
+                            void refreshStock(line.product_id, trForm.from_warehouse_id, batch)
+                          }}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  {product?.track_batch && (
+                    <Field label={t('common.batch')}>
+                      <input
+                        className={inputClass}
+                        value={line.batch_no}
+                        onChange={(e) => {
+                          const batch_no = e.target.value
+                          setStockLineIndex(index)
+                          updateTrLine(index, { batch_no })
+                          if (line.product_id && trForm.from_warehouse_id) {
+                            void refreshStock(line.product_id, trForm.from_warehouse_id, batch_no || undefined)
+                          }
+                        }}
+                        required
+                      />
+                    </Field>
+                  )}
+                  {product?.track_serial && (
+                    <Field label={t('common.serial')}>
+                      <input
+                        className={inputClass}
+                        value={line.serial_no}
+                        onChange={(e) => updateTrLine(index, { serial_no: e.target.value })}
+                        required
+                      />
+                    </Field>
+                  )}
+                  {product?.track_batch && <p className="text-xs text-amber">* {t('warehouse.trackBatch')}</p>}
+                  {product?.track_serial && <p className="text-xs text-amber">* {t('warehouse.trackSerial')}</p>}
+                </div>
+              )
+            })}
+
+            <div className="flex justify-end">
+              <Button type="button" variant="secondary" onClick={addTrLine}>{t('common.addLine')}</Button>
+            </div>
+          </FormSection>
         </div>
       </Modal>
 

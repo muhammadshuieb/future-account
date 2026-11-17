@@ -516,7 +516,15 @@
     "importRowError": "Row {{row}}: {{message}}",
     "importEmpty": "The file has no data rows to import",
     "importFailed": "Could not import the Excel file. Check permissions and format, then try again.",
-    "importTemplateFailed": "Could not download the import template."
+    "importTemplateFailed": "Could not download the import template.",
+    "importModelHint": "Match by model first: if the model exists in the catalog, the product is filled automatically.",
+    "importTransferModelHint": "Transfer template: model + quantity (and batch/serial when needed). Pick from/to warehouses, then review lines before posting.",
+    "importTransferSummary": "Loaded {{imported}} line(s) into the transfer — review then post. The transfer is not saved yet.",
+    "importUnmatchedCount": "{{count}} unmatched line(s) — pick products manually",
+    "importUnmatchedLine": "Unmatched product",
+    "importUnknownProduct": "Unknown product",
+    "importBlockedUnmatched": "Some lines are unmatched — select products manually before posting",
+    "transferLinesRequired": "Add at least one transfer line"
   },
   "reports": {
     "generalLedger": "General Ledger",
