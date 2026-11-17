@@ -294,7 +294,20 @@
     "collectSaved": "Amount collected and invoice updated",
     "filterSettlement": "Filter invoices",
     "filterAllInvoices": "All invoices",
-    "filterUnsettled": "Unsettled (open AR)"
+    "filterUnsettled": "Unsettled (open AR)",
+    "downloadImportTemplate": "Download Excel template",
+    "importFromExcel": "Import from Excel",
+    "importing": "Importing...",
+    "importEmpty": "The file has no data rows to import",
+    "importFailed": "Could not import the Excel file. Check permissions and format, then try again.",
+    "importTemplateFailed": "Could not download the import template.",
+    "importModelHint": "Match by model first — model + quantity is enough; sale price fills from the catalog when blank.",
+    "importSummary": "Loaded {{imported}} line(s) into the form — review then save. The document is not saved yet.",
+    "importUnmatchedCount": "{{count}} unmatched line(s) — pick products manually",
+    "importUnmatchedLine": "Unmatched product",
+    "importUnknownProduct": "Unknown product",
+    "importBlockedUnmatched": "Some lines are unmatched — select products manually before saving",
+    "importRowError": "Row {{row}}: {{message}}"
   },
   "quotes": {
     "title": "Price Quotes",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Printer } from 'lucide-react'
@@ -18,6 +18,7 @@ import AttachmentPanel, { AttachmentIcon, PendingAttachmentField, uploadAttachme
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
+import PurchaseInvoiceExcelImportButtons, { type PurchaseInvoiceLinesPreview } from '@/components/PurchaseInvoiceExcelImportButtons'
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
@@ -52,6 +53,8 @@ type InvoiceLineDraft = {
   unit_price: string
   batch_no: string
   serial_no: string
+  unmatched_label?: string
+  import_notes?: string
 }
 
 type QuoteLineDraft = PrintInvoiceLineDraft
@@ -179,8 +182,6 @@ export default function SalesPage() {
   const currencyList = currencies.data?.currencies || []
   const baseCurrency = currencies.data?.base_currency || 'USD'
 
-  const emptyLine = { customer_id: '', warehouse_id: '', product_id: '', quantity: '1', unit_price: '', batch_no: '', serial_no: '', currency: 'USD', exchange_rate: '1' }
-
   const [quote, setQuote] = useState({
     quote_date: todayYmd(),
     valid_until: '',
@@ -190,7 +191,27 @@ export default function SalesPage() {
     exchange_rate: '1',
     lines: [emptyQuoteLine()] as QuoteLineDraft[],
   })
-  const [order, setOrder] = useState({ order_date: todayYmd(), ...emptyLine })
+  const [order, setOrder] = useState({
+    order_date: todayYmd(),
+    customer_id: '',
+    warehouse_id: '',
+    currency: 'USD',
+    exchange_rate: '1',
+    lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
+  })
+  const [catalogExtra, setCatalogExtra] = useState<ProductRow[]>([])
+  const [importNotice, setImportNotice] = useState<{
+    imported: number
+    unmatched: number
+    errors: { row: number; message: string }[]
+  } | null>(null)
+  const productCatalog = useMemo(() => {
+    const base = products.data || []
+    if (!catalogExtra.length) return base
+    const map = new Map(base.map((p) => [p.id, p]))
+    for (const p of catalogExtra) map.set(p.id, { ...map.get(p.id), ...p, sale_price: p.sale_price ?? map.get(p.id)?.sale_price ?? 0 })
+    return [...map.values()]
+  }, [products.data, catalogExtra])
   const [inv, setInv] = useState({
     invoice_date: todayYmd(),
     status: 'posted',
@@ -247,8 +268,9 @@ export default function SalesPage() {
   const quoteLinesScroll = useScrollToLastLine(quote.lines.length)
 
   const invHasSerialProduct = inv.lines.some((line) =>
-    (products.data || []).find((p) => String(p.id) === line.product_id)?.track_serial,
+    productCatalog.find((p) => String(p.id) === line.product_id)?.track_serial,
   )
+  const orderLinesScroll = useScrollToLastLine(order.lines.length)
 
   const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string; batch_no?: string }>(
     setState: Dispatch<SetStateAction<T>>,
@@ -298,6 +320,88 @@ export default function SalesPage() {
       ...prev,
       lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
     }))
+  }
+
+  const updateOrderLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
+    setOrder((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, ...patch } : line)),
+    }))
+  }
+
+  const addOrderLine = () => {
+    orderLinesScroll.markPending()
+    setOrder((prev) => ({ ...prev, lines: [...prev.lines, emptyInvoiceLine()] }))
+  }
+
+  const removeOrderLine = (index: number) => {
+    setOrder((prev) => ({
+      ...prev,
+      lines: prev.lines.length <= 1 ? prev.lines : prev.lines.filter((_, i) => i !== index),
+    }))
+  }
+
+  const applyStockToOrderLine = useCallback(async (index: number, productId: string, warehouseId: string) => {
+    const info = await fetchStockInfo(productId, warehouseId)
+    if (info === null) return
+    const canOversell = allowNegativeStock || !!info.allow_negative_stock
+    if (canOversell && info.available_qty <= 0) return
+    setOrder((prev) => ({
+      ...prev,
+      lines: prev.lines.map((line, i) => (i === index ? { ...line, quantity: String(info.available_qty) } : line)),
+    }))
+  }, [allowNegativeStock])
+
+  function mapImportedSalesLines(result: PurchaseInvoiceLinesPreview): InvoiceLineDraft[] {
+    const extras: ProductRow[] = []
+    const newLines = result.lines.map((line) => {
+      if (line.product_id) {
+        extras.push({
+          id: line.product_id,
+          name: line.product_name || line.sku || '',
+          brand: line.brand || undefined,
+          model: line.model || undefined,
+          sale_price: Number(line.unit_price) || 0,
+          sku: line.sku || undefined,
+        })
+      }
+      const labelParts = [line.product_code, line.product_name, line.brand, line.model].filter(Boolean)
+      return {
+        product_id: line.product_id ? String(line.product_id) : '',
+        quantity: line.quantity != null ? String(line.quantity) : '1',
+        unit_price: line.unit_price != null ? String(line.unit_price) : '',
+        batch_no: '',
+        serial_no: '',
+        unmatched_label: line.matched ? undefined : (labelParts.join(' / ') || t('sales.importUnknownProduct')),
+        import_notes: line.notes || line.warning || undefined,
+      }
+    })
+    if (extras.length) {
+      setCatalogExtra((prev) => {
+        const map = new Map(prev.map((p) => [p.id, p]))
+        for (const p of extras) map.set(p.id, { ...map.get(p.id), ...p })
+        return [...map.values()]
+      })
+    }
+    return newLines
+  }
+
+  function applyImportedInvoiceLines(result: PurchaseInvoiceLinesPreview) {
+    const newLines = mapImportedSalesLines(result)
+    setInv((prev) => {
+      const keep = prev.lines.filter((l) => l.product_id || l.unmatched_label)
+      return { ...prev, lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyInvoiceLine()]) }
+    })
+    setImportNotice({ imported: result.imported, unmatched: result.unmatched, errors: result.errors || [] })
+  }
+
+  function applyImportedOrderLines(result: PurchaseInvoiceLinesPreview) {
+    const newLines = mapImportedSalesLines(result)
+    setOrder((prev) => {
+      const keep = prev.lines.filter((l) => l.product_id || l.unmatched_label)
+      return { ...prev, lines: keep.length ? [...keep, ...newLines] : (newLines.length ? newLines : [emptyInvoiceLine()]) }
+    })
+    setImportNotice({ imported: result.imported, unmatched: result.unmatched, errors: result.errors || [] })
   }
 
   const updateRetLine = (index: number, patch: Partial<InvoiceLineDraft>) => {
@@ -391,8 +495,18 @@ export default function SalesPage() {
           return { ...prev, lines }
         })
       } else if (target === 'order') {
-        setOrder((prev) => ({ ...prev, ...patch }))
-        if (order.warehouse_id) void applyStockToForm(setOrder, String(found.id), order.warehouse_id)
+        setOrder((prev) => {
+          const emptyIdx = prev.lines.findIndex((l) => !l.product_id)
+          if (emptyIdx < 0) orderLinesScroll.markPending()
+          const lines = emptyIdx >= 0
+            ? prev.lines.map((line, i) => (i === emptyIdx ? { ...line, ...patch } : line))
+            : [...prev.lines, { ...emptyInvoiceLine(), ...patch }]
+          const targetIdx = emptyIdx >= 0 ? emptyIdx : lines.length - 1
+          if (prev.warehouse_id && !skipStockAutofill.current) {
+            void applyStockToOrderLine(targetIdx, String(found.id), prev.warehouse_id)
+          }
+          return { ...prev, lines }
+        })
       } else {
         setQuote((prev) => {
           const emptyIdx = prev.lines.findIndex((l) => !l.product_id && !l.product_name.trim())
@@ -419,6 +533,7 @@ export default function SalesPage() {
     }
   }
   const closeModal = () => {
+    setImportNotice(null)
     setModal(null)
     setSelectedId(null)
     setSelectedRow(null)
@@ -525,9 +640,18 @@ export default function SalesPage() {
       exchange_rate: '1',
       lines: [emptyInvoiceLine()],
     })
+    setCatalogExtra([])
+    setImportNotice(null)
+    setOrder({
+      order_date: todayYmd(),
+      customer_id: '',
+      warehouse_id: defaultWarehouseId || '',
+      currency: baseCurrency || 'USD',
+      exchange_rate: '1',
+      lines: [emptyInvoiceLine()],
+    })
     if (defaultWarehouseId) {
       setQuote((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
-      setOrder((prev) => (prev.warehouse_id ? prev : { ...prev, warehouse_id: defaultWarehouseId }))
     }
     setQuote((prev) => ({
       ...prev,
@@ -590,20 +714,32 @@ export default function SalesPage() {
   })
 
   const saveOrder = useMutation({
-    mutationFn: () => api.post('/sales-orders', {
-      order_date: order.order_date,
-      customer_id: Number(order.customer_id),
-      warehouse_id: Number(order.warehouse_id) || undefined,
-      currency: order.currency,
-      exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
-      lines: [linePayload(order.product_id, order.quantity, order.unit_price, order.batch_no, order.serial_no, defaultTaxRate)],
-    }),
+    mutationFn: () => {
+      if (order.lines.some((l) => l.unmatched_label && !l.product_id)) {
+        throw { response: { data: { message: t('sales.importBlockedUnmatched') } } }
+      }
+      const filledLines = order.lines.filter((l) => l.product_id)
+      if (filledLines.length === 0) {
+        throw { response: { data: { message: t('common.linesRequired') } } }
+      }
+      return api.post('/sales-orders', {
+        order_date: order.order_date,
+        customer_id: Number(order.customer_id),
+        warehouse_id: Number(order.warehouse_id) || undefined,
+        currency: order.currency,
+        exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
+        lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
+      })
+    },
     onSuccess: () => { msg.setMessage(t('sales.orderSaved')); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
   const saveInv = useMutation({
     mutationFn: async () => {
+      if (inv.lines.some((l) => l.unmatched_label && !l.product_id)) {
+        throw { response: { data: { message: t('sales.importBlockedUnmatched') } } }
+      }
       const filledLines = inv.lines.filter((l) => l.product_id)
       if (filledLines.length === 0) {
         throw { response: { data: { message: t('common.linesRequired') } } }
@@ -664,6 +800,9 @@ export default function SalesPage() {
     return Math.round(n * 100) / 100
   }
 
+  const orderLineSub = round2(
+    order.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0),
+  )
   const invLineSub = round2(
     inv.lines.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0),
   )
@@ -1063,21 +1202,52 @@ export default function SalesPage() {
     )
   }
 
+  const salesImportButtons = (kind: 'orders' | 'invoices') => (
+    <PurchaseInvoiceExcelImportButtons
+      i18nPrefix="sales"
+      hintKey="sales.importModelHint"
+      templatePath={kind === 'orders' ? '/imports/sales-orders/lines/template' : '/imports/sales-invoices/lines/template'}
+      previewPath={kind === 'orders' ? '/imports/sales-orders/lines/preview' : '/imports/sales-invoices/lines/preview'}
+      fileName="sales-lines-template.xlsx"
+      onImported={(result) => {
+        msg.setError('')
+        if (kind === 'orders') applyImportedOrderLines(result)
+        else applyImportedInvoiceLines(result)
+        msg.setMessage(t('sales.importSummary', { imported: result.imported }))
+      }}
+      onError={(message) => msg.setError(message)}
+    />
+  )
+
+  const importNoticeBanner = importNotice ? (
+    <div className="rounded-lg border border-teal/25 bg-teal/5 px-3 py-2 text-xs text-teal">
+      <p>{t('sales.importSummary', { imported: importNotice.imported })}</p>
+      {importNotice.unmatched > 0 && (
+        <p className="mt-1 text-amber-800">{t('sales.importUnmatchedCount', { count: importNotice.unmatched })}</p>
+      )}
+      {importNotice.errors.map((err) => (
+        <p key={err.row} className="mt-1 text-rose-700">{t('sales.importRowError', { row: err.row, message: err.message })}</p>
+      ))}
+    </div>
+  ) : null
+
   const invoiceLinesEditor = (
-    <FormSection title={t('common.lines')}>
+    <FormSection title={t('common.lines')} actions={salesImportButtons('invoices')}>
       <BarcodeScanInput
         label={t('sales.scanBarcode')}
         hint={t('sales.scanBarcodeHint')}
         onScan={(code) => void handleBarcodeScan(code, 'inv')}
         compact
       />
+      {importNoticeBanner}
       {inv.lines.map((line, index) => {
-        const product = (products.data || []).find((p) => String(p.id) === line.product_id)
+        const product = productCatalog.find((p) => String(p.id) === line.product_id)
         const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
+        const unmatched = Boolean(line.unmatched_label && !line.product_id)
         return (
           <div
             key={index}
-            className="form-line-card"
+            className={`form-line-card ${unmatched ? 'border-amber-300 bg-amber-50/40' : ''}`}
             ref={index === inv.lines.length - 1 ? invLinesScroll.setLastLineRef : undefined}
           >
             <div className="form-line-card-header">
@@ -1088,11 +1258,15 @@ export default function SalesPage() {
                 </button>
               )}
             </div>
+            {unmatched && (
+              <p className="mb-2 text-xs text-amber-800">{t('sales.importUnmatchedLine')}: {line.unmatched_label}</p>
+            )}
+            {line.import_notes && <p className="mb-2 text-xs text-black/50">{line.import_notes}</p>}
             <ProductVariantSelect
-              products={products.data || []}
+              products={productCatalog}
               value={line.product_id}
               onChange={(productId) => {
-                const selected = (products.data || []).find((p) => String(p.id) === productId)
+                const selected = productCatalog.find((p) => String(p.id) === productId)
                 const productChanged = productId !== line.product_id
                 updateInvLine(index, {
                   product_id: productId,
@@ -1100,6 +1274,7 @@ export default function SalesPage() {
                   unit_price: productChanged && selected ? String(selected.sale_price) : line.unit_price,
                   serial_no: selected?.track_serial ? line.serial_no : '',
                   batch_no: selected?.track_batch ? line.batch_no : '',
+                  unmatched_label: undefined,
                 })
                 // Never auto-overwrite quantity while editing an existing invoice.
                 if (productId && inv.warehouse_id && !skipStockAutofill.current && modal !== 'edit') {
@@ -1163,6 +1338,100 @@ export default function SalesPage() {
         )}
         <p className="font-bold">
           {t('common.total')}: <span className="tabular-nums">{formatMoney(invEstimatedTotal, inv.currency)}</span>
+        </p>
+      </div>
+    </FormSection>
+  )
+
+  const orderLinesEditor = (
+    <FormSection title={t('common.lines')} actions={salesImportButtons('orders')}>
+      <BarcodeScanInput
+        label={t('sales.scanBarcode')}
+        hint={t('sales.scanBarcodeHint')}
+        onScan={(code) => void handleBarcodeScan(code, 'order')}
+        compact
+      />
+      {importNoticeBanner}
+      {order.lines.map((line, index) => {
+        const product = productCatalog.find((p) => String(p.id) === line.product_id)
+        const lineTotal = round2((Number(line.quantity) || 0) * (Number(line.unit_price) || 0))
+        const unmatched = Boolean(line.unmatched_label && !line.product_id)
+        return (
+          <div
+            key={index}
+            className={`form-line-card ${unmatched ? 'border-amber-300 bg-amber-50/40' : ''}`}
+            ref={index === order.lines.length - 1 ? orderLinesScroll.setLastLineRef : undefined}
+          >
+            <div className="form-line-card-header">
+              <span>{t('common.lineN', { n: index + 1 })}</span>
+              {order.lines.length > 1 && (
+                <button type="button" className="text-xs text-rose-600" onClick={() => removeOrderLine(index)}>
+                  {t('common.removeLine')}
+                </button>
+              )}
+            </div>
+            {unmatched && (
+              <p className="mb-2 text-xs text-amber-800">{t('sales.importUnmatchedLine')}: {line.unmatched_label}</p>
+            )}
+            {line.import_notes && <p className="mb-2 text-xs text-black/50">{line.import_notes}</p>}
+            <ProductVariantSelect
+              products={productCatalog}
+              value={line.product_id}
+              onChange={(productId) => {
+                const selected = productCatalog.find((p) => String(p.id) === productId)
+                const productChanged = productId !== line.product_id
+                updateOrderLine(index, {
+                  product_id: productId,
+                  unit_price: productChanged && selected ? String(selected.sale_price) : line.unit_price,
+                  serial_no: selected?.track_serial ? line.serial_no : '',
+                  batch_no: selected?.track_batch ? line.batch_no : '',
+                  unmatched_label: undefined,
+                })
+                if (productId && order.warehouse_id && !skipStockAutofill.current) {
+                  void applyStockToOrderLine(index, productId, order.warehouse_id)
+                }
+              }}
+            />
+            <div className="form-grid-4">
+              {line.product_id && (
+                <Field label={t('common.unit')}>
+                  <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
+                </Field>
+              )}
+              <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
+                <NumericInput value={line.quantity} onChange={(v) => updateOrderLine(index, { quantity: v })} />
+                {line.product_id && order.warehouse_id && (
+                  <div className="mt-1 text-xs text-black/55">
+                    <LineStockHint
+                      productId={Number(line.product_id)}
+                      warehouseId={Number(order.warehouse_id)}
+                      quantity={Number(line.quantity) || 0}
+                      allowNegativeStock={allowNegativeStock}
+                    />
+                  </div>
+                )}
+              </Field>
+              <Field label={t('common.price')}>
+                <NumericInput value={line.unit_price} onChange={(v) => updateOrderLine(index, { unit_price: v })} />
+              </Field>
+              <Field label={t('common.total')}>
+                <input className={`${inputClass} bg-black/5 tabular-nums`} readOnly value={formatQuantity(lineTotal)} />
+              </Field>
+            </div>
+            {product?.track_serial && (
+              <Field label={t('common.serial')}>
+                <input className={inputClass} value={line.serial_no} onChange={(e) => updateOrderLine(index, { serial_no: e.target.value })} required />
+              </Field>
+            )}
+          </div>
+        )
+      })}
+      <div className="flex justify-end">
+        <Button type="button" variant="secondary" onClick={addOrderLine}>{t('common.addLine')}</Button>
+      </div>
+      <div className="rounded-lg border border-black/10 bg-white px-3 py-2 text-sm">
+        <p className="font-bold">
+          {t('common.total')}: <span className="tabular-nums">{formatMoney(orderLineSub, order.currency)}</span>
         </p>
       </div>
     </FormSection>
@@ -1725,7 +1994,7 @@ export default function SalesPage() {
               : modal === 'collect' ? t('sales.collectRemaining')
                 : t('common.view')
         }
-        size={(tab === 'invoices' || tab === 'returns') && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
+        size={(tab === 'invoices' || tab === 'orders' || tab === 'returns') && (modal === 'view' || modal === 'create' || modal === 'edit') ? 'xl' : 'lg'}
         footer={
           modal === 'collect' ? (
             <>
@@ -1962,10 +2231,19 @@ export default function SalesPage() {
               <FormStack>
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
-                  {customerFields(order, setOrder, true, onSalesWarehouseChange(setOrder))}
+                  {customerFields(order, setOrder, true, (warehouseId) => {
+                    if (!warehouseId) {
+                      setStockInfo(null)
+                      return
+                    }
+                    const first = order.lines.find((l) => l.product_id)
+                    if (first?.product_id && !skipStockAutofill.current) {
+                      void applyStockToOrderLine(order.lines.indexOf(first), first.product_id, warehouseId)
+                    }
+                  })}
                 </div>
-                <DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} />
-                {productFields(order, setOrder, (code) => void handleBarcodeScan(code, 'order'), true)}
+                <DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={orderLineSub} />
+                {orderLinesEditor}
               </FormStack>
             )}
             {tab === 'invoices' && (

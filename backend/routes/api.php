@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SalaryRecordController;
 use App\Http\Controllers\Api\SalesInvoiceController;
+use App\Http\Controllers\Api\SalesLineImportController;
 use App\Http\Controllers\Api\SalesOrderController;
 use App\Http\Controllers\Api\SalesQuoteController;
 use App\Http\Controllers\Api\SalesReturnController;
@@ -98,6 +99,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Excel warehouse-transfer lines — preview only (does not save the transfer)
     Route::get('imports/warehouse-transfers/lines/template', [WarehouseTransferImportController::class, 'template']);
     Route::post('imports/warehouse-transfers/lines/preview', [WarehouseTransferImportController::class, 'preview']);
+
+    // Excel sales order / invoice lines — preview only (does not save the document)
+    Route::get('imports/sales-orders/lines/template', [SalesLineImportController::class, 'template']);
+    Route::post('imports/sales-orders/lines/preview', [SalesLineImportController::class, 'preview']);
+    Route::get('imports/sales-invoices/lines/template', [SalesLineImportController::class, 'template']);
+    Route::post('imports/sales-invoices/lines/preview', [SalesLineImportController::class, 'preview']);
 
     // Excel purchase invoice lines — preview only (does not save the invoice)
     Route::get('imports/purchase-invoices/lines/template', [PurchaseInvoiceImportController::class, 'template']);

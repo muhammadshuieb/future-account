@@ -292,7 +292,20 @@
     "collectSaved": "Tutar tahsil edildi ve fatura güncellendi",
     "filterSettlement": "Faturaları filtrele",
     "filterAllInvoices": "Tüm faturalar",
-    "filterUnsettled": "Ödenmemiş (açık alacak)"
+    "filterUnsettled": "Ödenmemiş (açık alacak)",
+    "downloadImportTemplate": "Excel şablonunu indir",
+    "importFromExcel": "Excel'den içe aktar",
+    "importing": "İçe aktarılıyor...",
+    "importEmpty": "Dosyada içe aktarılacak veri satırı yok",
+    "importFailed": "Excel dosyası içe aktarılamadı. İzinleri ve biçimi kontrol edip tekrar deneyin.",
+    "importTemplateFailed": "İçe aktarma şablonu indirilemedi.",
+    "importModelHint": "Önce modele göre eşleşir — model + miktar yeter; satış fiyatı boşsa katalogdan dolar.",
+    "importSummary": "Forma {{imported}} satır yüklendi — kontrol edip kaydedin. Belge henüz kaydedilmedi.",
+    "importUnmatchedCount": "{{count}} eşleşmeyen satır — ürünleri elle seçin",
+    "importUnmatchedLine": "Eşleşmeyen ürün",
+    "importUnknownProduct": "Bilinmeyen ürün",
+    "importBlockedUnmatched": "Eşleşmeyen satırlar var — kaydetmeden önce ürünleri elle seçin",
+    "importRowError": "Satır {{row}}: {{message}}"
   },
   "quotes": {
     "title": "Fiyat Teklifleri",

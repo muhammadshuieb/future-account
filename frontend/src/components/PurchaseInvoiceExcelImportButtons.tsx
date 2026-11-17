@@ -41,7 +41,7 @@ type Props = {
   /** Preferred downloaded filename. */
   fileName?: string
   /** i18n namespace for button/hint/error strings (default: purchases). */
-  i18nPrefix?: 'purchases' | 'warehouse'
+  i18nPrefix?: 'purchases' | 'warehouse' | 'sales'
   /** Optional hint override (defaults to `${i18nPrefix}.importModelHint`). */
   hintKey?: string
   onImported?: (result: PurchaseInvoiceLinesPreview) => void

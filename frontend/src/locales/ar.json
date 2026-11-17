@@ -294,7 +294,20 @@
     "collectSaved": "تم تحصيل المبلغ وتحديث الفاتورة",
     "filterSettlement": "فرز الفواتير",
     "filterAllInvoices": "كل الفواتير",
-    "filterUnsettled": "غير مسددة (عليها ذمة)"
+    "filterUnsettled": "غير مسددة (عليها ذمة)",
+    "downloadImportTemplate": "تحميل قالب Excel",
+    "importFromExcel": "استيراد من Excel",
+    "importing": "جاري الاستيراد...",
+    "importEmpty": "الملف لا يحتوي على صفوف بيانات للاستيراد",
+    "importFailed": "تعذر استيراد ملف Excel. تحقق من الصلاحيات والصيغة وحاول مجدداً.",
+    "importTemplateFailed": "تعذر تحميل قالب الاستيراد.",
+    "importModelHint": "المطابقة بالموديل أولاً — يكفي الموديل والكمية؛ سعر البيع يُعبَّأ من الدليل إن فرغ.",
+    "importSummary": "تم تحميل {{imported}} بنداً إلى النموذج — راجع ثم احفظ. لم يُحفظ المستند بعد.",
+    "importUnmatchedCount": "{{count}} بند بدون مطابقة في الدليل — اختر الصنف يدوياً",
+    "importUnmatchedLine": "صنف غير مطابق",
+    "importUnknownProduct": "صنف غير معروف",
+    "importBlockedUnmatched": "يوجد بنود غير مطابقة — اختر الأصناف يدوياً قبل الحفظ",
+    "importRowError": "صف {{row}}: {{message}}"
   },
   "quotes": {
     "title": "عروض الأسعار",
