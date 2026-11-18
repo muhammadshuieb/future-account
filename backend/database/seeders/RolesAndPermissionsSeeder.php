@@ -47,6 +47,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'suppliers.manage',
             'cash.view',
             'cash.manage',
+            'profit_distributions.view',
+            'profit_distributions.manage',
             'hr.view',
             'hr.manage',
             'reports.view',
@@ -96,6 +98,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'suppliers.view',
             'cash.view',
             'cash.manage',
+            'profit_distributions.view',
+            'profit_distributions.manage',
             'hr.view',
         ]);
 

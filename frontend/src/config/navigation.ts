@@ -20,6 +20,7 @@ import {
   NotebookPen,
   Cable,
   Tags,
+  HandCoins,
 } from 'lucide-react'
 
 export type NavItem = {
@@ -72,6 +73,7 @@ export const navGroups: NavGroup[] = [
       { to: '/warehouse-approvals', key: 'warehouseApprovals', icon: ClipboardCheck, permission: 'warehouse.approvals.view_own' },
       { to: '/partners', key: 'partners', icon: Users, permission: 'customers.view' },
       { to: '/cash-banks', key: 'cash', icon: Landmark, permission: 'cash.view' },
+      { to: '/profit-distributions', key: 'profitDistributions', icon: HandCoins, permission: 'profit_distributions.view' },
       { to: '/hr', key: 'hr', icon: UserCog, permission: 'hr.view' },
       { to: '/barcodes', key: 'barcodes', icon: Barcode, permission: 'warehouse.view' },
     ],

@@ -36,6 +36,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['code' => '3', 'name' => 'حقوق الملكية', 'name_en' => 'Equity', 'type' => 'equity', 'nature' => 'credit', 'is_group' => true, 'children' => [
                 ['code' => '3101', 'name' => 'رأس المال', 'name_en' => 'Capital', 'type' => 'equity', 'nature' => 'credit'],
                 ['code' => '3102', 'name' => 'الأرباح المحتجزة', 'name_en' => 'Retained Earnings', 'type' => 'equity', 'nature' => 'credit'],
+                ['code' => '3103', 'name' => 'مسحوبات الشركاء', 'name_en' => 'Partner Drawings', 'type' => 'equity', 'nature' => 'debit'],
             ]],
             ['code' => '4', 'name' => 'الإيرادات', 'name_en' => 'Revenue', 'type' => 'revenue', 'nature' => 'credit', 'is_group' => true, 'children' => [
                 ['code' => '4101', 'name' => 'إيرادات المبيعات', 'name_en' => 'Sales Revenue', 'type' => 'revenue', 'nature' => 'credit'],

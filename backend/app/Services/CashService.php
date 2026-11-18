@@ -9,6 +9,7 @@ use App\Models\CashBox;
 use App\Models\CashTransfer;
 use App\Models\CurrencyExchange;
 use App\Models\JournalDetail;
+use App\Models\ProfitDistribution;
 use App\Models\PurchaseReturn;
 use App\Models\Receipt;
 use App\Models\SalesReturn;
@@ -631,6 +632,18 @@ class CashService
                 $payment->payment_date?->toDateString()
             ));
 
+        $profitDistributionsOut = ProfitDistribution::query()
+            ->where('cash_box_id', $box->id)
+            ->where('status', 'posted')
+            ->get()
+            ->sum(fn (ProfitDistribution $dist) => $this->boxMovementAmount(
+                $currency,
+                $dist->currency,
+                (float) $dist->total_amount,
+                $dist->base_amount !== null ? (float) $dist->base_amount : null,
+                $dist->distribution_date?->toDateString()
+            ));
+
         $salesReturnRefunds = SalesReturn::query()
             ->where('cash_box_id', $box->id)
             ->where('status', 'posted')
@@ -688,6 +701,7 @@ class CashService
             (float) $box->opening_balance
             + (float) $receiptsIn
             - (float) $paymentsOut
+            - (float) $profitDistributionsOut
             - (float) $salesReturnRefunds
             + (float) $purchaseReturnRefunds
             + $transfersIn

@@ -19,7 +19,9 @@ use App\Http\Controllers\Api\CurrencyExchangeController;
 use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\EquityPartnerController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\ProfitDistributionController;
 use App\Http\Controllers\Api\FtthDailyReportController;
 use App\Http\Controllers\Api\InventoryController;
 use App\Http\Controllers\Api\JournalEntryController;
@@ -268,6 +270,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('cash-transfers', [CashTransferController::class, 'index']);
     Route::post('cash-transfers', [CashTransferController::class, 'store']);
     Route::post('cash-transfers/{cashTransfer}/post', [CashTransferController::class, 'post']);
+
+    // Equity partners (shareholders) + profit distributions from cash boxes
+    Route::get('equity-partners', [EquityPartnerController::class, 'index']);
+    Route::post('equity-partners', [EquityPartnerController::class, 'store']);
+    Route::put('equity-partners/{equityPartner}', [EquityPartnerController::class, 'update']);
+    Route::delete('equity-partners/{equityPartner}', [EquityPartnerController::class, 'destroy']);
+    Route::get('profit-distributions', [ProfitDistributionController::class, 'index']);
+    Route::post('profit-distributions', [ProfitDistributionController::class, 'store']);
+    Route::get('profit-distributions/{profitDistribution}', [ProfitDistributionController::class, 'show']);
+    Route::post('profit-distributions/{profitDistribution}/post', [ProfitDistributionController::class, 'post']);
+    Route::delete('profit-distributions/{profitDistribution}', [ProfitDistributionController::class, 'destroy']);
+
     Route::get('currency-exchanges', [CurrencyExchangeController::class, 'index']);
     Route::post('currency-exchanges', [CurrencyExchangeController::class, 'store']);
     Route::get('currency-exchanges/{currencyExchange}', [CurrencyExchangeController::class, 'show']);

@@ -25,6 +25,7 @@ const VouchersPage = lazy(() => import('@/pages/VouchersPage'))
 const PurchasesPage = lazy(() => import('@/pages/PurchasesPage'))
 const PartnersPage = lazy(() => import('@/pages/PartnersPage'))
 const CashBanksPage = lazy(() => import('@/pages/CashBanksPage'))
+const ProfitDistributionsPage = lazy(() => import('@/pages/ProfitDistributionsPage'))
 const HrPage = lazy(() => import('@/pages/HrPage'))
 const ReportsPage = lazy(() => import('@/pages/ReportsPage'))
 const FtthDailyReportPage = lazy(() => import('@/pages/FtthDailyReportPage'))
@@ -128,6 +129,7 @@ export default function App() {
                 <Route path="warehouse-approvals" element={<WarehouseApprovalsPage />} />
                 <Route path="partners" element={<PartnersPage />} />
                 <Route path="cash-banks" element={<CashBanksPage />} />
+                <Route path="profit-distributions" element={<ProfitDistributionsPage />} />
                 <Route path="hr" element={<HrPage />} />
                 <Route path="reports" element={<ReportsPage />} />
                 <Route path="ftth-daily-report" element={<FtthDailyReportPage />} />
