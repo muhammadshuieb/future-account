@@ -19,7 +19,12 @@ class ExportController extends ApiController
         if (! isset($permissions[$module])) {
             abort(404, 'وحدة التصدير غير موجودة.');
         }
-        $this->authorizePermission($permissions[$module]);
+        $required = $permissions[$module];
+        if (is_array($required)) {
+            $this->authorizeAnyPermission($required);
+        } else {
+            $this->authorizePermission($required);
+        }
 
         try {
             return $this->exports->downloadModule($module, $request);

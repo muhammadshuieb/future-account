@@ -194,6 +194,121 @@ class ExcelExportTest extends TestCase
         $this->assertTrue($foundLine, 'Expected invoice line-item row in supplier statement Excel');
     }
 
+    public function test_sales_quotes_excel_includes_header_and_line_sheets(): void
+    {
+        $this->seed([ChartOfAccountsSeeder::class, ErpDemoSeeder::class]);
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('sales');
+        Sanctum::actingAs($user);
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product->update(['brand' => 'Dell', 'model' => 'Latitude']);
+
+        $created = $this->postJson('/api/sales-quotes', [
+            'quote_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'USD',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 900, 'tax_rate' => 0],
+            ],
+        ])->assertCreated();
+        $quoteId = (int) $created->json('data.id');
+        $quoteNumber = (string) $created->json('data.quote_number');
+
+        $response = $this->get('/api/exports/sales-quotes?id='.$quoteId);
+        $response->assertOk();
+
+        $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tmp, $response->streamedContent());
+        $book = IOFactory::load($tmp);
+
+        $this->assertSame(2, $book->getSheetCount());
+        $headers = $book->getSheet(0);
+        $this->assertSame('عروض الأسعار', $headers->getTitle());
+        $this->assertSame($quoteNumber, (string) $headers->getCell('A2')->getValue());
+
+        $lines = $book->getSheet(1);
+        $this->assertSame('بنود عروض الأسعار', $lines->getTitle());
+        $this->assertSame($quoteNumber, (string) $lines->getCell('A2')->getValue());
+        $this->assertSame('Dell', (string) $lines->getCell('C2')->getValue());
+        $this->assertSame('Latitude', (string) $lines->getCell('D2')->getValue());
+        $this->assertEqualsWithDelta(2.0, (float) $lines->getCell('E2')->getValue(), 0.001);
+        $this->assertEqualsWithDelta(900.0, (float) $lines->getCell('F2')->getValue(), 0.01);
+
+        unlink($tmp);
+    }
+
+    public function test_quotes_view_permission_can_export_sales_quotes(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo('quotes.view');
+        Sanctum::actingAs($user);
+
+        $this->get('/api/exports/sales-quotes')->assertOk();
+    }
+
+    public function test_print_invoices_excel_includes_header_and_line_sheets(): void
+    {
+        $this->seed([ChartOfAccountsSeeder::class, ErpDemoSeeder::class]);
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('sales');
+        Sanctum::actingAs($user);
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product->update(['brand' => 'Hikvision', 'model' => 'DS-2CD']);
+
+        $created = $this->postJson('/api/print-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'USD',
+            'notes' => 'تصدير تجريبي',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 450, 'tax_rate' => 0],
+            ],
+        ])->assertCreated();
+        $invoiceId = (int) $created->json('data.id');
+        $invoiceNumber = (string) $created->json('data.invoice_number');
+
+        $response = $this->get('/api/exports/print-invoices?id='.$invoiceId);
+        $response->assertOk();
+
+        $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tmp, $response->streamedContent());
+        $book = IOFactory::load($tmp);
+
+        $this->assertSame(2, $book->getSheetCount());
+        $headers = $book->getSheet(0);
+        $this->assertSame('فواتير الطباعة', $headers->getTitle());
+        $this->assertSame($invoiceNumber, (string) $headers->getCell('A2')->getValue());
+
+        $lines = $book->getSheet(1);
+        $this->assertSame('بنود فواتير الطباعة', $lines->getTitle());
+        $this->assertSame($invoiceNumber, (string) $lines->getCell('A2')->getValue());
+        $this->assertSame('Hikvision', (string) $lines->getCell('C2')->getValue());
+        $this->assertSame('DS-2CD', (string) $lines->getCell('D2')->getValue());
+        $this->assertEqualsWithDelta(3.0, (float) $lines->getCell('E2')->getValue(), 0.001);
+        $this->assertEqualsWithDelta(450.0, (float) $lines->getCell('F2')->getValue(), 0.01);
+
+        unlink($tmp);
+    }
+
+    public function test_print_invoices_view_permission_can_export(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+        $user->givePermissionTo('print_invoices.view');
+        Sanctum::actingAs($user);
+
+        $this->get('/api/exports/print-invoices')->assertOk();
+    }
+
     public function test_non_admin_cannot_export_full_archive(): void
     {
         $user = User::factory()->create(['is_active' => true]);

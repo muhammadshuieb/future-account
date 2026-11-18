@@ -11,10 +11,11 @@ import { useListSearch } from '@/lib/useListSearch'
 import { useScrollToLastLine } from '@/lib/useScrollToLastLine'
 import { useAuth } from '@/context/AuthContext'
 import { DocumentCurrencyFields, type CurrencyOption } from '@/components/CurrencyFields'
+import ExcelExportButton from '@/components/ExcelExportButton'
 import PdfExportButton from '@/components/PdfExportButton'
 import WhatsAppSendButton from '@/components/WhatsAppSendButton'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
-import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { buildDocumentBaseName, buildDocumentFileName } from '@/lib/documentFileName'
 import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import {
   Button,
@@ -376,13 +377,16 @@ export default function PrintInvoicesPage() {
       <Panel>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('common.searchPlaceholder')} />
-          {list.length > 0 && (
-            <PdfExportButton
-              fileName="print-invoices"
-              printPaths={list.map((row) => `/print/print-invoices/${row.id}`)}
-              compact
-            />
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <ExcelExportButton path="/exports/print-invoices" fileName="print-invoices" />
+            {list.length > 0 && (
+              <PdfExportButton
+                fileName="print-invoices"
+                printPaths={list.map((row) => `/print/print-invoices/${row.id}`)}
+                compact
+              />
+            )}
+          </div>
         </div>
 
         {invoices.isLoading ? (
@@ -421,6 +425,13 @@ export default function PrintInvoicesPage() {
                         >
                           <Printer size={14} className="inline" /> {t('common.print')}
                         </button>
+                        <ExcelExportButton
+                          path="/exports/print-invoices"
+                          params={{ id: row.id }}
+                          fileName={buildDocumentFileName(t('documents.printInvoice'), row.customer?.name, 'xlsx')}
+                          variant="ghost"
+                          className="!px-2 !py-1 text-xs"
+                        />
                         <PdfExportButton
                           fileName={buildDocumentBaseName(t('documents.printInvoice'), row.customer?.name)}
                           printPath={`/print/print-invoices/${row.id}`}
@@ -483,6 +494,11 @@ export default function PrintInvoicesPage() {
                   <Button variant="primary" onClick={() => openPrintPopup(`/print/print-invoices/${selectedId}`)}>
                     <Printer size={16} /> {t('common.print')}
                   </Button>
+                  <ExcelExportButton
+                    path="/exports/print-invoices"
+                    params={{ id: selectedId }}
+                    fileName={buildDocumentFileName(t('documents.printInvoice'), selectedCustomerName, 'xlsx')}
+                  />
                   <PdfExportButton
                     fileName={selectedInvoiceFileName}
                     printPath={`/print/print-invoices/${selectedId}`}

@@ -28,10 +28,13 @@ use App\Models\PurchaseRequest;
 use App\Models\PurchaseReturn;
 use App\Models\Receipt;
 use App\Models\SalaryRecord;
+use App\Models\PrintInvoice;
+use App\Models\PrintInvoiceItem;
 use App\Models\SalesInvoice;
 use App\Models\SalesInvoiceLine;
 use App\Models\SalesOrder;
 use App\Models\SalesQuote;
+use App\Models\SalesQuoteItem;
 use App\Models\SalesReturn;
 use App\Models\Setting;
 use App\Models\StockLevel;
@@ -58,15 +61,16 @@ class ExcelExportService
         protected PurchaseService $purchases,
     ) {}
 
-    /** @return array<string, string> module => permission */
+    /** @return array<string, string|list<string>> module => permission(s) */
     public static function modulePermissions(): array
     {
         return [
-            'sales-quotes' => 'sales.view',
+            'sales-quotes' => ['quotes.view', 'sales.view'],
             'sales-orders' => 'sales.view',
             'sales-invoices' => 'sales.view',
             'sales-returns' => 'sales.view',
             'receipts' => 'sales.view',
+            'print-invoices' => ['print_invoices.view', 'sales.view'],
             'purchase-requests' => 'purchases.view',
             'purchase-orders' => 'purchases.view',
             'purchase-invoices' => 'purchases.view',
@@ -322,6 +326,7 @@ class ExcelExportService
             'sales-invoices' => $this->sheetSalesInvoices($book, $request),
             'sales-returns' => $this->sheetSalesReturns($book, $request),
             'receipts' => $this->sheetReceipts($book, $request),
+            'print-invoices' => $this->sheetPrintInvoices($book, $request),
             'purchase-requests' => $this->sheetPurchaseRequests($book, $request),
             'purchase-orders' => $this->sheetPurchaseOrders($book, $request),
             'purchase-invoices' => $this->sheetPurchaseInvoices($book, $request),
@@ -405,13 +410,98 @@ class ExcelExportService
 
     protected function sheetSalesQuotes(ExcelWorkbook $book, Request $request): void
     {
-        $q = SalesQuote::query()->with('customer')->orderByDesc('id');
+        $q = SalesQuote::query()->with(['customer', 'warehouse'])->orderByDesc('id');
         $this->applyDateFilter($q, 'quote_date', $request);
-        $book->addSheet('عروض الأسعار', ['الرقم', 'التاريخ', 'العميل', 'العملة', 'الإجمالي', 'الحالة'],
-            $q->get()->map(fn ($r) => [
-                $r->quote_number, optional($r->quote_date)?->format('Y-m-d'), $r->customer?->name,
-                $r->currency, $r->total, $r->status,
-            ])->all());
+        if ($request->filled('id')) {
+            $q->where('id', (int) $request->query('id'));
+        }
+        $quotes = $q->get();
+        $book->addSheet('عروض الأسعار', [
+            'الرقم', 'التاريخ', 'صالح حتى', 'العميل', 'المستودع', 'العملة', 'سعر الصرف',
+            'المجموع', 'الضريبة', 'الإجمالي', 'الحالة', 'ملاحظات',
+        ], $quotes->map(fn ($r) => [
+            $r->quote_number,
+            optional($r->quote_date)?->format('Y-m-d'),
+            optional($r->valid_until)?->format('Y-m-d'),
+            $r->customer?->name,
+            $r->warehouse?->name,
+            $r->currency,
+            $r->exchange_rate,
+            $r->subtotal,
+            $r->tax_amount,
+            $r->total,
+            $r->status,
+            $r->notes,
+        ])->all());
+
+        $quoteIds = $quotes->pluck('id');
+        $lines = SalesQuoteItem::query()
+            ->with('product')
+            ->whereIn('sales_quote_id', $quoteIds)
+            ->orderBy('sales_quote_id')
+            ->orderBy('id')
+            ->get();
+        $quoteNumbers = $quotes->pluck('quote_number', 'id');
+        $book->addSheet('بنود عروض الأسعار', [
+            'رقم العرض', 'الصنف', 'الماركة', 'الموديل', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
+        ], $lines->map(fn (SalesQuoteItem $l) => [
+            $quoteNumbers[$l->sales_quote_id] ?? $l->sales_quote_id,
+            $l->product_name ?: $l->product?->name,
+            $l->brand ?: $l->product?->brand,
+            $l->model ?: $l->product?->model,
+            $l->quantity,
+            $l->unit_price,
+            $l->tax_rate,
+            $l->line_total,
+        ])->all());
+    }
+
+    protected function sheetPrintInvoices(ExcelWorkbook $book, Request $request): void
+    {
+        $q = PrintInvoice::query()->with(['customer', 'warehouse', 'branch'])->orderByDesc('id');
+        $this->applyDateFilter($q, 'invoice_date', $request);
+        if ($request->filled('id')) {
+            $q->where('id', (int) $request->query('id'));
+        }
+        $invoices = $q->get();
+        $book->addSheet('فواتير الطباعة', [
+            'الرقم', 'التاريخ', 'العميل', 'المستودع', 'الفرع', 'العملة', 'سعر الصرف',
+            'المجموع', 'الضريبة', 'الإجمالي', 'الحالة', 'ملاحظات',
+        ], $invoices->map(fn ($r) => [
+            $r->invoice_number,
+            optional($r->invoice_date)?->format('Y-m-d'),
+            $r->customer?->name,
+            $r->warehouse?->name,
+            $r->branch?->name,
+            $r->currency,
+            $r->exchange_rate,
+            $r->subtotal,
+            $r->tax_amount,
+            $r->total,
+            $r->status,
+            $r->notes,
+        ])->all());
+
+        $invoiceIds = $invoices->pluck('id');
+        $lines = PrintInvoiceItem::query()
+            ->with('product')
+            ->whereIn('print_invoice_id', $invoiceIds)
+            ->orderBy('print_invoice_id')
+            ->orderBy('id')
+            ->get();
+        $invoiceNumbers = $invoices->pluck('invoice_number', 'id');
+        $book->addSheet('بنود فواتير الطباعة', [
+            'رقم الفاتورة', 'الصنف', 'الماركة', 'الموديل', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
+        ], $lines->map(fn (PrintInvoiceItem $l) => [
+            $invoiceNumbers[$l->print_invoice_id] ?? $l->print_invoice_id,
+            $l->product_name ?: $l->product?->name,
+            $l->brand ?: $l->product?->brand,
+            $l->model ?: $l->product?->model,
+            $l->quantity,
+            $l->unit_price,
+            $l->tax_rate,
+            $l->line_total,
+        ])->all());
     }
 
     protected function sheetSalesOrders(ExcelWorkbook $book, Request $request): void
