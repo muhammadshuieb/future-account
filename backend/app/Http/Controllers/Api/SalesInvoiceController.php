@@ -16,11 +16,16 @@ class SalesInvoiceController extends ApiController
     {
         $this->authorizePermission('sales.view');
         $query = SalesInvoice::query()->with(['customer', 'warehouse', 'branch'])->withCount('attachments')->latest('id');
-        ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
-            'customer' => ['name', 'code'],
-            'branch' => ['name', 'code'],
-            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('invoice_number'),
+            array_merge(
+                ListSearch::customerRelations(),
+                ListSearch::placeRelations(),
+                ListSearch::productLineRelations('lines.product'),
+            ),
+        );
         ListSearch::applyUnsettledInvoiceFilter($query, $request);
 
         return $this->ok($query->get());

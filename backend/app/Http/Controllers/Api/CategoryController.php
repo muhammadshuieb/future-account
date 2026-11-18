@@ -13,7 +13,9 @@ class CategoryController extends ApiController
     {
         $this->authorizePermission('warehouse.view');
         $query = Category::query()->with('parent')->orderBy('name');
-        ListSearch::apply($query, $request, ['name']);
+        ListSearch::apply($query, $request, ['name'], [
+            'parent' => ['name'],
+        ]);
 
         return $this->ok($query->get());
     }

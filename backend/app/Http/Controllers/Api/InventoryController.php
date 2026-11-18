@@ -31,9 +31,9 @@ class InventoryController extends ApiController
             WarehouseAccess::assertWarehouse($request->user(), $request->integer('warehouse_id'));
             $query->where('warehouse_id', $request->integer('warehouse_id'));
         }
-        ListSearch::apply($query, $request, ['batch_no'], [
-            'product' => ['name', 'sku', 'barcode'],
-            'warehouse' => ['name', 'code'],
+        ListSearch::apply($query, $request, ['batch_no', 'quantity'], [
+            'product' => ListSearch::productColumns(),
+            'warehouse' => ['name', 'code', 'location'],
         ]);
 
         return $this->ok($query->get());
@@ -51,9 +51,12 @@ class InventoryController extends ApiController
         if ($request->filled('product_id')) {
             $query->where('product_id', $request->integer('product_id'));
         }
-        ListSearch::apply($query, $request, ['reference', 'notes', 'type', 'batch_no', 'serial_no'], [
-            'product' => ['name', 'sku', 'barcode'],
-            'warehouse' => ['name', 'code'],
+        ListSearch::apply($query, $request, [
+            'movement_number', 'reference', 'reference_type', 'notes', 'type',
+            'batch_no', 'serial_no', 'quantity', 'unit_cost', 'movement_date',
+        ], [
+            'product' => ListSearch::productColumns(),
+            'warehouse' => ['name', 'code', 'location'],
         ]);
 
         return $this->ok($query->limit(200)->get());
@@ -103,10 +106,37 @@ class InventoryController extends ApiController
                 array_push($alerts, ...$this->inventory->lowStockAlerts($assignedId));
             }
 
-            return $this->ok($alerts);
+            return $this->ok($this->filterAlerts($alerts, $request));
         }
 
-        return $this->ok($this->inventory->lowStockAlerts($warehouseId));
+        return $this->ok($this->filterAlerts($this->inventory->lowStockAlerts($warehouseId), $request));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $alerts
+     * @return list<array<string, mixed>>
+     */
+    protected function filterAlerts(array $alerts, Request $request): array
+    {
+        $term = ListSearch::term($request);
+        if ($term === null) {
+            return $alerts;
+        }
+
+        $needle = mb_strtolower($term);
+
+        return array_values(array_filter($alerts, function (array $alert) use ($needle) {
+            $haystack = mb_strtolower(implode(' ', array_filter([
+                (string) ($alert['sku'] ?? ''),
+                (string) ($alert['name'] ?? ''),
+                (string) ($alert['warehouse_name'] ?? ''),
+                (string) ($alert['warehouse_code'] ?? ''),
+                (string) ($alert['on_hand'] ?? ''),
+                (string) ($alert['reorder_level'] ?? ''),
+            ], fn ($v) => $v !== '')));
+
+            return str_contains($haystack, $needle);
+        }));
     }
 
     public function transfers(Request $request): JsonResponse
@@ -121,9 +151,11 @@ class InventoryController extends ApiController
             $ids = WarehouseAccess::warehouseIds($request->user());
             $query->whereIn('from_warehouse_id', $ids);
         }
-        ListSearch::apply($query, $request, ['transfer_number', 'notes', 'status'], [
-            'fromWarehouse' => ['name', 'code'],
-            'toWarehouse' => ['name', 'code'],
+        ListSearch::apply($query, $request, ListSearch::documentColumns('transfer_number'), [
+            'fromWarehouse' => ['name', 'code', 'location'],
+            'toWarehouse' => ['name', 'code', 'location'],
+            'lines.product' => ListSearch::productColumns(),
+            'lines' => ['batch_no', 'serial_no', 'quantity'],
         ]);
 
         return $this->ok($query->get());
@@ -196,8 +228,10 @@ class InventoryController extends ApiController
         $this->authorizePermission('warehouse.view');
         $query = InventoryCount::query()->with(['warehouse', 'lines.product'])->latest('id');
         WarehouseAccess::scopeWarehouseColumn($query, $request->user());
-        ListSearch::apply($query, $request, ['count_number', 'notes', 'status'], [
-            'warehouse' => ['name', 'code'],
+        ListSearch::apply($query, $request, ListSearch::documentColumns('count_number'), [
+            'warehouse' => ['name', 'code', 'location'],
+            'lines.product' => ListSearch::productColumns(),
+            'lines' => ['batch_no', 'serial_no', 'system_qty', 'counted_qty', 'difference'],
         ]);
 
         return $this->ok($query->get());

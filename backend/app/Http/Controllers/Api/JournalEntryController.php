@@ -36,8 +36,11 @@ class JournalEntryController extends Controller
             $query->where('branch_id', $request->integer('branch_id'));
         }
 
-        ListSearch::apply($query, $request, ['entry_number', 'description', 'reference'], [
-            'creator' => ['name'],
+        ListSearch::apply($query, $request, ListSearch::documentColumns('entry_number', ['description', 'reference']), [
+            'creator' => ['name', 'username'],
+            'branch' => ['name', 'code'],
+            'details' => ['memo', 'debit', 'credit'],
+            'details.account' => ['code', 'name', 'name_en'],
         ]);
 
         $entries = $query->paginate($request->integer('per_page', 15));

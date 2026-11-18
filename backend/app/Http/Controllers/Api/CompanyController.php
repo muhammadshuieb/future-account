@@ -14,7 +14,9 @@ class CompanyController extends ApiController
     {
         $this->authorizePermission('settings.manage');
         $query = Company::query()->with('branches')->orderBy('code');
-        ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'tax_number', 'currency']);
+        ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'tax_number', 'currency'], [
+            'branches' => ['code', 'name', 'city', 'address'],
+        ]);
 
         return $this->ok($query->get());
     }

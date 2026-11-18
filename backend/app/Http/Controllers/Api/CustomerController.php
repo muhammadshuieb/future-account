@@ -16,7 +16,9 @@ class CustomerController extends ApiController
     {
         $this->authorizePermission('customers.view');
         $query = Customer::query()->with('branch')->orderBy('code');
-        ListSearch::apply($query, $request, ['name', 'code', 'phone', 'email', 'tax_number', 'notes']);
+        ListSearch::apply($query, $request, ListSearch::partnerColumns(), [
+            'branch' => ['name', 'code'],
+        ]);
 
         $rows = $query->get()->map(function (Customer $customer) {
             $customer->setAttribute('balance', $this->sales->customerBalance($customer));

@@ -48,7 +48,9 @@ class AccountController extends ApiController
             $query->where('is_group', false)->where('is_active', true);
         }
 
-        \App\Support\ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'description']);
+        \App\Support\ListSearch::apply($query, $request, ['code', 'name', 'name_en', 'description', 'type'], [
+            'parent' => ['code', 'name', 'name_en'],
+        ]);
 
         return $this->ok($query->get());
     }

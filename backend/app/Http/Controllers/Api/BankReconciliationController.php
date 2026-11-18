@@ -16,8 +16,10 @@ class BankReconciliationController extends ApiController
     {
         $this->authorizePermission('cash.view');
         $query = BankReconciliation::query()->with('bank')->latest('id');
-        ListSearch::apply($query, $request, ['notes', 'status'], [
-            'bank' => ['name', 'code'],
+        ListSearch::apply($query, $request, [
+            'notes', 'status', 'statement_date', 'statement_balance', 'book_balance', 'difference',
+        ], [
+            'bank' => ['name', 'code', 'account_number', 'iban'],
         ]);
 
         return $this->ok($query->get());

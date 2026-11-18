@@ -349,7 +349,8 @@ class ListSearchAndBranchReportTest extends TestCase
             'supplier-payments', 'cash-boxes', 'banks', 'cash-transfers', 'currency-exchanges',
             'bank-reconciliations', 'stock-levels', 'stock-movements', 'warehouse-transfers',
             'inventory-counts', 'employees', 'attendances', 'leave-requests', 'salary-records',
-            'companies', 'branches', 'audit-logs', 'users',
+            'companies', 'branches', 'audit-logs', 'users', 'print-invoices', 'price-lists',
+            'ftth/daily-reports',
         ];
 
         foreach ($endpoints as $endpoint) {
@@ -365,5 +366,101 @@ class ListSearchAndBranchReportTest extends TestCase
         $byQ = $this->getJson('/api/products?q='.urlencode($product->sku));
         $byQ->assertOk();
         $this->assertTrue(collect($byQ->json('data'))->contains(fn ($r) => $r['sku'] === $product->sku));
+    }
+
+    public function test_sales_invoice_search_covers_date_payment_type_and_paid_amount(): void
+    {
+        $dam = Branch::query()->where('code', 'DAM')->firstOrFail();
+        $wh = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $customer->update(['phone' => '0999-SEARCH-PHONE']);
+        $userId = User::query()->first()->id;
+        $uniqueDate = '2031-07-19';
+
+        SalesInvoice::query()->create([
+            'invoice_number' => 'SI-COL-SEARCH-1',
+            'invoice_date' => $uniqueDate,
+            'customer_id' => $customer->id,
+            'warehouse_id' => $wh->id,
+            'branch_id' => $dam->id,
+            'status' => 'posted',
+            'payment_type' => 'partial',
+            'currency' => 'USD',
+            'exchange_rate' => 1,
+            'base_amount' => 777.25,
+            'subtotal' => 777.25,
+            'discount_amount' => 12.5,
+            'tax_amount' => 0,
+            'total' => 777.25,
+            'paid_amount' => 111.11,
+            'notes' => 'column-search-note-xyz',
+            'created_by' => $userId,
+            'posted_at' => now(),
+        ]);
+
+        foreach ([
+            $uniqueDate,
+            'partial',
+            '111.11',
+            '12.5',
+            'column-search-note-xyz',
+            '0999-SEARCH-PHONE',
+        ] as $term) {
+            $hit = $this->getJson('/api/sales-invoices?q='.urlencode($term));
+            $hit->assertOk();
+            $this->assertTrue(
+                collect($hit->json('data'))->contains(fn ($r) => $r['invoice_number'] === 'SI-COL-SEARCH-1'),
+                "Expected invoice hit for q={$term}"
+            );
+        }
+    }
+
+    public function test_customer_search_covers_phone_and_address(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $customer->update([
+            'phone' => '011-ADDR-SEARCH',
+            'address' => 'Street Search Unique 42',
+        ]);
+
+        $byPhone = $this->getJson('/api/customers?q=011-ADDR-SEARCH');
+        $byPhone->assertOk()->assertJsonCount(1, 'data');
+
+        $byAddress = $this->getJson('/api/customers?q='.urlencode('Street Search Unique'));
+        $byAddress->assertOk();
+        $this->assertTrue(collect($byAddress->json('data'))->contains(fn ($r) => $r['code'] === 'CUS-001'));
+    }
+
+    public function test_empty_q_still_returns_full_sales_invoice_list(): void
+    {
+        $dam = Branch::query()->where('code', 'DAM')->firstOrFail();
+        $wh = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $userId = User::query()->first()->id;
+
+        SalesInvoice::query()->create([
+            'invoice_number' => 'SI-EMPTY-Q-KEEP',
+            'invoice_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $wh->id,
+            'branch_id' => $dam->id,
+            'status' => 'draft',
+            'currency' => 'SYP',
+            'exchange_rate' => 1,
+            'base_amount' => 10,
+            'subtotal' => 10,
+            'tax_amount' => 0,
+            'total' => 10,
+            'paid_amount' => 0,
+            'created_by' => $userId,
+        ]);
+
+        $all = $this->getJson('/api/sales-invoices');
+        $all->assertOk();
+        $this->assertGreaterThan(0, count($all->json('data')));
+
+        $blank = $this->getJson('/api/sales-invoices?q=');
+        $blank->assertOk();
+        $this->assertSame(count($all->json('data')), count($blank->json('data')));
     }
 }

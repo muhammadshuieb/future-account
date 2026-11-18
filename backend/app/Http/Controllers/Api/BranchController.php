@@ -25,7 +25,7 @@ class BranchController extends ApiController
 
         $query = Branch::query()->with('company')->orderBy('code');
         ListSearch::apply($query, $request, ['code', 'name', 'city', 'address'], [
-            'company' => ['name', 'code'],
+            'company' => ['name', 'code', 'name_en', 'tax_number'],
         ]);
 
         return $this->ok($query->get());

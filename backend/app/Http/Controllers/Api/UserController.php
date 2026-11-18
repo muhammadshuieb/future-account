@@ -23,7 +23,11 @@ class UserController extends ApiController
         $this->authorizePermission('users.manage');
 
         $query = User::query()->with(['roles', 'permissions', 'warehouses:id,name,code', 'priceLists:id,name'])->orderBy('name');
-        ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name']);
+        ListSearch::apply($query, $request, ['name', 'username', 'email', 'first_name', 'last_name', 'mobile'], [
+            'roles' => ['name'],
+            'warehouses' => ['name', 'code'],
+            'priceLists' => ['name'],
+        ]);
         $users = $query->get()->map(fn (User $u) => $this->userPayload($u));
 
         return $this->ok($users);

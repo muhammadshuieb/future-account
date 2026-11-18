@@ -16,7 +16,7 @@ class CashTransferController extends ApiController
     {
         $this->authorizePermission('cash.view');
         $query = CashTransfer::query()->latest('id');
-        ListSearch::apply($query, $request, ['transfer_number', 'notes', 'amount', 'status', 'from_type', 'to_type']);
+        ListSearch::apply($query, $request, ListSearch::documentColumns('transfer_number', ['from_type', 'to_type', 'from_id', 'to_id']));
 
         return $this->ok($query->get());
     }

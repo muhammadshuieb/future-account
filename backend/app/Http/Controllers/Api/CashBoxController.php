@@ -24,7 +24,8 @@ class CashBoxController extends ApiController
 
         $query = CashBox::query()->with(['branch', 'account'])->orderBy('code');
         ListSearch::apply($query, $request, ['name', 'code', 'currency'], [
-            'branch' => ['name', 'code'],
+            'branch' => ['name', 'code', 'city'],
+            'account' => ['code', 'name', 'name_en'],
         ]);
         $boxes = $query->get()
             ->map(function (CashBox $box) {

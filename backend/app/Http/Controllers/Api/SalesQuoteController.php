@@ -20,10 +20,16 @@ class SalesQuoteController extends ApiController
     {
         $this->authorizeQuoteView();
         $query = SalesQuote::query()->with(['customer', 'warehouse', 'branch'])->latest('id');
-        ListSearch::apply($query, $request, ['quote_number', 'notes', 'currency', 'total', 'status'], [
-            'customer' => ['name', 'code'],
-            'items.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('quote_number'),
+            array_merge(
+                ListSearch::customerRelations(),
+                ListSearch::placeRelations(),
+                ListSearch::productLineRelations('items.product'),
+            ),
+        );
 
         return $this->ok($query->get());
     }

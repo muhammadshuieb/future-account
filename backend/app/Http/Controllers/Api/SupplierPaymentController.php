@@ -16,9 +16,19 @@ class SupplierPaymentController extends ApiController
     {
         $this->authorizePermission('purchases.view');
         $query = SupplierPayment::query()->with(['supplier', 'invoice'])->latest('id');
-        ListSearch::apply($query, $request, ['payment_number', 'notes', 'currency', 'amount', 'status'], [
-            'supplier' => ['name', 'code'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('payment_number'),
+            array_merge(
+                ListSearch::supplierRelations(),
+                [
+                    'invoice' => ['invoice_number', 'notes', 'currency', 'total', 'status'],
+                    'cashBox' => ['name', 'code'],
+                    'bank' => ['name', 'code'],
+                ],
+            ),
+        );
 
         return $this->ok($query->get());
     }

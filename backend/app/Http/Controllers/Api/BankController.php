@@ -17,7 +17,8 @@ class BankController extends ApiController
         $this->authorizePermission('cash.view');
         $query = Bank::query()->with(['branch', 'account'])->orderBy('code');
         ListSearch::apply($query, $request, ['name', 'code', 'currency', 'account_number', 'iban'], [
-            'branch' => ['name', 'code'],
+            'branch' => ['name', 'code', 'city'],
+            'account' => ['code', 'name', 'name_en'],
         ]);
 
         $banks = $query->get()

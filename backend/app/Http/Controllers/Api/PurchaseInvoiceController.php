@@ -16,10 +16,16 @@ class PurchaseInvoiceController extends ApiController
     {
         $this->authorizePermission('purchases.view');
         $query = PurchaseInvoice::query()->with(['supplier', 'warehouse'])->withCount('attachments')->latest('id');
-        ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
-            'supplier' => ['name', 'code'],
-            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('invoice_number', ['customs_amount', 'transport_fees', 'fines_amount', 'other_fees']),
+            array_merge(
+                ListSearch::supplierRelations(),
+                ListSearch::placeRelations(withBranch: false),
+                ListSearch::productLineRelations('lines.product'),
+            ),
+        );
         ListSearch::applyUnsettledInvoiceFilter($query, $request);
 
         return $this->ok($query->get());

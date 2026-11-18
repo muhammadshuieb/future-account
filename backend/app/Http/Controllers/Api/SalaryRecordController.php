@@ -18,8 +18,10 @@ class SalaryRecordController extends ApiController
     {
         $this->authorizePermission('hr.view');
         $query = SalaryRecord::query()->with('employee')->latest('id');
-        ListSearch::apply($query, $request, ['period', 'status', 'notes'], [
-            'employee' => ['name', 'employee_number'],
+        ListSearch::apply($query, $request, [
+            'period', 'status', 'notes', 'basic_salary', 'allowances', 'deductions', 'net_salary',
+        ], [
+            'employee' => ['name', 'employee_number', 'phone', 'job_title', 'department'],
         ]);
 
         return $this->ok($query->get());

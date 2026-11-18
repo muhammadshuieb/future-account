@@ -16,9 +16,19 @@ class ReceiptController extends ApiController
     {
         $this->authorizePermission('sales.view');
         $query = Receipt::query()->with(['customer', 'invoice'])->latest('id');
-        ListSearch::apply($query, $request, ['receipt_number', 'notes', 'currency', 'amount', 'status'], [
-            'customer' => ['name', 'code'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('receipt_number'),
+            array_merge(
+                ListSearch::customerRelations(),
+                [
+                    'invoice' => ['invoice_number', 'notes', 'currency', 'total', 'status'],
+                    'cashBox' => ['name', 'code'],
+                    'bank' => ['name', 'code'],
+                ],
+            ),
+        );
 
         return $this->ok($query->get());
     }

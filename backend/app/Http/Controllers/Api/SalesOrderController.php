@@ -16,10 +16,16 @@ class SalesOrderController extends ApiController
     {
         $this->authorizePermission('sales.view');
         $query = SalesOrder::query()->with(['customer', 'warehouse', 'quote'])->latest('id');
-        ListSearch::apply($query, $request, ['order_number', 'notes', 'currency', 'total', 'status'], [
-            'customer' => ['name', 'code'],
-            'items.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('order_number'),
+            array_merge(
+                ListSearch::customerRelations(),
+                ListSearch::placeRelations(),
+                ListSearch::productLineRelations('items.product'),
+            ),
+        );
 
         return $this->ok($query->get());
     }

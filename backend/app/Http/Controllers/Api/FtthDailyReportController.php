@@ -18,7 +18,10 @@ class FtthDailyReportController extends ApiController
         $this->authorizePermission('ftth.view');
         $query = FtthDailyReport::query()->latest('report_date')->latest('id');
         ListSearch::apply($query, $request, [
-            'report_number', 'project_name', 'area_sector', 'supervisor', 'contractor_team', 'weather', 'status',
+            'report_number', 'report_date', 'project_name', 'phase', 'area_sector', 'supervisor',
+            'contractor_team', 'weather', 'status', 'prepared_by', 'approved_by',
+            'obstacles', 'remediation', 'quality_notes', 'safety_notes', 'attachments_notes',
+            'next_day_goal', 'next_day_obstacles', 'next_day_coordination', 'workers_count',
         ]);
         if ($request->filled('from')) {
             $query->whereDate('report_date', '>=', $request->string('from'));

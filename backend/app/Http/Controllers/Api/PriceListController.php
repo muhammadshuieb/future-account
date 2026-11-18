@@ -6,6 +6,7 @@ use App\Models\PriceList;
 use App\Models\PriceListItem;
 use App\Services\PriceListImportService;
 use App\Support\HikvisionProductUrl;
+use App\Support\ListSearch;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,10 @@ class PriceListController extends ApiController
         if ($restricted !== null) {
             $query->whereIn('id', $restricted);
         }
+
+        ListSearch::apply($query, $request, ['name', 'currency', 'notes'], [
+            'updatedBy' => ['name', 'username'],
+        ]);
 
         return $this->ok($query->get());
     }
@@ -58,12 +63,14 @@ class PriceListController extends ApiController
             if ($q !== '') {
                 $like = '%'.$q.'%';
                 $itemsQuery->where(function ($w) use ($like) {
-                    $w->where('model_no', 'like', $like)
-                        ->orWhere('specs', 'like', $like)
-                        ->orWhere('mp', 'like', $like)
-                        ->orWhere('lens', 'like', $like)
-                        ->orWhere('category', 'like', $like)
-                        ->orWhere('row_no', 'like', $like);
+                    $first = true;
+                    foreach ([
+                        'model_no', 'specs', 'mp', 'lens', 'category', 'row_no', 'product_url',
+                        'price_super_wholesale', 'price_retail', 'price_wholesale',
+                    ] as $column) {
+                        ListSearch::whereLike($w, $column, $like, $first);
+                        $first = false;
+                    }
                 });
             }
 

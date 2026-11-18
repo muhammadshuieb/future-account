@@ -20,9 +20,19 @@ class PrintInvoiceController extends ApiController
     {
         $this->authorizePrintInvoiceView();
         $query = PrintInvoice::query()->with(['customer', 'warehouse', 'branch'])->latest('id');
-        ListSearch::apply($query, $request, ['invoice_number', 'notes', 'currency', 'total', 'status'], [
-            'customer' => ['name', 'code'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('invoice_number'),
+            array_merge(
+                ListSearch::customerRelations(),
+                ListSearch::placeRelations(),
+                [
+                    'items' => ['product_name', 'brand', 'model', 'batch_no', 'serial_no', 'unit_price', 'line_total'],
+                ],
+                ListSearch::productLineRelations('items.product'),
+            ),
+        );
 
         return $this->ok($query->get());
     }

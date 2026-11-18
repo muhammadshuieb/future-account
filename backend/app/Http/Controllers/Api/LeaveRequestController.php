@@ -13,8 +13,10 @@ class LeaveRequestController extends ApiController
     {
         $this->authorizePermission('hr.view');
         $query = LeaveRequest::query()->with('employee')->latest('id');
-        ListSearch::apply($query, $request, ['leave_type', 'status', 'notes'], [
-            'employee' => ['name', 'employee_number'],
+        ListSearch::apply($query, $request, [
+            'leave_type', 'status', 'reason', 'from_date', 'to_date',
+        ], [
+            'employee' => ['name', 'employee_number', 'phone', 'job_title', 'department'],
         ]);
 
         return $this->ok($query->get());

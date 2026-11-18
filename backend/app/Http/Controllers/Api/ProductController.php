@@ -57,7 +57,10 @@ class ProductController extends ApiController
         if ($request->filled('barcode')) {
             $this->applyScanLookup($query, trim((string) $request->string('barcode')));
         } else {
-            ListSearch::apply($query, $request, ['name', 'sku', 'barcode', 'brand', 'model'], [
+            ListSearch::apply($query, $request, [
+                'name', 'sku', 'barcode', 'brand', 'model', 'description',
+                'cost_price', 'sale_price', 'reorder_level',
+            ], [
                 'category' => ['name'],
                 'unit' => ['name', 'symbol'],
             ]);

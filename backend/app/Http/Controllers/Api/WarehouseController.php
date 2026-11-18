@@ -18,7 +18,9 @@ class WarehouseController extends ApiController
         $this->authorizePermission('warehouse.view');
         $query = Warehouse::query()->with('branch')->orderBy('code');
         WarehouseAccess::scopeWarehouseColumn($query, $request->user(), 'id');
-        ListSearch::apply($query, $request, ['name', 'code', 'location', 'notes']);
+        ListSearch::apply($query, $request, ['name', 'code', 'location', 'notes'], [
+            'branch' => ['name', 'code', 'city'],
+        ]);
 
         return $this->ok($query->get());
     }

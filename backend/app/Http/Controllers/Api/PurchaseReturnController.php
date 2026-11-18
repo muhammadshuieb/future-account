@@ -17,10 +17,16 @@ class PurchaseReturnController extends ApiController
     {
         $this->authorizePermission('purchases.view');
         $query = PurchaseReturn::query()->with(['supplier', 'warehouse'])->latest('id');
-        ListSearch::apply($query, $request, ['return_number', 'notes', 'currency', 'total', 'status'], [
-            'supplier' => ['name', 'code'],
-            'lines.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('return_number'),
+            array_merge(
+                ListSearch::supplierRelations(),
+                ListSearch::placeRelations(withBranch: false),
+                ListSearch::productLineRelations('lines.product'),
+            ),
+        );
 
         return $this->ok($query->get());
     }

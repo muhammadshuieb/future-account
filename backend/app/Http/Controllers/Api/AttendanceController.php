@@ -16,8 +16,8 @@ class AttendanceController extends ApiController
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->integer('employee_id'));
         }
-        ListSearch::apply($query, $request, ['status', 'notes'], [
-            'employee' => ['name', 'employee_number'],
+        ListSearch::apply($query, $request, ['status', 'notes', 'attendance_date', 'check_in', 'check_out'], [
+            'employee' => ['name', 'employee_number', 'phone', 'job_title', 'department'],
         ]);
 
         return $this->ok($query->limit(200)->get());

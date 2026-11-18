@@ -25,6 +25,113 @@ class ListSearch
     }
 
     /**
+     * Partner / contact fields commonly shown on list pages.
+     *
+     * @return list<string>
+     */
+    public static function partnerColumns(): array
+    {
+        return ['name', 'code', 'phone', 'email', 'address', 'tax_number', 'notes'];
+    }
+
+    /**
+     * Product identity fields used across document lines and inventory.
+     *
+     * @return list<string>
+     */
+    public static function productColumns(): array
+    {
+        return ['name', 'sku', 'barcode', 'brand', 'model', 'description'];
+    }
+
+    /**
+     * Shared document-list columns. Non-existent columns are dropped per table
+     * by {@see existingColumns()} so callers can reuse one list safely.
+     *
+     * @param  list<string>  $extra
+     * @return list<string>
+     */
+    public static function documentColumns(string $numberColumn, array $extra = []): array
+    {
+        return array_values(array_unique(array_merge([
+            $numberColumn,
+            'notes',
+            'currency',
+            'total',
+            'amount',
+            'status',
+            'payment_type',
+            'paid_amount',
+            'discount_amount',
+            'tax_amount',
+            'subtotal',
+            'method',
+            'applied_amount',
+            'base_amount',
+            'exchange_rate',
+            'invoice_date',
+            'quote_date',
+            'order_date',
+            'return_date',
+            'receipt_date',
+            'payment_date',
+            'request_date',
+            'transfer_date',
+            'count_date',
+            'movement_date',
+            'entry_date',
+            'report_date',
+            'exchange_date',
+            'statement_date',
+            'attendance_date',
+            'created_at',
+            'posted_at',
+        ], $extra)));
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public static function customerRelations(): array
+    {
+        return ['customer' => self::partnerColumns()];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public static function supplierRelations(): array
+    {
+        return ['supplier' => self::partnerColumns()];
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    public static function productLineRelations(string $relation = 'lines.product'): array
+    {
+        return [$relation => self::productColumns()];
+    }
+
+    /**
+     * Warehouse / branch lookup used on many documents.
+     *
+     * @return array<string, list<string>>
+     */
+    public static function placeRelations(bool $withBranch = true, bool $withWarehouse = true): array
+    {
+        $relations = [];
+        if ($withBranch) {
+            $relations['branch'] = ['name', 'code', 'city'];
+        }
+        if ($withWarehouse) {
+            $relations['warehouse'] = ['name', 'code', 'location'];
+        }
+
+        return $relations;
+    }
+
+    /**
      * Apply a LIKE search across columns and optional relation columns.
      *
      * @param  list<string>  $columns  e.g. ['invoice_number', 'notes', 'total']

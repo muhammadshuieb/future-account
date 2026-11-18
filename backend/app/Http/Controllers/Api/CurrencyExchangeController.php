@@ -19,7 +19,10 @@ class CurrencyExchangeController extends ApiController
             ->with(['sourceCashBox', 'targetCashBox', 'journalEntry', 'creator'])
             ->withCount('attachments')
             ->latest('id');
-        ListSearch::apply($query, $request, ['exchange_number', 'notes', 'source_currency', 'target_currency', 'status', 'source_amount', 'target_amount'], [
+        ListSearch::apply($query, $request, ListSearch::documentColumns('exchange_number', [
+            'source_currency', 'target_currency', 'source_amount', 'target_amount',
+            'source_base_amount', 'target_base_amount',
+        ]), [
             'sourceCashBox' => ['name', 'code'],
             'targetCashBox' => ['name', 'code'],
         ]);

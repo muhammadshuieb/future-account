@@ -16,10 +16,16 @@ class PurchaseRequestController extends ApiController
     {
         $this->authorizePermission('purchases.view');
         $query = PurchaseRequest::query()->with(['supplier', 'warehouse'])->latest('id');
-        ListSearch::apply($query, $request, ['request_number', 'notes', 'currency', 'total', 'status'], [
-            'supplier' => ['name', 'code'],
-            'items.product' => ['name', 'sku', 'barcode', 'brand', 'model'],
-        ]);
+        ListSearch::apply(
+            $query,
+            $request,
+            ListSearch::documentColumns('request_number'),
+            array_merge(
+                ListSearch::supplierRelations(),
+                ListSearch::placeRelations(),
+                ListSearch::productLineRelations('items.product'),
+            ),
+        );
 
         return $this->ok($query->get());
     }

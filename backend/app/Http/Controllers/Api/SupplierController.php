@@ -16,7 +16,7 @@ class SupplierController extends ApiController
     {
         $this->authorizePermission('suppliers.view');
         $query = Supplier::query()->with('branch')->orderBy('code');
-        ListSearch::apply($query, $request, ['name', 'code', 'phone', 'email', 'tax_number', 'notes']);
+        ListSearch::apply($query, $request, ListSearch::partnerColumns());
 
         $rows = $query->get()->map(function (Supplier $supplier) {
             $supplier->setAttribute('balance', $this->purchases->supplierBalance($supplier));
