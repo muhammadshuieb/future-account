@@ -262,7 +262,6 @@ export default function SalesPage() {
     const id = defaultCashBoxId(matched, cur)
     if (id !== rc.cash_box_id) setRc((prev) => ({ ...prev, cash_box_id: id }))
   }, [cashBoxes.data, rc.cash_box_id, rc.currency, baseCurrency])
-  const [stockInfo, setStockInfo] = useState<StockInfo | null>(null)
   const skipStockAutofill = useRef(false)
   const invLinesScroll = useScrollToLastLine(inv.lines.length)
   const quoteLinesScroll = useScrollToLastLine(quote.lines.length)
@@ -271,26 +270,6 @@ export default function SalesPage() {
     productCatalog.find((p) => String(p.id) === line.product_id)?.track_serial,
   )
   const orderLinesScroll = useScrollToLastLine(order.lines.length)
-
-  const applyStockToForm = useCallback(async <T extends { product_id: string; warehouse_id?: string; quantity: string; batch_no?: string }>(
-    setState: Dispatch<SetStateAction<T>>,
-    productId: string,
-    warehouseId: string,
-    batchNo?: string,
-  ) => {
-    const info = await fetchStockInfo(productId, warehouseId, batchNo)
-    if (info === null) {
-      setStockInfo(null)
-      return
-    }
-    setStockInfo(info)
-    const canOversell = allowNegativeStock || !!info.allow_negative_stock
-    // When oversell is allowed and there is no stock, keep the user's quantity (don't force 0).
-    if (canOversell && info.available_qty <= 0) {
-      return
-    }
-    setState((prev) => ({ ...prev, quantity: String(info.available_qty) }))
-  }, [allowNegativeStock])
 
   const applyStockToInvoiceLine = useCallback(async (index: number, productId: string, warehouseId: string) => {
     const info = await fetchStockInfo(productId, warehouseId)
@@ -537,7 +516,6 @@ export default function SalesPage() {
     setModal(null)
     setSelectedId(null)
     setSelectedRow(null)
-    setStockInfo(null)
     setPendingAttachment(null)
     setCollectForm({ receipt_date: todayYmd(), payments: [] })
   }
@@ -622,7 +600,6 @@ export default function SalesPage() {
   const openCreate = () => {
     setSelectedId(null)
     setSelectedRow(null)
-    setStockInfo(null)
     skipStockAutofill.current = false
     setInv({
       invoice_date: todayYmd(),
@@ -1046,7 +1023,6 @@ export default function SalesPage() {
             }))
           : [emptyQuoteLine()],
       })
-      setStockInfo(null)
       return
     }
     if (tab === 'invoices') {
@@ -1108,7 +1084,6 @@ export default function SalesPage() {
             }))
           : [emptyInvoiceLine()],
       })
-      setStockInfo(null)
       return
     }
     const line = d.items?.[0] || d.lines?.[0] || {}
@@ -1128,7 +1103,6 @@ export default function SalesPage() {
         unit_price: String(line.unit_price || ''),
       }],
     })
-    setStockInfo(null)
   }, [detail.data, modal, tab, baseCurrency])
 
   const tabs = [
@@ -1138,69 +1112,6 @@ export default function SalesPage() {
     { id: 'returns', label: t('sales.returns') },
     { id: 'receipts', label: t('sales.receipts') },
   ]
-
-  const productFields = <T extends { product_id: string; warehouse_id?: string; quantity: string; unit_price: string; batch_no: string; serial_no: string }>(
-    state: T,
-    setState: Dispatch<SetStateAction<T>>,
-    onScan?: (code: string) => void,
-    autoFillStock = false,
-  ) => {
-    const product = (products.data || []).find((p) => String(p.id) === state.product_id)
-    return (
-      <>
-        {onScan && (
-          <BarcodeScanInput
-            label={t('sales.scanBarcode')}
-            hint={t('sales.scanBarcodeHint')}
-            onScan={onScan}
-            compact
-          />
-        )}
-        <ProductVariantSelect
-          products={products.data || []}
-          value={state.product_id}
-          onChange={(productId) => {
-            const next = (products.data || []).find((p) => String(p.id) === productId)
-            setState((prev) => ({
-              ...prev,
-              product_id: productId,
-              unit_price: next ? String(next.sale_price) : prev.unit_price,
-            }))
-            if (autoFillStock && productId && state.warehouse_id && !skipStockAutofill.current) {
-              void applyStockToForm(setState, productId, state.warehouse_id)
-            } else if (!productId) {
-              setStockInfo(null)
-            }
-          }}
-        />
-        <div className="form-grid-3">
-          {state.product_id && (
-            <Field label={t('common.unit')}>
-              <input className={`${inputClass} bg-black/5`} readOnly value={formatProductUnit(product?.unit)} />
-            </Field>
-          )}
-          <Field label={t('common.quantity')} hint={t('common.quantityUnit')}>
-            <NumericInput value={state.quantity} onChange={(v) => setState((prev) => ({ ...prev, quantity: v }))} />
-            {autoFillStock && stockInfo !== null && state.product_id && state.warehouse_id && (
-              <StockAvailabilityHint
-                stockInfo={stockInfo}
-                quantity={Number(state.quantity) || 0}
-                allowNegativeStock={allowNegativeStock}
-              />
-            )}
-          </Field>
-          <Field label={t('common.price')}>
-            <NumericInput value={state.unit_price} onChange={(v) => setState((prev) => ({ ...prev, unit_price: v }))} />
-          </Field>
-        </div>
-        {product?.track_serial && (
-          <Field label={t('common.serial')}>
-            <input className={inputClass} value={state.serial_no} onChange={(e) => setState({ ...state, serial_no: e.target.value })} required />
-          </Field>
-        )}
-      </>
-    )
-  }
 
   const salesImportButtons = (kind: 'orders' | 'invoices') => (
     <PurchaseInvoiceExcelImportButtons
@@ -1610,16 +1521,6 @@ export default function SalesPage() {
       )}
     </>
   )
-
-  const onSalesWarehouseChange = <T extends { product_id: string; warehouse_id?: string; quantity: string }>(
-    setState: Dispatch<SetStateAction<T>>,
-  ) => (warehouseId: string, productId?: string) => {
-    if (productId && warehouseId && !skipStockAutofill.current) {
-      void applyStockToForm(setState, productId, warehouseId)
-    } else if (!warehouseId) {
-      setStockInfo(null)
-    }
-  }
 
   const summary = (data: Record<string, unknown>) => {
     const warehouseName = (data.warehouse as { name?: string } | undefined)?.name
@@ -2232,10 +2133,7 @@ export default function SalesPage() {
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
                   {customerFields(order, setOrder, true, (warehouseId) => {
-                    if (!warehouseId) {
-                      setStockInfo(null)
-                      return
-                    }
+                    if (!warehouseId) return
                     const first = order.lines.find((l) => l.product_id)
                     if (first?.product_id && !skipStockAutofill.current) {
                       void applyStockToOrderLine(order.lines.indexOf(first), first.product_id, warehouseId)
@@ -2348,37 +2246,6 @@ export default function SalesPage() {
           </form>
         )}
       </Modal>
-    </div>
-  )
-}
-
-function StockAvailabilityHint({
-  stockInfo,
-  quantity,
-  allowNegativeStock,
-}: {
-  stockInfo: StockInfo
-  quantity: number
-  allowNegativeStock: boolean
-}) {
-  const { t } = useTranslation()
-  const onHand = stockInfo.on_hand_qty ?? stockInfo.available_qty
-  const canOversell = allowNegativeStock || !!stockInfo.allow_negative_stock
-  const overselling = canOversell && quantity > stockInfo.available_qty + 0.0001
-
-  return (
-    <div className="mt-1 space-y-1 text-xs text-black/55">
-      <p>
-        {t('sales.stockRemainingIn', {
-          qty: formatQuantity(onHand),
-          warehouse: stockInfo.warehouse_name || t('common.warehouse'),
-        })}
-      </p>
-      {overselling ? (
-        <p className="text-amber">{t('sales.oversellWarning', { available: formatQuantity(stockInfo.available_qty) })}</p>
-      ) : stockInfo.breakdown.length === 0 ? (
-        <p className="text-amber">{t('sales.noStockInWarehouse')}</p>
-      ) : null}
     </div>
   )
 }

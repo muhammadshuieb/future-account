@@ -15,6 +15,7 @@ export type PurchaseInvoiceImportLine = {
   sku?: string | null
   quantity: number
   unit_cost?: number | null
+  unit_price?: number | null
   batch_no?: string | null
   serial_no?: string | null
   notes: string
