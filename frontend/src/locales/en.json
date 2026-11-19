@@ -568,7 +568,9 @@
     "importUnmatchedLine": "Unmatched product",
     "importUnknownProduct": "Unknown product",
     "importBlockedUnmatched": "Some lines are unmatched — select products manually before posting",
-    "transferLinesRequired": "Add at least one transfer line"
+    "transferLinesRequired": "Add at least one transfer line",
+    "showCost": "Show cost",
+    "hideCost": "Hide cost"
   },
   "reports": {
     "generalLedger": "General Ledger",

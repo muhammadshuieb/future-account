@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Eye, EyeOff } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import api from '@/lib/api'
 import { todayYmd } from '@/lib/dates'
@@ -18,6 +19,16 @@ import { useAuth } from '@/context/AuthContext'
 
 const WAREHOUSE_TABS = ['warehouses', 'products', 'categories', 'units', 'stock', 'movements', 'transfers', 'alerts', 'counts'] as const
 type Tab = (typeof WAREHOUSE_TABS)[number]
+
+const SHOW_COST_STORAGE_KEY = 'warehouse.products.showCost'
+
+function readShowCostPreference(): boolean {
+  try {
+    return localStorage.getItem(SHOW_COST_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 type ProductRow = { id: number; name: string; brand?: string; model?: string; track_batch?: boolean; track_serial?: boolean }
 
@@ -117,6 +128,19 @@ export default function WarehousePage() {
   const [viewRow, setViewRow] = useState<Record<string, unknown> | null>(null)
   const search = useListSearch()
   const [filterWarehouseId, setFilterWarehouseId] = useState('')
+  const [showCost, setShowCost] = useState(readShowCostPreference)
+
+  const toggleShowCost = useCallback(() => {
+    setShowCost((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem(SHOW_COST_STORAGE_KEY, next ? '1' : '0')
+      } catch {
+        /* ignore quota / private mode */
+      }
+      return next
+    })
+  }, [])
 
   const warehouses = useQuery({
     queryKey: ['warehouses', tab === 'warehouses' ? search.debouncedQ : ''],
@@ -570,6 +594,18 @@ export default function WarehousePage() {
           <div className="flex flex-wrap items-center gap-2">
             {warehouseFilterControl}
             <ListSearchInput value={search.q} onChange={search.setQ} />
+            {tab === 'products' ? (
+              <button
+                type="button"
+                onClick={toggleShowCost}
+                className="touch-target inline-flex items-center justify-center rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5 text-ink/70 transition hover:bg-mist hover:text-ink"
+                aria-label={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+                aria-pressed={showCost}
+                title={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+              >
+                {showCost ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            ) : null}
             {['alerts', 'counts'].includes(tab) ? null : (
               <ExcelExportButton
                 path={`/exports/${excelModuleForWarehouseTab(tab)}`}
@@ -731,7 +767,7 @@ export default function WarehousePage() {
                     <td>{p.name}</td>
                     <td>{p.brand || '—'}</td>
                     <td>{p.model || '—'}</td>
-                    <td>{p.cost_price}</td>
+                    <td className="tabular-nums">{showCost ? p.cost_price : '••••'}</td>
                     <td>{p.sale_price}</td>
                     <td className="tabular-nums">{formatQuantity(p.on_hand ?? 0)}</td>
                     <td className="max-w-xs text-xs text-black/60">
@@ -1007,7 +1043,13 @@ export default function WarehousePage() {
             <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
           </div>
           <div className="form-grid-3">
-            <Field label="تكلفة"><NumericInput value={prForm.cost_price} onChange={(v) => setPrForm((prev) => ({ ...prev, cost_price: v }))} /></Field>
+            <Field label="تكلفة">
+              {showCost ? (
+                <NumericInput value={prForm.cost_price} onChange={(v) => setPrForm((prev) => ({ ...prev, cost_price: v }))} />
+              ) : (
+                <input className={inputClass} type="password" value="••••••••" readOnly tabIndex={-1} aria-hidden />
+              )}
+            </Field>
             <Field label="بيع"><NumericInput value={prForm.sale_price} onChange={(v) => setPrForm((prev) => ({ ...prev, sale_price: v }))} /></Field>
             <Field label="حد الطلب"><NumericInput value={prForm.reorder_level} onChange={(v) => setPrForm((prev) => ({ ...prev, reorder_level: v }))} /></Field>
           </div>

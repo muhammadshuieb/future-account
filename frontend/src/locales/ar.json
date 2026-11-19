@@ -568,7 +568,9 @@
     "importUnmatchedLine": "صنف غير مطابق",
     "importUnknownProduct": "صنف غير معروف",
     "importBlockedUnmatched": "يوجد بنود غير مطابقة — اختر الأصناف يدوياً قبل الترحيل",
-    "transferLinesRequired": "أضف بند تحويل واحداً على الأقل"
+    "transferLinesRequired": "أضف بند تحويل واحداً على الأقل",
+    "showCost": "إظهار التكلفة",
+    "hideCost": "إخفاء التكلفة"
   },
   "reports": {
     "generalLedger": "دفتر الأستاذ العام",

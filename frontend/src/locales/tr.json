@@ -566,7 +566,9 @@
     "importUnmatchedLine": "Eşleşmeyen ürün",
     "importUnknownProduct": "Bilinmeyen ürün",
     "importBlockedUnmatched": "Eşleşmeyen satırlar var — onaylamadan önce ürünleri elle seçin",
-    "transferLinesRequired": "En az bir transfer satırı ekleyin"
+    "transferLinesRequired": "En az bir transfer satırı ekleyin",
+    "showCost": "Maliyeti göster",
+    "hideCost": "Maliyeti gizle"
   },
   "reports": {
     "generalLedger": "Genel Defter",
