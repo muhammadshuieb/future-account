@@ -1915,6 +1915,52 @@ class SalesService
         });
     }
 
+    /**
+     * Orders are non-posting documents (like quotes): header/lines only.
+     * Draft and confirmed may be edited; converted/cancelled are blocked.
+     */
+    public function updateOrder(SalesOrder $order, array $data, array $lines, User $user): SalesOrder
+    {
+        if (in_array($order->status, ['converted', 'cancelled'], true)) {
+            throw ValidationException::withMessages(['status' => ['لا يمكن تعديل أمر محوّل أو ملغى.']]);
+        }
+
+        return DB::transaction(function () use ($order, $data, $lines) {
+            [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
+            $fx = $this->currencies->resolveDocumentFx(
+                $total,
+                $data['currency'] ?? $order->currency,
+                isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : (float) $order->exchange_rate,
+                $data['order_date'] ?? $order->order_date?->toDateString()
+            );
+
+            $order->update([
+                'order_date' => $data['order_date'] ?? $order->order_date,
+                'customer_id' => $data['customer_id'] ?? $order->customer_id,
+                'sales_quote_id' => array_key_exists('sales_quote_id', $data) ? $data['sales_quote_id'] : $order->sales_quote_id,
+                'warehouse_id' => array_key_exists('warehouse_id', $data)
+                    ? $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
+                    : $order->warehouse_id,
+                'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $order->branch_id,
+                'notes' => array_key_exists('notes', $data) ? $data['notes'] : $order->notes,
+                'status' => $data['status'] ?? $order->status,
+                'currency' => $fx['currency'],
+                'exchange_rate' => $fx['exchange_rate'],
+                'base_amount' => $fx['base_amount'],
+                'subtotal' => $subtotal,
+                'tax_amount' => $tax,
+                'total' => $total,
+            ]);
+
+            $order->items()->delete();
+            foreach ($normalized as $line) {
+                $order->items()->create($line);
+            }
+
+            return $order->fresh(['items.product', 'customer', 'warehouse', 'branch', 'quote']);
+        });
+    }
+
     public function convertOrderToInvoice(SalesOrder $order, User $user, array $overrides = []): SalesInvoice
     {
         if ($order->status === 'converted') {

@@ -42,7 +42,15 @@ class SalesOrderController extends ApiController
     {
         $this->authorizePermission('sales.view');
 
-        return $this->ok($salesOrder->load(['customer', 'warehouse', 'items.product', 'quote']));
+        return $this->ok($salesOrder->load(['customer', 'warehouse', 'branch', 'items.product.unit', 'quote']));
+    }
+
+    public function update(Request $request, SalesOrder $salesOrder): JsonResponse
+    {
+        $this->authorizePermission('sales.manage');
+        $data = $this->validated($request);
+
+        return $this->ok($this->sales->updateOrder($salesOrder, $data, $data['lines'], $request->user()));
     }
 
     public function destroy(SalesOrder $salesOrder): JsonResponse

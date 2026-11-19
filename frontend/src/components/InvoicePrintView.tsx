@@ -558,6 +558,117 @@ export function SalesQuotePrintView({ quote }: { quote: SalesQuotePrintData }) {
   )
 }
 
+export type SalesOrderPrintData = {
+  order_number: string
+  order_date: string
+  created_at?: string | null
+  total: number
+  tax_amount?: number
+  subtotal: number
+  currency?: string
+  notes?: string | null
+  customer?: { name: string; tax_number?: string; phone?: string } | null
+  branch?: { name?: string; code?: string } | null
+  warehouse?: { name?: string } | null
+  items?: {
+    product?: { name: string; sku?: string; brand?: string; model?: string; unit?: { name?: string; symbol?: string } }
+    quantity: number
+    unit_price: number
+    line_total: number
+  }[]
+}
+
+export function SalesOrderPrintView({ order }: { order: SalesOrderPrintData }) {
+  const { t } = useTranslation()
+  const rootClass = usePrintDocClass()
+  const lines = (order.items || []).map((l) => ({
+    product: {
+      name: l.product?.name,
+      brand: l.product?.brand,
+      model: l.product?.model,
+      unit: l.product?.unit,
+    },
+    quantity: l.quantity,
+    unit_price: l.unit_price,
+    line_total: l.line_total,
+  }))
+  const currency = order.currency || 'USD'
+
+  return (
+    <div className={rootClass} dir="rtl">
+      <InvoiceBrandHeader
+        statementStyle
+        documentLabel={t('documents.salesOrder')}
+        invoiceNumber={order.order_number}
+        invoiceDate={order.order_date}
+        createdAt={order.created_at}
+      />
+
+      <section className="statement-print__meta">
+        <p>
+          <span className="statement-print__label">{t('common.customer')}: </span>
+          <strong>{order.customer?.name || '—'}</strong>
+        </p>
+        {order.customer?.phone && (
+          <p>
+            <span className="statement-print__label">الهاتف: </span>
+            {order.customer.phone}
+          </p>
+        )}
+        {order.customer?.tax_number && (
+          <p>
+            <span className="statement-print__label">{t('companies.taxNumber')}: </span>
+            {order.customer.tax_number}
+          </p>
+        )}
+        {order.branch?.name && (
+          <p>
+            <span className="statement-print__label">{t('common.branch')}: </span>
+            {order.branch.name}
+          </p>
+        )}
+        {order.warehouse?.name && (
+          <p>
+            <span className="statement-print__label">{t('common.warehouse')}: </span>
+            {order.warehouse.name}
+          </p>
+        )}
+        <p>
+          <span className="statement-print__label">{t('common.currency')}: </span>
+          {currency}
+        </p>
+      </section>
+
+      {order.notes ? (
+        <p className="statement-invoice-detail__notes">ملاحظات: {order.notes}</p>
+      ) : null}
+
+      <div className="statement-invoice-detail">
+        <StatementStyleLinesTable lines={lines} currency={currency} />
+      </div>
+
+      <PrintClosing>
+        <section className="statement-print__summary statement-print__summary--footer">
+          <p>
+            فرعي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(order.subtotal) || 0, currency)}</strong>
+          </p>
+          {Number(order.tax_amount) > 0 && (
+            <p>
+              ضريبة:{' '}
+              <strong className="tabular-nums">{formatMoney(Number(order.tax_amount) || 0, currency)}</strong>
+            </p>
+          )}
+          <p className="statement-print__closing-line">
+            الإجمالي:{' '}
+            <strong className="tabular-nums">{formatMoney(Number(order.total) || 0, currency)}</strong>
+          </p>
+        </section>
+      </PrintClosing>
+    </div>
+  )
+}
+
 export type PrintInvoicePrintData = {
   invoice_number: string
   invoice_date: string

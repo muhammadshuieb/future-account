@@ -34,6 +34,7 @@ const AuditLogPage = lazy(() => import('@/pages/AuditLogPage'))
 const CompaniesPage = lazy(() => import('@/pages/CompaniesPage'))
 const SalesInvoicePrintPage = lazy(() => import('@/pages/SalesInvoicePrintPage'))
 const SalesQuotePrintPage = lazy(() => import('@/pages/SalesQuotePrintPage'))
+const SalesOrderPrintPage = lazy(() => import('@/pages/SalesOrderPrintPage'))
 const PrintInvoicePrintPage = lazy(() => import('@/pages/PrintInvoicePrintPage'))
 const VoucherPrintPage = lazy(() => import('@/pages/VoucherPrintPage'))
 const PurchaseInvoicePrintPage = lazy(() => import('@/pages/PurchaseInvoicePrintPage'))
@@ -100,6 +101,7 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/print/sales-invoices/:id" element={<SalesInvoicePrintPage />} />
               <Route path="/print/sales-quotes/:id" element={<SalesQuotePrintPage />} />
+              <Route path="/print/sales-orders/:id" element={<SalesOrderPrintPage />} />
               <Route path="/print/print-invoices/:id" element={<PrintInvoicePrintPage />} />
               <Route path="/print/vouchers" element={<VoucherPrintPage />} />
               <Route path="/print/purchase-invoices/:id" element={<PurchaseInvoicePrintPage />} />

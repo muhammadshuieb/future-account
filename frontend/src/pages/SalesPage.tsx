@@ -22,7 +22,7 @@ import PurchaseInvoiceExcelImportButtons, { type PurchaseInvoiceLinesPreview } f
 import ProductVariantSelect from '@/components/ProductVariantSelect'
 import PrintInvoiceLineFields, { type PrintInvoiceLineDraft } from '@/components/PrintInvoiceLineFields'
 import { excelModuleForSalesTab } from '@/lib/excelExport'
-import { buildDocumentBaseName } from '@/lib/documentFileName'
+import { buildDocumentBaseName, buildDocumentFileName } from '@/lib/documentFileName'
 import { invoiceMessageDetails } from '@/lib/whatsappDraft'
 import { Button, EmptyState, Field, FormSection, FormStack, ListSearchInput, Modal, Msg, NumericInput, PageHeader, Panel, TableActions, Tabs, formatMoney, formatQuantity, inputClass, useFormMessage } from '@/components/ui'
 import { useListSearch } from '@/lib/useListSearch'
@@ -106,6 +106,8 @@ export default function SalesPage() {
   const { t } = useTranslation()
   const { hasPermission } = useAuth()
   const canEditInvoices = hasPermission('sales.invoices.edit')
+  const canEditOrders = hasPermission('sales.manage')
+  const canEditOrderStatus = (status: string) => status !== 'converted' && status !== 'cancelled'
   const [tab, setTab] = useQueryTab(SALES_TABS, 'invoices')
   const qc = useQueryClient()
   const msg = useFormMessage()
@@ -669,6 +671,13 @@ export default function SalesPage() {
     setModal(editable ? 'edit' : 'view')
   }
   const printInvoice = (id: number) => openPrintPopup(`/print/sales-invoices/${id}`)
+  const printOrder = (id: number) => openPrintPopup(`/print/sales-orders/${id}`)
+  const orderCustomerName = (row?: { customer?: { name?: string } } | null) =>
+    (detail.data as { customer?: { name?: string } } | undefined)?.customer?.name
+    || row?.customer?.name
+  const orderCustomerPhone = (row?: { customer?: { phone?: string } } | null) =>
+    (detail.data as { customer?: { phone?: string } } | undefined)?.customer?.phone
+    || row?.customer?.phone
 
   const saveQuote = useMutation({
     mutationFn: () => {
@@ -690,25 +699,33 @@ export default function SalesPage() {
     onError: msg.fromErr,
   })
 
+  const orderPayload = () => {
+    if (order.lines.some((l) => l.unmatched_label && !l.product_id)) {
+      throw { response: { data: { message: t('sales.importBlockedUnmatched') } } }
+    }
+    const filledLines = order.lines.filter((l) => l.product_id)
+    if (filledLines.length === 0) {
+      throw { response: { data: { message: t('common.linesRequired') } } }
+    }
+    return {
+      order_date: order.order_date,
+      customer_id: Number(order.customer_id),
+      warehouse_id: Number(order.warehouse_id) || undefined,
+      currency: order.currency,
+      exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
+      lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
+    }
+  }
+
   const saveOrder = useMutation({
-    mutationFn: () => {
-      if (order.lines.some((l) => l.unmatched_label && !l.product_id)) {
-        throw { response: { data: { message: t('sales.importBlockedUnmatched') } } }
-      }
-      const filledLines = order.lines.filter((l) => l.product_id)
-      if (filledLines.length === 0) {
-        throw { response: { data: { message: t('common.linesRequired') } } }
-      }
-      return api.post('/sales-orders', {
-        order_date: order.order_date,
-        customer_id: Number(order.customer_id),
-        warehouse_id: Number(order.warehouse_id) || undefined,
-        currency: order.currency,
-        exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
-        lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
-      })
-    },
+    mutationFn: () => api.post('/sales-orders', orderPayload()),
     onSuccess: () => { msg.setMessage(t('sales.orderSaved')); invalidateSales(); closeModal() },
+    onError: msg.fromErr,
+  })
+
+  const updateOrder = useMutation({
+    mutationFn: (id: number) => api.put(`/sales-orders/${id}`, orderPayload()),
+    onSuccess: () => { msg.setMessage(t('sales.orderUpdated')); invalidateSales(); closeModal() },
     onError: msg.fromErr,
   })
 
@@ -1025,6 +1042,33 @@ export default function SalesPage() {
       })
       return
     }
+    if (tab === 'orders') {
+      const items = (d.items || d.lines || []) as {
+        product_id?: number
+        product?: { id?: number }
+        quantity?: number
+        unit_price?: number
+        batch_no?: string
+        serial_no?: string
+      }[]
+      setOrder({
+        order_date: String(d.order_date || '').slice(0, 10),
+        customer_id: String(d.customer_id || d.customer?.id || ''),
+        warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
+        currency: String(d.currency || baseCurrency || 'USD'),
+        exchange_rate: String(d.exchange_rate || '1'),
+        lines: items.length
+          ? items.map((line) => ({
+              product_id: String(line.product_id || line.product?.id || ''),
+              quantity: String(line.quantity || 1),
+              unit_price: String(line.unit_price || ''),
+              batch_no: line.batch_no || '',
+              serial_no: line.serial_no || '',
+            }))
+          : [emptyInvoiceLine()],
+      })
+      return
+    }
     if (tab === 'invoices') {
       const items = (d.lines || d.items || []) as {
         product_id?: number
@@ -1084,25 +1128,7 @@ export default function SalesPage() {
             }))
           : [emptyInvoiceLine()],
       })
-      return
     }
-    const line = d.items?.[0] || d.lines?.[0] || {}
-    setQuote({
-      quote_date: String(d.quote_date || '').slice(0, 10),
-      valid_until: String(d.valid_until || '').slice(0, 10),
-      customer_id: String(d.customer_id || d.customer?.id || ''),
-      warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
-      currency: d.currency || 'USD',
-      exchange_rate: String(d.exchange_rate || ''),
-      lines: [{
-        product_id: line.product_id ? String(line.product_id) : '',
-        product_name: line.product_name || line.product?.name || '',
-        brand: line.brand || line.product?.brand || '',
-        model: line.model || line.product?.model || '',
-        quantity: String(line.quantity || 1),
-        unit_price: String(line.unit_price || ''),
-      }],
-    })
   }, [detail.data, modal, tab, baseCurrency])
 
   const tabs = [
@@ -1653,7 +1679,18 @@ export default function SalesPage() {
                 <option value="unsettled">{t('sales.filterUnsettled')}</option>
               </select>
             )}
-            <ExcelExportButton path={`/exports/${excelModuleForSalesTab(tab)}`} />
+            <ExcelExportButton
+              path={`/exports/${excelModuleForSalesTab(tab)}`}
+              fileName={tab === 'orders' ? 'sales-orders' : undefined}
+            />
+            {tab === 'orders' && (
+              <PdfExportButton
+                label={t('common.exportPdfAll')}
+                fileName="sales-orders"
+                printPaths={(orders.data || []).map((o: { id: number }) => `/print/sales-orders/${o.id}`)}
+                disabled={!(orders.data || []).length}
+              />
+            )}
             {tab === 'invoices' && (
               <PdfExportButton
                 label={t('common.exportPdfAll')}
@@ -1713,8 +1750,8 @@ export default function SalesPage() {
             <table className="data-table text-sm">
               <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; currency?: string; customer?: { name: string } }) => (
-                  <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o)}>
+                {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; currency?: string; customer?: { name: string; phone?: string } }) => (
+                  <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o, canEditOrders && canEditOrderStatus(o.status))}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.customer?.name}</td>
                     <td>{o.currency || 'USD'}</td>
@@ -1722,6 +1759,43 @@ export default function SalesPage() {
                     <td>{documentStatusLabel(o.status)}</td>
                     <td>
                       <TableActions>
+                      {canEditOrders && canEditOrderStatus(o.status) && (
+                        <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); openRow(o, true) }}>{t('common.edit')}</button>
+                      )}
+                      <button type="button" className="text-xs text-teal print-hide" onClick={(e) => { e.stopPropagation(); printOrder(o.id) }}>
+                        <Printer size={14} className="inline" /> {t('common.print')}
+                      </button>
+                      <span className="print-hide" onClick={(e) => e.stopPropagation()}>
+                        <ExcelExportButton
+                          path="/exports/sales-orders"
+                          params={{ id: o.id }}
+                          fileName={buildDocumentFileName(t('documents.salesOrder'), o.customer?.name, 'xlsx')}
+                          variant="ghost"
+                          className="!px-2 !py-1 text-xs"
+                        />
+                      </span>
+                      <span className="print-hide" onClick={(e) => e.stopPropagation()}>
+                        <PdfExportButton
+                          compact
+                          printPath={`/print/sales-orders/${o.id}`}
+                          fileName={buildDocumentBaseName(t('documents.salesOrder'), o.customer?.name)}
+                        />
+                      </span>
+                      <span className="print-hide" onClick={(e) => e.stopPropagation()}>
+                        <WhatsAppSendButton
+                          compact
+                          defaultPhone={o.customer?.phone}
+                          printPath={`/print/sales-orders/${o.id}`}
+                          fileName={buildDocumentBaseName(t('documents.salesOrder'), o.customer?.name)}
+                          documentLabel={t('documents.salesOrder')}
+                          messageDetails={invoiceMessageDetails(t, {
+                            partnerName: o.customer?.name,
+                            partnerKind: 'customer',
+                            documentNumber: o.order_number,
+                            numberLabel: t('whatsapp.orderNumber'),
+                          })}
+                        />
+                      </span>
                       {o.status !== 'converted' && <button type="button" className="text-xs text-teal" onClick={(e) => { e.stopPropagation(); convertOrder.mutate(o.id) }}>{t('sales.convertToInvoice')}</button>}
                       {canDeleteSales('orders', o.status)
                         ? <button type="button" className="text-xs text-rose-600" onClick={(e) => { e.stopPropagation(); askDelete('orders', o.id, o.status) }}>{t('common.delete')}</button>
@@ -1908,6 +1982,51 @@ export default function SalesPage() {
             <><Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button><Button variant="primary" type="submit" form="sales-form">{t('common.save')}</Button></>
           ) : (
             <>
+              {tab === 'orders' && selectedId && canEditOrders && canEditOrderStatus(String((detail.data as { status?: string } | undefined)?.status || selectedRow?.status || '')) && (
+                <Button variant="secondary" onClick={() => openRow((detail.data || selectedRow || { id: selectedId }) as Record<string, unknown> & { id: number }, true)}>
+                  {t('common.edit')}
+                </Button>
+              )}
+              {tab === 'orders' && selectedId && (
+                <>
+                  <Button variant="secondary" onClick={() => printOrder(selectedId)}>
+                    <Printer size={16} /> {t('common.print')}
+                  </Button>
+                  <ExcelExportButton
+                    path="/exports/sales-orders"
+                    params={{ id: selectedId }}
+                    fileName={buildDocumentFileName(
+                      t('documents.salesOrder'),
+                      orderCustomerName(selectedRow as { customer?: { name?: string } } | null),
+                      'xlsx',
+                    )}
+                  />
+                  <PdfExportButton
+                    printPath={`/print/sales-orders/${selectedId}`}
+                    fileName={buildDocumentBaseName(
+                      t('documents.salesOrder'),
+                      orderCustomerName(selectedRow as { customer?: { name?: string } } | null),
+                    )}
+                  />
+                  <WhatsAppSendButton
+                    defaultPhone={orderCustomerPhone(selectedRow as { customer?: { phone?: string } } | null)}
+                    printPath={`/print/sales-orders/${selectedId}`}
+                    fileName={buildDocumentBaseName(
+                      t('documents.salesOrder'),
+                      orderCustomerName(selectedRow as { customer?: { name?: string } } | null),
+                    )}
+                    documentLabel={t('documents.salesOrder')}
+                    messageDetails={invoiceMessageDetails(t, {
+                      partnerName: orderCustomerName(selectedRow as { customer?: { name?: string } } | null),
+                      partnerKind: 'customer',
+                      documentNumber:
+                        (detail.data as { order_number?: string } | undefined)?.order_number
+                        || (selectedRow as { order_number?: string } | null)?.order_number,
+                      numberLabel: t('whatsapp.orderNumber'),
+                    })}
+                  />
+                </>
+              )}
               {tab === 'invoices' && selectedId && (
                 <>
                   {canEditInvoices && (
@@ -2116,7 +2235,7 @@ export default function SalesPage() {
             </div>
           </form>
         ) : modal === 'view' ? (detail.isLoading ? <p>{t('common.loading')}</p> : summary(detail.data || selectedRow || {})) : (
-          <form id="sales-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
+          <form id="sales-form" className="form-stack" onSubmit={(e) => { e.preventDefault(); if (tab === 'quotes') modal === 'edit' && selectedId ? updateQuote.mutate(selectedId) : saveQuote.mutate(); else if (tab === 'orders') modal === 'edit' && selectedId ? updateOrder.mutate(selectedId) : saveOrder.mutate(); else if (tab === 'invoices') saveInv.mutate(); else if (tab === 'returns') saveRet.mutate(); else saveRc.mutate() }}>
             {tab === 'quotes' && (
               <FormStack>
                 <div className="form-grid-4">
@@ -2130,6 +2249,11 @@ export default function SalesPage() {
             )}
             {tab === 'orders' && (
               <FormStack>
+                {modal === 'edit' && (
+                  <p className="rounded-lg border border-teal/20 bg-teal/5 px-3 py-2 text-xs text-teal">
+                    {t('sales.orderEditNotice')}
+                  </p>
+                )}
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
                   {customerFields(order, setOrder, true, (warehouseId) => {

@@ -251,6 +251,54 @@ class ExcelExportTest extends TestCase
         $this->get('/api/exports/sales-quotes')->assertOk();
     }
 
+    public function test_sales_orders_excel_includes_header_and_line_sheets(): void
+    {
+        $this->seed([ChartOfAccountsSeeder::class, ErpDemoSeeder::class]);
+
+        $user = User::factory()->create(['is_active' => true]);
+        $user->assignRole('sales');
+        Sanctum::actingAs($user);
+
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product->update(['brand' => 'Cisco', 'model' => 'ISR4331']);
+
+        $created = $this->postJson('/api/sales-orders', [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'USD',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 4, 'unit_price' => 750, 'tax_rate' => 0],
+            ],
+        ])->assertCreated();
+        $orderId = (int) $created->json('data.id');
+        $orderNumber = (string) $created->json('data.order_number');
+
+        $response = $this->get('/api/exports/sales-orders?id='.$orderId);
+        $response->assertOk();
+
+        $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+        file_put_contents($tmp, $response->streamedContent());
+        $book = IOFactory::load($tmp);
+
+        $this->assertSame(2, $book->getSheetCount());
+        $headers = $book->getSheet(0);
+        $this->assertSame('أوامر البيع', $headers->getTitle());
+        $this->assertSame($orderNumber, (string) $headers->getCell('A2')->getValue());
+
+        $lines = $book->getSheet(1);
+        $this->assertSame('بنود أوامر البيع', $lines->getTitle());
+        $this->assertSame($orderNumber, (string) $lines->getCell('A2')->getValue());
+        $this->assertSame('Cisco', (string) $lines->getCell('C2')->getValue());
+        $this->assertSame('ISR4331', (string) $lines->getCell('D2')->getValue());
+        $this->assertEqualsWithDelta(4.0, (float) $lines->getCell('E2')->getValue(), 0.001);
+        $this->assertEqualsWithDelta(750.0, (float) $lines->getCell('F2')->getValue(), 0.01);
+
+        unlink($tmp);
+    }
+
     public function test_print_invoices_excel_includes_header_and_line_sheets(): void
     {
         $this->seed([ChartOfAccountsSeeder::class, ErpDemoSeeder::class]);

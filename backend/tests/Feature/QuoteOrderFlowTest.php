@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\PurchaseRequest;
+use App\Models\SalesOrder;
 use App\Models\SalesQuote;
 use App\Models\Supplier;
 use App\Models\User;
@@ -64,6 +65,59 @@ class QuoteOrderFlowTest extends TestCase
 
         $this->assertNotNull($invoice->json('data.e_invoice_uuid'));
         $this->assertSame('converted', SalesQuote::query()->find($quoteId)?->status);
+    }
+
+    public function test_update_draft_and_confirmed_sales_order(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $product2 = Product::query()->where('sku', 'PRD-002')->firstOrFail();
+
+        $created = $this->postJson('/api/sales-orders', [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'draft',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $orderId = $created->json('data.id');
+
+        $updated = $this->putJson("/api/sales-orders/{$orderId}", [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'confirmed',
+            'lines' => [
+                ['product_id' => $product->id, 'quantity' => 3, 'unit_price' => 110, 'tax_rate' => 0],
+                ['product_id' => $product2->id, 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 0],
+            ],
+        ])->assertOk();
+
+        $this->assertSame('confirmed', $updated->json('data.status'));
+        $this->assertCount(2, $updated->json('data.items'));
+        $this->assertEquals(380, (float) $updated->json('data.total'));
+        $this->assertDatabaseHas('sales_orders', ['id' => $orderId, 'status' => 'confirmed', 'total' => 380]);
+
+        // Confirmed remains editable until converted.
+        $confirmedEdit = $this->putJson("/api/sales-orders/{$orderId}", [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'status' => 'confirmed',
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 200, 'tax_rate' => 0]],
+        ])->assertOk();
+        $this->assertEquals(200, (float) $confirmedEdit->json('data.total'));
+
+        SalesOrder::query()->whereKey($orderId)->update(['status' => 'converted']);
+
+        $this->putJson("/api/sales-orders/{$orderId}", [
+            'order_date' => now()->toDateString(),
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'lines' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 200, 'tax_rate' => 0]],
+        ])->assertStatus(422);
     }
 
     public function test_purchase_request_to_order_flow(): void

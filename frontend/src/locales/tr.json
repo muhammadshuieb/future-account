@@ -280,6 +280,8 @@
     "quoteSaved": "Teklif kaydedildi",
     "quoteUpdated": "Teklif güncellendi",
     "orderSaved": "Satış siparişi kaydedildi",
+    "orderUpdated": "Satış siparişi güncellendi",
+    "orderEditNotice": "Satış siparişi satırlarını (ürün, miktar, fiyat, depo) faturalanmamış veya iptal edilmemişken düzenleyebilirsiniz.",
     "invoicePosted": "Satış faturası oluşturuldu/onaylandı",
     "invoiceUpdated": "Satış faturası güvenli şekilde güncellendi (iptal sonra yeniden onay)",
     "safeEditNotice": "Herhangi bir kalemi değiştirebilirsiniz: ürün (ad/marka/model), fiyat, miktar ve depo — veya yalnızca birini. Kayıtta eski onay tersine çevrilir ve yeni değerlerle yeniden onaylanır. Bağlı iade varsa düzenleme engellenir.",
@@ -306,7 +308,11 @@
     "importUnmatchedLine": "Eşleşmeyen ürün",
     "importUnknownProduct": "Bilinmeyen ürün",
     "importBlockedUnmatched": "Eşleşmeyen satırlar var — kaydetmeden önce ürünleri elle seçin",
-    "importRowError": "Satır {{row}}: {{message}}"
+    "importRowError": "Satır {{row}}: {{message}}",
+    "printPreviewHint": "A4 önizleme — satış siparişi yazdırma",
+    "invalidOrder": "Geçersiz satış siparişi",
+    "loadOrderFailed": "Satış siparişi yüklenemedi",
+    "noPermission": "Satışları görüntüleme yetkiniz yok"
   },
   "quotes": {
     "title": "Fiyat Teklifleri",
@@ -910,6 +916,7 @@
   "documents": {
     "accountStatement": "Hesap ekstresi",
     "salesInvoice": "Satış faturası",
+    "salesOrder": "Satış siparişi",
     "purchaseInvoice": "Satın alma faturası",
     "priceQuote": "Fiyat teklifi",
     "printInvoice": "Yazdırma faturası"
@@ -1014,6 +1021,7 @@
     "companyName": "Şirket adı",
     "invoiceNumber": "Fatura numarası",
     "quoteNumber": "Teklif numarası",
+    "orderNumber": "Sipariş numarası",
     "periodLine": "Dönem: {{from}} — {{to}}",
     "untilToday": "bugün"
   },

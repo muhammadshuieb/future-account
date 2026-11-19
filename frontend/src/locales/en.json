@@ -282,6 +282,8 @@
     "quoteSaved": "Quote saved",
     "quoteUpdated": "Quote updated",
     "orderSaved": "Sales order saved",
+    "orderUpdated": "Sales order updated",
+    "orderEditNotice": "You can edit sales order lines (product, quantity, price, warehouse) while the order is not converted to an invoice or cancelled.",
     "invoicePosted": "Sales invoice created/posted",
     "invoiceUpdated": "Sales invoice updated safely (unpost then re-post)",
     "safeEditNotice": "You can change any line field: product (name/brand/model), price, quantity, and warehouse — or only one of them. On save, the old posting is reversed then re-posted safely. Editing is blocked if a linked return exists.",
@@ -308,7 +310,11 @@
     "importUnmatchedLine": "Unmatched product",
     "importUnknownProduct": "Unknown product",
     "importBlockedUnmatched": "Some lines are unmatched — select products manually before saving",
-    "importRowError": "Row {{row}}: {{message}}"
+    "importRowError": "Row {{row}}: {{message}}",
+    "printPreviewHint": "A4 preview — sales order print",
+    "invalidOrder": "Invalid sales order",
+    "loadOrderFailed": "Could not load sales order",
+    "noPermission": "You do not have permission to view sales"
   },
   "quotes": {
     "title": "Price Quotes",
@@ -916,6 +922,7 @@
   "documents": {
     "accountStatement": "Account Statement",
     "salesInvoice": "Sales Invoice",
+    "salesOrder": "Sales Order",
     "purchaseInvoice": "Purchase Invoice",
     "priceQuote": "Price Quote",
     "printInvoice": "Print Invoice"
@@ -1027,6 +1034,7 @@
     "companyName": "Company name",
     "invoiceNumber": "Invoice number",
     "quoteNumber": "Quote number",
+    "orderNumber": "Order number",
     "periodLine": "Period: from {{from}} to {{to}}",
     "untilToday": "today"
   },

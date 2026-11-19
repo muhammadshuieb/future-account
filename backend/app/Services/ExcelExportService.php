@@ -33,6 +33,7 @@ use App\Models\PrintInvoiceItem;
 use App\Models\SalesInvoice;
 use App\Models\SalesInvoiceLine;
 use App\Models\SalesOrder;
+use App\Models\SalesOrderItem;
 use App\Models\SalesQuote;
 use App\Models\SalesQuoteItem;
 use App\Models\SalesReturn;
@@ -506,13 +507,49 @@ class ExcelExportService
 
     protected function sheetSalesOrders(ExcelWorkbook $book, Request $request): void
     {
-        $q = SalesOrder::query()->with('customer')->orderByDesc('id');
+        $q = SalesOrder::query()->with(['customer', 'warehouse'])->orderByDesc('id');
         $this->applyDateFilter($q, 'order_date', $request);
-        $book->addSheet('أوامر البيع', ['الرقم', 'التاريخ', 'العميل', 'العملة', 'الإجمالي', 'الحالة'],
-            $q->get()->map(fn ($r) => [
-                $r->order_number, optional($r->order_date)?->format('Y-m-d'), $r->customer?->name,
-                $r->currency, $r->total, $r->status,
-            ])->all());
+        if ($request->filled('id')) {
+            $q->where('id', (int) $request->query('id'));
+        }
+        $orders = $q->get();
+        $book->addSheet('أوامر البيع', [
+            'الرقم', 'التاريخ', 'العميل', 'المستودع', 'العملة', 'سعر الصرف',
+            'المجموع', 'الضريبة', 'الإجمالي', 'الحالة', 'ملاحظات',
+        ], $orders->map(fn ($r) => [
+            $r->order_number,
+            optional($r->order_date)?->format('Y-m-d'),
+            $r->customer?->name,
+            $r->warehouse?->name,
+            $r->currency,
+            $r->exchange_rate,
+            $r->subtotal,
+            $r->tax_amount,
+            $r->total,
+            $r->status,
+            $r->notes,
+        ])->all());
+
+        $orderIds = $orders->pluck('id');
+        $lines = SalesOrderItem::query()
+            ->with('product')
+            ->whereIn('sales_order_id', $orderIds)
+            ->orderBy('sales_order_id')
+            ->orderBy('id')
+            ->get();
+        $orderNumbers = $orders->pluck('order_number', 'id');
+        $book->addSheet('بنود أوامر البيع', [
+            'رقم الأمر', 'الصنف', 'الماركة', 'الموديل', 'الكمية', 'السعر', 'الضريبة %', 'الإجمالي',
+        ], $lines->map(fn (SalesOrderItem $l) => [
+            $orderNumbers[$l->sales_order_id] ?? $l->sales_order_id,
+            $l->product?->name,
+            $l->product?->brand,
+            $l->product?->model,
+            $l->quantity,
+            $l->unit_price,
+            $l->tax_rate,
+            $l->line_total,
+        ])->all());
     }
 
     protected function sheetSalesInvoices(ExcelWorkbook $book, Request $request): void

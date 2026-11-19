@@ -209,6 +209,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('sales-orders', [SalesOrderController::class, 'index']);
     Route::post('sales-orders', [SalesOrderController::class, 'store']);
     Route::get('sales-orders/{salesOrder}', [SalesOrderController::class, 'show']);
+    Route::put('sales-orders/{salesOrder}', [SalesOrderController::class, 'update']);
     Route::delete('sales-orders/{salesOrder}', [SalesOrderController::class, 'destroy']);
     Route::post('sales-orders/{salesOrder}/convert-to-invoice', [SalesOrderController::class, 'convertToInvoice']);
 
