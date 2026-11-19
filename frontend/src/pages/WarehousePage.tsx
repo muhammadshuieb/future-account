@@ -594,18 +594,6 @@ export default function WarehousePage() {
           <div className="flex flex-wrap items-center gap-2">
             {warehouseFilterControl}
             <ListSearchInput value={search.q} onChange={search.setQ} />
-            {tab === 'products' ? (
-              <button
-                type="button"
-                onClick={toggleShowCost}
-                className="touch-target inline-flex items-center justify-center rounded-lg border border-[var(--color-line)] bg-[var(--color-surface)] p-2.5 text-ink/70 transition hover:bg-mist hover:text-ink"
-                aria-label={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
-                aria-pressed={showCost}
-                title={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
-              >
-                {showCost ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            ) : null}
             {['alerts', 'counts'].includes(tab) ? null : (
               <ExcelExportButton
                 path={`/exports/${excelModuleForWarehouseTab(tab)}`}
@@ -734,7 +722,33 @@ export default function WarehousePage() {
           </div>
           <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>SKU</th><th>الاسم</th><th>{t('warehouse.brand')}</th><th>{t('warehouse.model')}</th><th>تكلفة</th><th>بيع</th><th>{filterWarehouseId ? t('warehouse.warehouseBalance') : t('common.balance')}</th><th>{t('sales.stockLocation')}</th><th></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>الاسم</th>
+                  <th>{t('warehouse.brand')}</th>
+                  <th>{t('warehouse.model')}</th>
+                  <th>
+                    <span className="inline-flex items-center gap-1.5">
+                      تكلفة
+                      <button
+                        type="button"
+                        onClick={toggleShowCost}
+                        className="inline-flex items-center justify-center rounded p-0.5 text-ink/50 transition hover:text-ink"
+                        aria-label={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+                        aria-pressed={showCost}
+                        title={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+                      >
+                        {showCost ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </span>
+                  </th>
+                  <th>بيع</th>
+                  <th>{filterWarehouseId ? t('warehouse.warehouseBalance') : t('common.balance')}</th>
+                  <th>{t('sales.stockLocation')}</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody>
                 {productRows.map((p) => (
                   <tr
@@ -1043,13 +1057,26 @@ export default function WarehousePage() {
             <Field label="وحدة"><select className={inputClass} value={prForm.unit_id} onChange={(e) => setPrForm({ ...prForm, unit_id: e.target.value })}><option value="">—</option>{(units.data || []).map((u: { id: number; name: string }) => <option key={u.id} value={u.id}>{u.name}</option>)}</select></Field>
           </div>
           <div className="form-grid-3">
-            <Field label="تكلفة">
+            <div className="block text-sm">
+              <div className="mb-1.5 flex items-center gap-1.5 font-medium text-black/65">
+                <span>تكلفة</span>
+                <button
+                  type="button"
+                  onClick={toggleShowCost}
+                  className="inline-flex items-center justify-center rounded p-0.5 text-ink/50 transition hover:text-ink"
+                  aria-label={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+                  aria-pressed={showCost}
+                  title={showCost ? t('warehouse.hideCost') : t('warehouse.showCost')}
+                >
+                  {showCost ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
               {showCost ? (
                 <NumericInput value={prForm.cost_price} onChange={(v) => setPrForm((prev) => ({ ...prev, cost_price: v }))} />
               ) : (
                 <input className={inputClass} type="password" value="••••••••" readOnly tabIndex={-1} aria-hidden />
               )}
-            </Field>
+            </div>
             <Field label="بيع"><NumericInput value={prForm.sale_price} onChange={(v) => setPrForm((prev) => ({ ...prev, sale_price: v }))} /></Field>
             <Field label="حد الطلب"><NumericInput value={prForm.reorder_level} onChange={(v) => setPrForm((prev) => ({ ...prev, reorder_level: v }))} /></Field>
           </div>
