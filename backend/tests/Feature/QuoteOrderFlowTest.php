@@ -67,6 +67,54 @@ class QuoteOrderFlowTest extends TestCase
         $this->assertSame('converted', SalesQuote::query()->find($quoteId)?->status);
     }
 
+    public function test_convert_order_to_invoice_preserves_order_date_and_headers(): void
+    {
+        $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();
+        $warehouse = Warehouse::query()->where('code', 'WH-01')->firstOrFail();
+        $product = Product::query()->where('sku', 'PRD-001')->firstOrFail();
+        $orderDate = now()->subDays(5)->toDateString();
+
+        $this->postJson('/api/purchase-invoices', [
+            'invoice_date' => now()->toDateString(),
+            'supplier_id' => Supplier::query()->where('code', 'SUP-001')->value('id'),
+            'warehouse_id' => $warehouse->id,
+            'status' => 'posted',
+            'lines' => [['product_id' => $product->id, 'quantity' => 10, 'unit_cost' => 800, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $order = $this->postJson('/api/sales-orders', [
+            'order_date' => $orderDate,
+            'customer_id' => $customer->id,
+            'warehouse_id' => $warehouse->id,
+            'currency' => 'USD',
+            'exchange_rate' => 10000,
+            'notes' => 'احتفظ بنفس بيانات الأمر',
+            'status' => 'confirmed',
+            'lines' => [['product_id' => $product->id, 'quantity' => 2, 'unit_price' => 50, 'tax_rate' => 0]],
+        ])->assertCreated();
+
+        $orderId = $order->json('data.id');
+        $orderModel = SalesOrder::query()->findOrFail($orderId);
+        $this->assertSame($orderDate, $orderModel->order_date->toDateString());
+
+        $invoice = $this->postJson("/api/sales-orders/{$orderId}/convert-to-invoice", ['status' => 'posted'])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'posted')
+            ->assertJsonPath('data.invoice_date', $orderDate)
+            ->assertJsonPath('data.customer_id', $customer->id)
+            ->assertJsonPath('data.warehouse_id', $warehouse->id)
+            ->assertJsonPath('data.currency', 'USD')
+            ->assertJsonPath('data.notes', 'احتفظ بنفس بيانات الأمر')
+            ->assertJsonPath('data.sales_order_id', $orderId);
+
+        $this->assertEquals((float) $orderModel->exchange_rate, (float) $invoice->json('data.exchange_rate'));
+        $this->assertSame($orderModel->branch_id, $invoice->json('data.branch_id'));
+        $this->assertSame('converted', SalesOrder::query()->find($orderId)?->status);
+        $this->assertCount(1, $invoice->json('data.lines'));
+        $this->assertSame($product->id, $invoice->json('data.lines.0.product_id'));
+        $this->assertEquals(2, (float) $invoice->json('data.lines.0.quantity'));
+    }
+
     public function test_update_draft_and_confirmed_sales_order(): void
     {
         $customer = Customer::query()->where('code', 'CUS-001')->firstOrFail();

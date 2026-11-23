@@ -197,6 +197,7 @@ export default function SalesPage() {
     order_date: todayYmd(),
     customer_id: '',
     warehouse_id: '',
+    branch_id: '',
     currency: 'USD',
     exchange_rate: '1',
     lines: [emptyInvoiceLine()] as InvoiceLineDraft[],
@@ -625,6 +626,7 @@ export default function SalesPage() {
       order_date: todayYmd(),
       customer_id: '',
       warehouse_id: defaultWarehouseId || '',
+      branch_id: defaultBranchId || '',
       currency: baseCurrency || 'USD',
       exchange_rate: '1',
       lines: [emptyInvoiceLine()],
@@ -711,6 +713,7 @@ export default function SalesPage() {
       order_date: order.order_date,
       customer_id: Number(order.customer_id),
       warehouse_id: Number(order.warehouse_id) || undefined,
+      branch_id: order.branch_id ? Number(order.branch_id) : null,
       currency: order.currency,
       exchange_rate: order.exchange_rate ? Number(order.exchange_rate) : undefined,
       lines: filledLines.map((l) => linePayload(l.product_id, l.quantity, l.unit_price, l.batch_no, l.serial_no, defaultTaxRate)),
@@ -1055,6 +1058,7 @@ export default function SalesPage() {
         order_date: String(d.order_date || '').slice(0, 10),
         customer_id: String(d.customer_id || d.customer?.id || ''),
         warehouse_id: String(d.warehouse_id || d.warehouse?.id || ''),
+        branch_id: String(d.branch_id || d.branch?.id || ''),
         currency: String(d.currency || baseCurrency || 'USD'),
         exchange_rate: String(d.exchange_rate || '1'),
         lines: items.length
@@ -1573,7 +1577,7 @@ export default function SalesPage() {
           )}
           <p><b>{t('common.customer')}:</b> {(data.customer as { name?: string } | undefined)?.name || '—'}</p>
           <p><b>{t('common.warehouse')}:</b> {warehouseName || '—'}</p>
-          {tab === 'invoices' && (
+          {(tab === 'invoices' || tab === 'orders') && (
             <p><b>{t('common.branch')}:</b> {branchName || '—'}</p>
           )}
           <p><b>{t('common.currency')}:</b> {String(data.currency || baseCurrency)}</p>
@@ -1748,12 +1752,13 @@ export default function SalesPage() {
         <Panel>
             <div className="table-wrap">
             <table className="data-table text-sm">
-              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
+              <thead><tr><th>{t('common.number')}</th><th>{t('common.customer')}</th><th>{t('common.branch')}</th><th>{t('common.currency')}</th><th>{t('common.total')}</th><th>{t('common.status')}</th><th></th></tr></thead>
               <tbody>
-                {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; currency?: string; customer?: { name: string; phone?: string } }) => (
+                {(orders.data || []).map((o: { id: number; order_number: string; total: number; status: string; currency?: string; customer?: { name: string; phone?: string }; branch?: { name?: string } | null }) => (
                   <tr key={o.id} className="cursor-pointer" onClick={() => openRow(o, canEditOrders && canEditOrderStatus(o.status))}>
                     <td className="font-mono text-xs">{o.order_number}</td>
                     <td>{o.customer?.name}</td>
+                    <td>{o.branch?.name || '—'}</td>
                     <td>{o.currency || 'USD'}</td>
                     <td>{o.total}</td>
                     <td>{documentStatusLabel(o.status)}</td>
@@ -2257,12 +2262,20 @@ export default function SalesPage() {
                 <div className="form-grid-4">
                   <Field label={t('common.date')}><input type="date" className={inputClass} value={order.order_date} onChange={(e) => setOrder({ ...order, order_date: e.target.value })} /></Field>
                   {customerFields(order, setOrder, true, (warehouseId) => {
+                    const wh = (warehouses.data || []).find((w) => String(w.id) === warehouseId)
+                    if (wh?.branch_id) setOrder((prev) => ({ ...prev, branch_id: String(wh.branch_id) }))
                     if (!warehouseId) return
                     const first = order.lines.find((l) => l.product_id)
                     if (first?.product_id && !skipStockAutofill.current) {
                       void applyStockToOrderLine(order.lines.indexOf(first), first.product_id, warehouseId)
                     }
                   })}
+                  <Field label={t('common.branch')}>
+                    <select className={inputClass} value={order.branch_id} onChange={(e) => setOrder({ ...order, branch_id: e.target.value })} required={activeBranches.length > 0}>
+                      <option value="">—</option>
+                      {activeBranches.map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}
+                    </select>
+                  </Field>
                 </div>
                 <DocumentCurrencyFields state={order} setState={setOrder} currencies={currencyList} baseCurrency={baseCurrency} showBasePreview documentTotal={orderLineSub} />
                 {orderLinesEditor}

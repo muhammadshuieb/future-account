@@ -507,20 +507,21 @@ class ExcelExportService
 
     protected function sheetSalesOrders(ExcelWorkbook $book, Request $request): void
     {
-        $q = SalesOrder::query()->with(['customer', 'warehouse'])->orderByDesc('id');
+        $q = SalesOrder::query()->with(['customer', 'warehouse', 'branch'])->orderByDesc('id');
         $this->applyDateFilter($q, 'order_date', $request);
         if ($request->filled('id')) {
             $q->where('id', (int) $request->query('id'));
         }
         $orders = $q->get();
         $book->addSheet('أوامر البيع', [
-            'الرقم', 'التاريخ', 'العميل', 'المستودع', 'العملة', 'سعر الصرف',
+            'الرقم', 'التاريخ', 'العميل', 'المستودع', 'الفرع', 'العملة', 'سعر الصرف',
             'المجموع', 'الضريبة', 'الإجمالي', 'الحالة', 'ملاحظات',
         ], $orders->map(fn ($r) => [
             $r->order_number,
             optional($r->order_date)?->format('Y-m-d'),
             $r->customer?->name,
             $r->warehouse?->name,
+            $r->branch?->name,
             $r->currency,
             $r->exchange_rate,
             $r->subtotal,

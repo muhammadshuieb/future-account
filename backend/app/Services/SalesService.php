@@ -1889,13 +1889,21 @@ class SalesService
             [$subtotal, $tax, $total, $normalized] = $this->normalizeSalesLines($lines);
             $fx = $this->currencies->resolveDocumentFx($total, $data['currency'] ?? null, isset($data['exchange_rate']) ? (float) $data['exchange_rate'] : null, $data['order_date'] ?? null);
 
+            $warehouseId = $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null);
+            $customerBranchId = Customer::query()->whereKey($data['customer_id'])->value('branch_id');
+            $branchId = $this->resolveSalesBranchId(
+                isset($data['branch_id']) ? (int) $data['branch_id'] : null,
+                $warehouseId,
+                $customerBranchId ? (int) $customerBranchId : null,
+            );
+
             $order = SalesOrder::query()->create([
                 'order_number' => $this->nextNumber('SO'),
                 'order_date' => $data['order_date'],
                 'customer_id' => $data['customer_id'],
                 'sales_quote_id' => $data['sales_quote_id'] ?? null,
-                'warehouse_id' => $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null),
-                'branch_id' => $data['branch_id'] ?? null,
+                'warehouse_id' => $warehouseId,
+                'branch_id' => $branchId,
                 'status' => $data['status'] ?? 'draft',
                 'currency' => $fx['currency'],
                 'exchange_rate' => $fx['exchange_rate'],
@@ -1911,7 +1919,7 @@ class SalesService
                 $order->items()->create($line);
             }
 
-            return $order->load(['items.product', 'customer', 'warehouse']);
+            return $order->load(['items.product', 'customer', 'warehouse', 'branch']);
         });
     }
 
@@ -1934,14 +1942,25 @@ class SalesService
                 $data['order_date'] ?? $order->order_date?->toDateString()
             );
 
+            $customerId = $data['customer_id'] ?? $order->customer_id;
+            $warehouseId = array_key_exists('warehouse_id', $data)
+                ? $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
+                : $order->warehouse_id;
+            $customerBranchId = Customer::query()->whereKey($customerId)->value('branch_id');
+            $branchId = $this->resolveSalesBranchId(
+                array_key_exists('branch_id', $data)
+                    ? (isset($data['branch_id']) ? (int) $data['branch_id'] : null)
+                    : ($order->branch_id ? (int) $order->branch_id : null),
+                $warehouseId ? (int) $warehouseId : null,
+                $customerBranchId ? (int) $customerBranchId : null,
+            );
+
             $order->update([
                 'order_date' => $data['order_date'] ?? $order->order_date,
-                'customer_id' => $data['customer_id'] ?? $order->customer_id,
+                'customer_id' => $customerId,
                 'sales_quote_id' => array_key_exists('sales_quote_id', $data) ? $data['sales_quote_id'] : $order->sales_quote_id,
-                'warehouse_id' => array_key_exists('warehouse_id', $data)
-                    ? $this->resolveWarehouseId(isset($data['warehouse_id']) ? (int) $data['warehouse_id'] : null)
-                    : $order->warehouse_id,
-                'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $order->branch_id,
+                'warehouse_id' => $warehouseId,
+                'branch_id' => $branchId,
                 'notes' => array_key_exists('notes', $data) ? $data['notes'] : $order->notes,
                 'status' => $data['status'] ?? $order->status,
                 'currency' => $fx['currency'],
@@ -1998,7 +2017,10 @@ class SalesService
             })->all();
 
             $invoice = $this->createInvoice([
-                'invoice_date' => $overrides['invoice_date'] ?? now()->toDateString(),
+                // Preserve the sales order date unless the caller explicitly overrides it.
+                'invoice_date' => $overrides['invoice_date']
+                    ?? $order->order_date?->toDateString()
+                    ?? now()->toDateString(),
                 'customer_id' => $order->customer_id,
                 'warehouse_id' => $warehouseId,
                 'branch_id' => $order->branch_id,

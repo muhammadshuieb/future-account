@@ -15,7 +15,7 @@ class SalesOrderController extends ApiController
     public function index(Request $request): JsonResponse
     {
         $this->authorizePermission('sales.view');
-        $query = SalesOrder::query()->with(['customer', 'warehouse', 'quote'])->latest('id');
+        $query = SalesOrder::query()->with(['customer', 'warehouse', 'branch', 'quote'])->latest('id');
         ListSearch::apply(
             $query,
             $request,
